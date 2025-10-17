@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DJF Web Assistant</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+
+<!-- Navbar -->
+<div class="navbar">
+    <div class="logo">DJF Assistant</div>
+</div>
+
+<!-- Sidebar toggle (hamburger) -->
+<div class="sidebar-toggle" id="sidebar-toggle">☰</div>
+
+
+<!-- Left Sidebar -->
+<div class="left-sidebar" id="left-sidebar">
+    <div class="sidebar-header">
+        <div class="sidebar-logo">Helping Assistant</div>
+        <button class="close-sidebar" id="close-sidebar">&times;</button>
+    </div>
+    <div class="sidebar-content">
+
+        <!-- Firm Selection -->
+        <h4>Select Firm</h4>
+        <select id="firm-select">
+            <option value="">Select a firm</option>
+            <!-- Firms will be dynamically populated -->
+        </select>
+
+        <!-- Inject URLs -->
+        <h4>Inject URLs</h4>
+        <input type="url" id="sidebar-url" placeholder="https://example.com/page">
+        <button id="sidebar-add" class="btn">Add</button>
+        <div id="sidebar-url-list"></div>
+        <div id="url-loader" class="loader-overlay" style="display:none">Injecting URL...</div>
+
+    </div>
+</div>
+
+<!-- Chat Icon -->
+<div class="chat-icon" id="chat-icon">💬</div>
+
+<!-- Chat Container -->
+<!-- Chat Container -->
+<div class="chat-container" id="chat-container">
+    <div class="header">Web Assistant</div>
+
+    <div id="chat-box"></div>
+
+    <!-- Typing indicator inside chat box -->
+    <div id="chat-loader" class="chat-typing" style="display:none">
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+    </div>
+
+    <div class="chat-input">
+        <input type="text" id="user-input" placeholder="Ask anything...">
+        <button id="send-btn">Send</button>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="static/script.js"></script>
+</body>
+</html>

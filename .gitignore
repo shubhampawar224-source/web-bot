@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtualenvs / IDE
+.venv/
+venv/
+env/
+.idea/
+.vscode/
+
+# macOS
+.DS_Store
+
+# Env / secrets
+.env
+.env.* 
+
+# Logs / caches
+*.log
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Ignore large scraped/vector DBs and artifacts
+scraped_data/
+scraped_data.db
+scraped_data/*.json
+rag_db/
+rag_db/**
+vector_store/
+vector_store/**
+website_cache/
+
+# Common DB / vector files
+*.db
+*.sqlite
+*.sqlite3
+*.bin
+*.pkl
+*.npy
+
+# Large model/media files
+*.pt
+*.pth
+*.ckpt
+*.h5
+*.model
+*.tar.gz
+*.zip
+*.mp4
+*.wav
+*.flac
+*.m4a
+
+# Git LFS attributes (if you choose LFS)
+.gitattributes
