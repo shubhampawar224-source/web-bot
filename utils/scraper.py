@@ -3,6 +3,7 @@
 import asyncio
 import os
 import json
+import re
 import time
 import logging
 from collections import deque
@@ -22,8 +23,9 @@ BACKOFF = 0.5
 
 logger = logging.getLogger(__name__)
 
+
 async def fetch_page(client: httpx.AsyncClient, url: str, retries: int = RETRIES, backoff: float = BACKOFF) -> str:
-    """Fetch a single page asynchronously with retries and backoff."""
+    """Fetch a single page asynchronously with retries and exponential backoff."""
     for attempt in range(1, retries + 1):
         try:
             resp = await client.get(url, timeout=TIMEOUT, follow_redirects=True)
@@ -66,6 +68,33 @@ async def scrape_page(client, url, domain):
 
     return page_text, links
 
+from urllib.parse import urlparse
+
+def clean_domain(url: str, keep_subdomain: bool = False) -> str:
+    """
+    Remove protocol, www, and TLDs (.com, .ai, etc.) from a URL.
+    If keep_subdomain=True, keeps subdomains like 'learn.deeplearning'.
+    """
+    if not url:
+        return ""
+
+    clean_url = url.replace("https://", "").replace("http://", "").rstrip("/")
+
+    # Split by dots
+    parts = clean_url.split(".")
+
+    # Select first part based on length
+    if len(parts) == 2:
+        first_part = parts[0]
+    elif len(parts) == 3:
+        first_part = parts[1]
+    else:
+        first_part = parts[0]  # fallback
+
+    # Last part is always last
+    last_part =first_part
+    # Fallback: if regex fails (like localhost or IP)
+    return last_part if last_part else ""
 
 async def build_about(url: str, base_dir="scraped_data"):
     """Async concurrent scraper using an asyncio.Queue worker-pool."""
@@ -84,15 +113,16 @@ async def build_about(url: str, base_dir="scraped_data"):
     async with httpx.AsyncClient(headers=headers, limits=limits) as client:
 
         async def worker():
+            """Queue worker coroutine that processes pages."""
             while True:
                 try:
                     current = await q.get()
                 except asyncio.CancelledError:
-                    return
+                    break  # exit cleanly on cancel
+
                 try:
                     if current in visited:
-                        q.task_done()
-                        continue
+                        continue  # already processed, skip without extra task_done
                     visited.add(current)
 
                     page_text, links = await scrape_page(client, current, domain)
@@ -110,28 +140,43 @@ async def build_about(url: str, base_dir="scraped_data"):
                             and len(visited) < MAX_PAGES
                         ):
                             await q.put(link["url"])
+
                 except Exception as e:
                     logger.exception(f"[WORKER] error processing {current}: {e}")
                 finally:
-                    q.task_done()
+                    # Ensure task_done is only called once per q.get()
+                    try:
+                        q.task_done()
+                    except ValueError:
+                        logger.warning(f"[WARN] task_done() double-called or invalid for {current}")
 
-        # spawn workers
+        # Spawn workers
         workers = [asyncio.create_task(worker()) for _ in range(CONCURRENCY)]
 
-        # Wait until queue processed or max pages limit reached
+        # Wait until queue processed or max pages reached
         try:
-            while (not q.empty() or any(not w.done() for w in workers)) and len(visited) < MAX_PAGES:
+            while len(visited) < MAX_PAGES:
+                if q.empty():
+                    # Exit when all workers idle and queue is drained
+                    if all(w.done() or w.cancelled() for w in workers):
+                        break
                 await asyncio.sleep(0.1)
-                if q.empty() and all(w.done() for w in workers):
+                if q.empty() and q._unfinished_tasks == 0:
                     break
             await q.join()
         finally:
+            # Clean up workers gracefully
             for w in workers:
-                w.cancel()
+                if not w.done():
+                    w.cancel()
             await asyncio.gather(*workers, return_exceptions=True)
 
     # Assemble about data from collected texts
-    soup = BeautifulSoup(all_texts[0] if all_texts else "", "lxml")
+    try:
+        soup = BeautifulSoup(all_texts[0] if all_texts else "", "lxml")
+    except Exception:
+        soup = BeautifulSoup(all_texts[0] if all_texts else "", "html.parser")
+
     title = soup.title.string.strip() if soup.title and soup.title.string else domain
     meta_tag = soup.find("meta", attrs={"name": "description"}) or soup.find("meta", attrs={"property": "og:description"})
     meta_desc = meta_tag["content"].strip() if meta_tag and meta_tag.get("content") else ""
@@ -140,16 +185,18 @@ async def build_about(url: str, base_dir="scraped_data"):
 
     about_data = {
         "source_url": url,
-        "firm_name": title,
+        "firm_name": clean_domain(title),
         "tagline": tagline,
         "meta_description": meta_desc,
         "short_description": first_p,
-        "full_text": " ".join(all_texts),
+        "full_text": " "
     }
 
     # Save to DB safely
     firm_id = save_to_db(about_data, all_links)
     about_data["firm_id"] = firm_id  # include firm_id in returned data
+    about_data["full_text"]=" ".join(all_texts)
+
     return about_data
 
 
@@ -175,7 +222,7 @@ def save_to_db(about_obj, links_list):
             db.add(website)
             db.flush()  # assign PK immediately
 
-        # Call add_scraped_data safely
+        # Add scraped data safely
         website.add_scraped_data(about_obj, links_list)
 
         db.commit()
@@ -187,3 +234,5 @@ def save_to_db(about_obj, links_list):
         raise
     finally:
         db.close()
+
+

@@ -210,6 +210,7 @@ async def inject_url(payload: URLPayload):
             "data": {
                 "url": payload.url,
                 "firm_name": about_obj.get("firm_name"),
+                "firm_id": about_obj.get("firm_id"),
                 "indexed_chunks": len(chunks)
             }
         }

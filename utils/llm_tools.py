@@ -63,7 +63,6 @@ def load_firm_and_links(firm_id: int) -> Tuple[str, str, List[str]]:
             links_data = w.scraped_data.get("links", []) if w.scraped_data else []
 
             about_texts.append(about_data.get("full_text", ""))
-
             for link in links_data:
                 if isinstance(link, dict):
                     links_list.append(f"{link.get('text','')} → {link.get('url','')}")
@@ -113,7 +112,7 @@ def get_answer_from_db(query: str, firm_id: int, session_id: Optional[str] = Non
             context=context_text,
             question=query,
             is_followup=is_followup,
-            dynamic_value={"Urls": links_list},
+            Urls= links_list,
         )
 
         # 6️⃣ LLM response
@@ -148,7 +147,6 @@ def get_answer_from_db(query: str, firm_id: int, session_id: Optional[str] = Non
 
         # 🔟 Update last selected firm in session memory
         update_session_firm(session_id, firm_id)
-
         return answer_text
 
     except Exception as e:

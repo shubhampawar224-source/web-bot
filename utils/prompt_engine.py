@@ -94,7 +94,6 @@ def my_prompt_function(**dynamic_value) -> str:
         url_rule = "- Integrate at least one relevant URL naturally in the response if it helps the answer."
     else:
         url_rule = "- No URLs are provided; base your answer on the context only."
-
     followup_instructions = (
         "- At the end of your answer, naturally suggest 1–3 related topics or cases that the user might ask next."
         if not is_followup else
