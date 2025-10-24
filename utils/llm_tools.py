@@ -6,10 +6,12 @@ from datetime import datetime
 from typing import Tuple, List, Optional
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from langchain.chat_models import ChatOpenAI
+# from langchain.chat_models import ChatOpenAI
+from langchain_openai import ChatOpenAI
+
 from database.db import SessionLocal
 from model.models import Firm, Website
-from utils.vector_store import collection, embedding_model
+from utils.vector_store import collection, embedding_model, query_similar_texts
 from utils.prompt_engine import my_prompt_function, session_memory
 from config import OPENAI_API_KEY
 
@@ -59,10 +61,10 @@ def load_firm_and_links(firm_id: int) -> Tuple[str, str, List[str]]:
         about_texts = []
 
         for w in websites:
-            about_data = w.scraped_data.get("about", {}) if w.scraped_data else {}
+            # about_data = w.scraped_data.get("about", {}) if w.scraped_data else {}
             links_data = w.scraped_data.get("links", []) if w.scraped_data else []
 
-            about_texts.append(about_data.get("full_text", ""))
+            # about_texts.append(about_data.get("full_text", ""))
             for link in links_data:
                 if isinstance(link, dict):
                     links_list.append(f"{link.get('text','')} → {link.get('url','')}")
@@ -70,8 +72,8 @@ def load_firm_and_links(firm_id: int) -> Tuple[str, str, List[str]]:
                     links_list.append(link)
 
         firm_name = re.sub(r"^(www\.)|(\.com)$", "", firm.name, flags=re.IGNORECASE)
-        context_text = " ".join(about_texts)
-        return firm_name, context_text, links_list
+        # context_text = " ".join(about_texts)
+        return firm_name, links_list
     finally:
         db.close()
 
@@ -93,17 +95,17 @@ def get_answer_from_db(query: str, firm_id: int, session_id: Optional[str] = Non
         docs = results["documents"][0] if results["documents"] else []
 
         # 3️⃣ Load firm context & links
-        firm_name, context_text_from_db, links_list = load_firm_and_links(firm_id)
-
+        firm_name, links_list = load_firm_and_links(firm_id)
+        # context_text_from_db = query_similar_texts(query)
         # 3a️⃣ Truncate long firm context
-        MAX_CHARS = 20000
-        if len(context_text_from_db) > MAX_CHARS:
-            context_text_from_db = context_text_from_db[:MAX_CHARS] + " ...[truncated]"
+        # MAX_CHARS = 20000
+        # if len(context_text_from_db) > MAX_CHARS:
+        #     context_text_from_db = context_text_from_db[:MAX_CHARS] + " ...[truncated]"
 
         # 4️⃣ Merge retrieved docs + context
         MAX_DOC_CHARS = 5000
         docs = [d[:MAX_DOC_CHARS] for d in docs]
-        context_text = " ".join(docs) + "\n\n" + context_text_from_db
+        context_text = " ".join(docs)
 
         # 5️⃣ Generate prompt (use session memory suggestions)
         is_followup = bool(session_memory.get("previous_suggestions"))

@@ -189,7 +189,7 @@ async def build_about(url: str, base_dir="scraped_data"):
         "tagline": tagline,
         "meta_description": meta_desc,
         "short_description": first_p,
-        "full_text": " "
+        "full_text": " ".join(all_texts)
     }
 
     # Save to DB safely

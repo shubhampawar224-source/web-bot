@@ -25,6 +25,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from model.validation_schema import ChatRequest, SecurityHeadersMiddleware, URLPayload
 from utils.voice_bot_helper import client
+from voice_config.voice_helper import *
 
 
 
@@ -37,6 +38,8 @@ from utils.vector_store import (
     add_text_chunks_to_collection,
     query_similar_texts
 )
+
+load_dotenv(override=True)
 
 
 # ---------------- Disable HuggingFace Tokenizer Warning ----------------
@@ -57,7 +60,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 init_db()
-load_dotenv(override=True)
+voice_assistant = VoiceAssistant()
 
 # ---------------- Helper ----------------
 def get_session_history(session_id: str):
@@ -71,75 +74,15 @@ def get_session_history(session_id: str):
             history.append({"role": meta["role"], "content": doc})
     return history
 
-# ---------------- Routes ----------------
-# @app.get("/")
-# async def root():
-#     return FileResponse("static/index.html")
-
 # ----- APIs -----
 @app.get("/", response_class=HTMLResponse)
 async def index():
     return FileResponse("static/index.html")
-# @app.post("/chat")
-# async def chat_endpoint(data: dict):
-#     try:
-#         session_id = data.get("session_id") or str(uuid.uuid4())
-#         query = data.get("query")
 
-#         if not query:
-#             return JSONResponse({"error": "Query is required"}, status_code=400)
 
-#         # ---------------- Store user query ----------------
-#         query_embedding = embedding_model.encode(query).tolist()
-#         collection.add(
-#             ids=[f"user_{session_id}_{uuid.uuid4()}"],
-#             embeddings=[query_embedding],
-#             documents=[query],
-#             metadatas={"type": "chat", "role": "user", "session_id": session_id}
-#         )
-
-#         # ---------------- Retrieve relevant website chunks ----------------
-#         results = collection.query(
-#             query_embeddings=[query_embedding],
-#             n_results=5,
-#             where={"type": "website"}  # only website content
-#         )
-
-#         # Flatten and deduplicate documents + metadata
-#         raw_docs = results["documents"][0] if results["documents"] else []
-#         raw_metas = results["metadatas"][0] if results["metadatas"] else []
-
-#         seen = set()
-#         retrieved_docs, retrieved_metas = [], []
-#         for doc, meta in zip(raw_docs, raw_metas):
-#             if doc not in seen:
-#                 seen.add(doc)
-#                 retrieved_docs.append(doc)
-#                 retrieved_metas.append(meta)
-
-#         # ---------------- Generate answer ----------------
-#         retrieved_context_text = " ".join(retrieved_docs)
-#         answer = get_answer(retrieved_context_text, query)
-
-#         # ---------------- Store assistant answer ----------------
-#         answer_embedding = embedding_model.encode(answer).tolist()
-#         collection.add(
-#             ids=[f"assistant_{session_id}_{uuid.uuid4()}"],
-#             embeddings=[answer_embedding],
-#             documents=[answer],
-#             metadatas={"type": "chat", "role": "assistant", "session_id": session_id}
-#         )
-
-#         # ---------------- Return only what the user should see ----------------
-#         return {
-#             "answer": answer,
-#             "session_id": session_id,
-#             "history": get_session_history(session_id)  # optional; remove if you don't want to show history
-#         }
-
-#     except Exception as e:
-#         print(f"[Error] Chat endpoint failed: {e}")
-#         return JSONResponse({"error": "Something went wrong."}, status_code=500)
+@app.get("/voice")
+async def get_index():
+    return FileResponse("static/voice.html")
 
 
 @app.post("/chat")
@@ -176,10 +119,6 @@ async def chat_endpoint(data: ChatRequest):
     finally:
         db.close()
 
-@app.get("/history/{session_id}")
-async def get_history(session_id: str):
-    """Fetch full chat history from vector DB"""
-    return {"session_id": session_id, "history": get_session_history(session_id)}
 
 @app.post("/inject-url")
 async def inject_url(payload: URLPayload):
@@ -238,98 +177,49 @@ async def get_all_firms():
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
-        
 
-@app.get("/voice")
-async def get_index():
-    return FileResponse("static/voice.html")
 
-# ----------------- WebSocket voice assistant -----------------
+@app.get("/history/{session_id}")
+async def get_history(session_id: str):
+    """Fetch full chat history from vector DB"""
+    return {"session_id": session_id, "history": get_session_history(session_id)}
+
+@app.get("/widget")
+async def get_widget():
+    return FileResponse("static/widget.html")
+  
+# ----------------- WebSocket voice assistant ----------------
+
 @app.websocket("/ws/voice")
 async def ws_voice(ws: WebSocket):
     await ws.accept()
-    session_db: Session = SessionLocal()
-    paused = False  # Pause control flag
+    session_id = str(ws.client.host)  # or uuid.uuid4() for uniqueness
+    print(f"🎧 Voice session started: {session_id}")
 
     try:
-        # Greeting message
-        welcome_text = "Hello! I am your AI voice assistant. Start speaking and I will reply."
-        tts_resp = client.audio.speech.create(
-            model="gpt-4o-mini-tts", voice="alloy", input=welcome_text
-        )
-        audio_data = io.BytesIO(tts_resp.read())
-        audio_b64 = base64.b64encode(audio_data.getvalue()).decode()
-        await ws.send_json({"bot_text": welcome_text, "audio": audio_b64})
+        # Send greeting
+        greeting = "Hello! I’m your AI voice assistant. How can I help you today?"
+        await voice_assistant.safe_send(ws, greeting)
 
+        # Listen loop
         while True:
-            data = await ws.receive_json()
+            try:
+                data = await ws.receive_json()
+            except WebSocketDisconnect:
+                print("⚠️ Client disconnected during receive.")
+                break
 
-            # 🟡 Handle pause/resume commands
-            if data.get("command") == "pause":
-                paused = True
-                await ws.send_json({"status": "paused"})
-                continue
-            elif data.get("command") == "resume":
-                paused = False
-                await ws.send_json({"status": "resumed"})
+            if not data.get("audio") or data.get("silence"):
                 continue
 
-            if paused:
-                await ws.send_json({"status": "paused_ignored"})
-                continue
-
-            # 🟢 Handle voice input
-            audio_b64_input = data.get("audio")
-            if not audio_b64_input:
-                await ws.send_json({"error": "Empty input not allowed"})
-                continue
-
-            # 1️⃣ Speech-to-Text
-            audio_bytes = base64.b64decode(audio_b64_input)
-            audio_file = io.BytesIO(audio_bytes)
-            audio_file.name = "input.wav"
-
-            stt_resp = client.audio.transcriptions.create(
-                model="whisper-1",
-                file=audio_file
-            )
-            user_text = stt_resp.text.strip()
-
-            if not user_text:
-                await ws.send_json({"error": "No speech detected"})
-                continue
-
-            print(f"[User]: {user_text}")
-
-            # 2️⃣ FAISS retrieval
-            faiss_resp = retrieve_faiss_response(user_text)
-            faiss_text = faiss_resp["text"]
-
-            # 3️⃣ GPT refinement
-            final_reply = refine_text_with_gpt(user_text, faiss_text)
-            print(f"[Bot]: {final_reply}")
-
-            # 4️⃣ TTS
-            tts_resp = client.audio.speech.create(
-                model="gpt-4o-mini-tts",
-                voice="alloy",
-                input=final_reply
-            )
-            audio_data = io.BytesIO(tts_resp.read())
-            audio_b64_out = base64.b64encode(audio_data.getvalue()).decode()
-
-            # 5️⃣ Send back to client
-            await ws.send_json({
-                "user_text": user_text,
-                "bot_text": final_reply,
-                "metadata": faiss_resp["metadata"],
-                "audio": audio_b64_out
-            })
-
-            time.sleep(5)
+            audio_bytes = base64.b64decode(data["audio"])
+            exit_signal = await voice_assistant.process_audio(ws, audio_bytes, session_id)
+            if exit_signal == "exit":
+                break
 
     except Exception as e:
-        print(f"WebSocket error: {e}")
-        await ws.send_json({"error": str(e)})
+        print(f"💥 WebSocket error: {e}")
     finally:
-        session_db.close()
+        if ws.client_state.name == "CONNECTED":
+            await ws.close()
+        print(f"🔒 Session {session_id} closed.")
