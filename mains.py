@@ -11,21 +11,22 @@ from utils.voice_bot_helper import refine_text_with_gpt, retrieve_faiss_response
 from utils.query_senetizer import is_safe_query
 from database.db import init_db
 from utils.scraper import build_about
-from fastapi import FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException
 from pydantic import BaseModel, HttpUrl
 from fastapi import FastAPI, WebSocket
 from typing import Optional, List
 from sqlalchemy.orm import Session
 from database.db import SessionLocal
-from model.models import Website, Firm
+from model.models import Contact, Website, Firm
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from model.validation_schema import ChatRequest, SecurityHeadersMiddleware, URLPayload
+from model.validation_schema import ChatRequest, ContactIn, SecurityHeadersMiddleware, URLPayload
 from utils.voice_bot_helper import client
 from voice_config.voice_helper import *
+from utils.email_send import ContactManager
 
 
 
@@ -47,6 +48,8 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 loges.log_check(message="INFO")
 # ---------------- FastAPI setup ----------------
 app = FastAPI()
+contact_mgr = ContactManager()
+
 # After CORS setup
 app.add_middleware(
     CORSMiddleware,
@@ -104,16 +107,12 @@ async def chat_endpoint(data: ChatRequest):
         if not firm:
             return JSONResponse({"error": "Selected firm not found"}, status_code=404)
 
-        # Fetch all websites for this firm
-        websites = db.query(Website).filter(Website.firm_id == firm.id).all()
-        # Aggregate "full_text" from the 'about' field in scraped_data
-        context = " ".join([
-            w.scraped_data.get("about", {}).get("full_text", "")
-            for w in websites if w.scraped_data
-        ])
-
         # Get firm-specific answer from vector DB
         answer = get_answer_from_db(query=query, session_id=session_id, firm_id=firm.id)
+        if not answer:
+            answer= {"action": "SHOW_CONTACT_FORM",
+                       "message": "Before we finish, we would like to collect your contact details so our team can assist further."
+}
         return {"answer": answer, "session_id": session_id}
 
     finally:
@@ -178,6 +177,20 @@ async def get_all_firms():
     finally:
         db.close()
 
+# ...existing code...
+@app.post("/save-contact")
+async def save_contact(payload: ContactIn, background_tasks: BackgroundTasks):
+    try:
+        # prefer explicit notify_to, otherwise send to the contact's email
+        notify_to = payload.notify_to or payload.email
+        contact_id = contact_mgr.save_and_notify(
+            payload.model_dump(),
+            background_tasks=background_tasks,
+            notify_to=notify_to
+        )
+        return {"status": "ok", "id": contact_id}
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
 
 @app.get("/history/{session_id}")
 async def get_history(session_id: str):

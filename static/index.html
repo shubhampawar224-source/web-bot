@@ -4,13 +4,15 @@
 <meta charset="UTF-8">
 <title>DJF Web Assistant</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="static/style.css">
+<link rel="stylesheet" href="static/css/style.css">
+<link rel="stylesheet" href="static/css/popup.css">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
 
 <!-- Navbar -->
 <div class="navbar">
-    <div class="logo">DJF Assistant</div>
+    <div class="logo">Helping Assistant</div>
 </div>
 
 <!-- Sidebar toggle (hamburger) -->
@@ -65,8 +67,44 @@
     </div>
 </div>
 
+<!-- Contact Form Modal -->
+<div id="contactModal" class="modal" aria-hidden="true">
+  <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="contactTitle">
+    <div class="modal-header">
+      <h2 id="contactTitle">Provide Your Contact Details</h2>
+      <button class="modal-close" aria-label="Close">&times;</button>
+    </div>
+
+    <div class="modal-form">
+      <div class="grid-2">
+        <div>
+          <label for="fname">First Name</label>
+          <input type="text" id="fname" placeholder="First Name">
+        </div>
+        <div>
+          <label for="lname">Last Name</label>
+          <input type="text" id="lname" placeholder="Last Name">
+        </div>
+      </div>
+
+      <label for="email">Email</label>
+      <input type="email" id="email" placeholder="Email">
+
+      <label for="phone">Phone Number</label>
+      <input type="text" id="phone" placeholder="Phone Number">
+
+      <div class="modal-actions">
+        <button id="contactSkip" class="btn secondary">Skip</button>
+        <button id="contactSubmit" class="btn primary">Submit</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
-<script src="static/script.js"></script>
+<!-- load popup helper BEFORE main chat script so handle/show functions exist when script.js runs -->
+<script src="static/js/popup.js"></script>
+<script src="static/js/script.js"></script>
 </body>
 </html>

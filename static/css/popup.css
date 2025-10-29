@@ -1,0 +1,317 @@
+/* Improved styling & centering for contact modal */
+
+#contactModal {
+  display: none; /* JS will add .open to show */
+  position: fixed;
+  inset: 0; /* top:0; right:0; bottom:0; left:0; */
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 9999;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* show modal */
+#contactModal.open {
+  display: flex;
+}
+
+/* inner card */
+#contactModal .modal-content {
+  width: min(620px, 96%);
+  max-width: 720px;
+  height: auto;
+  max-height: calc(100vh - 80px);
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 18px;
+  box-shadow: 0 14px 30px rgba(2,6,23,0.2), 0 6px 12px rgba(2,6,23,0.08);
+  transform: translateY(12px);
+  opacity: 0;
+  transition: transform 320ms cubic-bezier(.2,.9,.3,1), opacity 220ms ease;
+  position: relative;
+  overflow: auto; /* allow inner scroll if form is tall */
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* animate in */
+#contactModal.open .modal-content {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+/* header */
+#contactModal .modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+#contactModal .modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #0b1320;
+  font-weight: 600;
+}
+
+/* close button */
+#contactModal .modal-close {
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: #8b95a3;
+  padding: 6px;
+  border-radius: 6px;
+}
+#contactModal .modal-close:hover { color:#0b1320; background: rgba(11,121,255,0.06); }
+
+/* form layout */
+#contactModal .modal-form {
+  display: grid;
+  gap: 10px;
+}
+#contactModal .grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+@media (max-width: 520px) {
+  #contactModal .grid-2 {
+    grid-template-columns: 1fr;
+  }
+}
+#contactModal input[type="text"],
+#contactModal input[type="email"],
+#contactModal input[type="tel"],
+#contactModal textarea,
+#contactModal select {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: visible;
+  padding: 10px 12px;
+  border: 1px solid #e6e9ee;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #0b1320;
+  background: #fff;
+  outline: none;
+}
+#contactModal input:focus,
+#contactModal textarea:focus {
+  border-color: #0b79ff;
+  box-shadow: 0 4px 14px rgba(11,121,255,0.08);
+}
+
+/* actions */
+#contactModal .modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+#contactModal .btn {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+}
+#contactModal .btn.secondary {
+  background: transparent;
+  border: 1px solid #e6e9ee;
+  color: #334155;
+}
+#contactModal .btn.primary {
+  background: #0b79ff;
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(11,121,255,0.14);
+}
+
+/* small screens tweak */
+@media (max-width:420px) {
+  #contactModal .grid-2 { grid-template-columns: 1fr; }
+  #contactModal .modal-content { padding: 14px; border-radius: 10px; }
+}
+
+/* Fix input overflow and ensure responsive layout inside modal */
+#contactModal,
+#contactModal * {
+  box-sizing: border-box;
+}
+
+/* Small improvement for very long words or pasted content */
+#contactModal .modal-content,
+#contactModal .modal-content p,
+#contactModal .modal-content label {
+  word-wrap: break-word;
+  hyphens: auto;
+}
+
+/* Make inputs 60% width and inline with small submit button */
+#contactModal .input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+}
+
+/* target typical inputs used in modal */
+#contactModal .input-row input[type="text"],
+#contactModal .input-row input[type="email"],
+#contactModal .input-row input[type="tel"] {
+  width: 60%;
+  max-width: 60%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/* make submit button size to content (no full width) */
+#contactModal .modal-actions .btn.primary,
+#contactModal .modal-actions .btn {
+  width: auto;
+  min-width: 0;
+  padding: 8px 12px;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 600;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+}
+
+/* primary button color */
+#contactModal .modal-actions .btn.primary {
+  background: linear-gradient(180deg, #0b79ff 0%, #0466d9 100%);
+  color: #ffffff;
+  box-shadow: 0 6px 18px rgba(11,121,255,0.14);
+}
+
+/* secondary button (outline) */
+#contactModal .modal-actions .btn.secondary {
+  background: transparent;
+  border: 1px solid #e6e9ee;
+  color: #334155;
+}
+
+/* Slightly smaller padding on very small screens */
+@media (max-width: 420px) {
+  #contactModal .modal-actions .btn { padding: 6px 10px; font-size: 13px; }
+}
+
+/* Responsive: on small screens stack and make inputs full width */
+@media (max-width: 520px) {
+  #contactModal .input-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  #contactModal .input-row input[type="text"],
+  #contactModal .input-row input[type="email"],
+  #contactModal .input-row input[type="tel"] {
+    width: 100%;
+    max-width: 100%;
+  }
+  #contactModal .modal-actions {
+    justify-content: center;
+  }
+}
+
+/* slide-in-from-left animation */
+#contactModal .modal-content {
+  transition: transform 320ms cubic-bezier(.2,.9,.3,1), opacity 220ms ease;
+  transform: translateX(0);
+  opacity: 1;
+}
+
+/* initial state for slide-left (hidden slightly left & transparent) */
+#contactModal.slide-left .modal-content {
+  transform: translateX(-32%);
+  opacity: 0;
+}
+
+/* when modal is open and slide-left requested, animate into place */
+#contactModal.open.slide-left .modal-content {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+/* ensure modal container centers vertically but allows slide-from-left visual */
+#contactModal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 9999;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+/* keep responsiveness */
+@media (max-width:720px) {
+  #contactModal.slide-left .modal-content {
+    transform: translateX(-10%); /* less offset on small screens */
+  }
+}
+
+/* Toast: fixed right-bottom, size-to-content, hidden by default */
+#toast {
+  position: fixed;
+  right: 20px;
+  bottom: 24px;
+  display: none;              /* hidden until showToast() */
+  z-index: 14000;
+  box-sizing: border-box;
+  max-width: 380px;           /* cap width */
+  width: auto;
+  min-width: 140px;
+  padding: 0;                 /* inner padding in .toast-body */
+  border-radius: 10px;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  transform: translateY(8px);
+  opacity: 0;
+  transition: opacity 220ms ease, transform 220ms ease;
+  pointer-events: none;       /* avoid intercepting clicks when hidden */
+}
+
+/* when visible */
+#toast.show {
+  display: inline-block;
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+/* inner wrapper sizes and scroll handling */
+#toast .toast-body {
+  display: inline-block;
+  padding: 10px 14px;
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+  white-space: normal;
+  word-break: break-word;
+  max-height: 60vh;
+  overflow: auto;
+}
+
+/* variants */
+#toast.info  .toast-body { background: linear-gradient(90deg,#0b79ff,#0466d9); }
+#toast.success .toast-body { background: linear-gradient(90deg,#10b981,#059669); }
+#toast.error .toast-body { background: linear-gradient(90deg,#ef4444,#b91c1c); }
+
+/* small screens: bring toast nearer center if necessary */
+@media (max-width:420px) {
+  #toast { right: 12px; bottom: 18px; max-width: calc(100% - 32px); }
+}

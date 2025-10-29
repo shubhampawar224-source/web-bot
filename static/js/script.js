@@ -52,29 +52,59 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // ---------- Chat Formatting ----------
+    // convert markdown/link/bold/list -> HTML, safe minimal handling
     function parseMarkdownLinks(text) {
-        return text.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
-            (match, label, url) => `<a href="${url}" target="_blank" style="color:#4a90e2;text-decoration:none;">${label}</a>`);
+        if (typeof text !== "string") {
+            if (text && typeof text.message === "string") text = text.message;
+            else text = String(text || "");
+        }
+
+        // Preserve existing anchor tags: if HTML present, return as-is (we assume trusted source)
+        if (/<\/?[a-z][\s\S]*>/i.test(text)) {
+            return text;
+        }
+
+        // Bold **text**
+        text = text.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+
+        // Markdown links [label](https://...)
+        text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+
+        // Numbered lists: lines starting with "1. " or "2. " -> convert contiguous numbered lines to <ol>
+        text = text.replace(/((?:^\d+\.\s.*(\r?\n|$))+)/gm, (match) => {
+            const items = match.trim().split(/\r?\n/).map(l => l.replace(/^\d+\.\s*/, "").trim()).filter(Boolean);
+            return `<ol>${items.map(i => `<li>${i}</li>`).join("")}</ol>\n`;
+        });
+
+        // Dash lists: lines starting with "- "
+        text = text.replace(/((?:^- .*(\r?\n|$))+)/gim, (match) => {
+            const items = match.trim().split(/\r?\n/).map(l => l.replace(/^- /, "").trim()).filter(Boolean);
+            return `<ul>${items.map(i => `<li>${i}</li>`).join("")}</ul>\n`;
+        });
+
+        // Convert remaining newlines to <br> for simple paragraphs
+        text = text.replace(/\r?\n{2,}/g, "</p><p>"); // double newline = new paragraph
+        text = text.replace(/\r?\n/g, "<br>");
+
+        // Wrap paragraphs if we used paragraph splitting
+        if (text.includes("</p><p>") || !text.startsWith("<") ) {
+            if (!text.startsWith("<p") && !text.startsWith("<ol") && !text.startsWith("<ul")) {
+                text = `<p>${text}</p>`;
+            }
+        }
+
+        return text;
     }
 
-    function formatResponse(msg) {
-        msg = parseMarkdownLinks(msg);
-        msg = msg.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
-        const lines = msg.split("\n").map(l => l.trim()).filter(l => l);
-        let output = "", listItems = [];
-        lines.forEach(line => {
-            if (/^\d+\.\s/.test(line)) listItems.push(line.replace(/^\d+\.\s/, ""));
-            else {
-                if (listItems.length) {
-                    output += `<ol style="margin-left:20px;margin-top:10px;">${listItems.map(i => `<li style="margin-bottom:8px;">${i}</li>`).join("")}</ol>`;
-                    listItems = [];
-                }
-                output += `<p style="margin-bottom:10px;">${line}</p>`;
-            }
-        });
-        if (listItems.length)
-            output += `<ol style="margin-left:20px;margin-top:10px;">${listItems.map(i => `<li style="margin-bottom:8px;">${i}</li>`).join("")}</ol>`;
-        return output;
+    function formatResponse(resp) {
+        // Normalize object responses
+        if (typeof resp === "object" && resp !== null) {
+            if (typeof resp.message === "string") return parseMarkdownLinks(resp.message);
+            if (typeof resp.answer === "string") return parseMarkdownLinks(resp.answer);
+            // fallback to stringified object
+            try { return parseMarkdownLinks(JSON.stringify(resp)); } catch { return parseMarkdownLinks(String(resp)); }
+        }
+        return parseMarkdownLinks(String(resp || ""));
     }
 
     function addMessage(msg, className) {
@@ -107,21 +137,58 @@ document.addEventListener("DOMContentLoaded", () => {
         if (typingDiv && typingDiv.parentNode) typingDiv.remove();
     }
 
-    async function typeMessage(element, msg, delay = 25) {
-        element.innerHTML = "";
-        msg = formatResponse(msg);
-        let buffer = "", inTag = false;
-        for (let i = 0; i < msg.length; i++) {
-            const char = msg[i];
-            buffer += char;
-            if (char === "<") inTag = true;
-            if (char === ">") inTag = false;
-            if (!inTag) chatBox.scrollTop = chatBox.scrollHeight;
-            element.innerHTML = buffer;
-            await new Promise(r => setTimeout(r, delay));
+    async function typeMessage(containerEl, resp, speed = 1) {
+        const html = formatResponse(resp);
+
+        // If HTML contains tags (links/lists etc.), don't type char-by-char (avoids broken tags)
+        if (/<\/?[a-z][\s\S]*>/i.test(html)) {
+            containerEl.innerHTML = html;
+            return;
         }
-        element.innerHTML = buffer;
-        chatBox.scrollTop = chatBox.scrollHeight;
+
+        // Natural typing simulation:
+        // - speed: multiplier (1 = normal, <1 faster, >1 slower)
+        // - baseDelay: baseline ms per character
+        const baseDelay = 12; // baseline ms per character
+        const jitterFactor = 0.45; // randomness factor
+
+        const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+        containerEl.innerHTML = "";
+        for (let i = 0; i < html.length; i++) {
+            const ch = html.charAt(i);
+            containerEl.innerHTML += ch;
+
+            // Determine delay
+            let delay = baseDelay * (speed || 1);
+
+            // Shorter pause for spaces (simulate continuous typing)
+            if (ch === " ") {
+                delay *= 0.3;
+            }
+
+            // Slightly longer for commas
+            if (ch === ",") {
+                delay += baseDelay * 4;
+            }
+
+            // Longer pause for sentence endings
+            if (ch === "." || ch === "!" || ch === "?") {
+                // look ahead: if next char is also punctuation or end, make a longer pause
+                delay += baseDelay * 20;
+            }
+
+            // Newline -> paragraph pause
+            if (ch === "\n") {
+                delay += baseDelay * 12;
+            }
+
+            // Add some jitter so it feels natural
+            const jitter = (Math.random() - 0.5) * jitterFactor * delay;
+            delay = Math.max(2, Math.round(delay + jitter));
+
+            await sleep(delay);
+        }
     }
 
     function getSelectedFirm() {
@@ -160,8 +227,49 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             if (data && data.answer) {
-                const botMsgDiv = addMessage("", "bot-msg");
-                await typeMessage(botMsgDiv, data.answer, 3);
+                // Attempt to parse structured JSON response (string or object)
+                let consumed = false;
+                try {
+                    let parsed = typeof data.answer === "string" ? JSON.parse(data.answer) : data.answer;
+                    if (parsed && parsed.action === "SHOW_CONTACT_FORM") {
+                        const botMsgDiv = addMessage("", "bot-msg");
+                        const assistantText = parsed.message || "Before we finish, please share your contact details.";
+                        await typeMessage(botMsgDiv, assistantText, 3);
+
+                        // Open contact modal with 2s delay and slide-left animation
+                        try {
+                            if (typeof window.showContactModal === "function") {
+                                window.showContactModal({
+                                    endpoint: "/save-contact",
+                                    metadata: { conversationId: parsed.conversation_id || null },
+                                    delayMs: 2000,
+                                    animation: "slide-left"
+                                });
+                            } else {
+                                // fallback: show modal after delay
+                                setTimeout(() => {
+                                    const modal = document.getElementById("contactModal");
+                                    if (modal) {
+                                        modal.classList.add("slide-left");
+                                        modal.classList.add("open");
+                                    }
+                                }, 2000);
+                            }
+                        } catch (e) {
+                            console.warn("Failed to open contact modal", e);
+                        }
+
+                        consumed = true;
+                    }
+                } catch (e) {
+                    // not JSON or parsing failed -> treat as regular text
+                    consumed = false;
+                }
+
+                if (!consumed) {
+                    const botMsgDiv = addMessage("", "bot-msg");
+                    await typeMessage(botMsgDiv, data.answer, 3);
+                }
             } else {
                 addMessage("⚠️ No valid response from assistant.", "bot-msg");
             }

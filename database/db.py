@@ -1,8 +1,10 @@
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-
-DATABASE_URL = "sqlite:///./scraped_data.db"  # replace with PostgreSQL/MySQL if needed
+import os
+from dotenv import load_dotenv
+load_dotenv(override=True)  
+DATABASE_URL = os.getenv("DATABASE_URI")  # replace with PostgreSQL/MySQL if needed
 
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

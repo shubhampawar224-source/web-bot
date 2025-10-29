@@ -96,12 +96,6 @@ def get_answer_from_db(query: str, firm_id: int, session_id: Optional[str] = Non
 
         # 3️⃣ Load firm context & links
         firm_name, links_list = load_firm_and_links(firm_id)
-        # context_text_from_db = query_similar_texts(query)
-        # 3a️⃣ Truncate long firm context
-        # MAX_CHARS = 20000
-        # if len(context_text_from_db) > MAX_CHARS:
-        #     context_text_from_db = context_text_from_db[:MAX_CHARS] + " ...[truncated]"
-
         # 4️⃣ Merge retrieved docs + context
         MAX_DOC_CHARS = 5000
         docs = [d[:MAX_DOC_CHARS] for d in docs]

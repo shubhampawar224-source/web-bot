@@ -46,3 +46,21 @@ class ChatRequest(BaseModel):
     query: str
     session_id: str
     firm_id: str    
+
+
+class ContactIn(BaseModel):
+    fname: Optional[str] = None
+    lname: Optional[str] = None
+    email: Optional[str] = None
+    phone_number: Optional[str] = None
+    metadata: Optional[dict] = None
+
+
+
+class ContactIn(BaseModel):
+    fname: Optional[str] = None
+    lname: Optional[str] = None
+    email: Optional[str] = None
+    phone_number: Optional[str] = None
+    metadata: Optional[dict] = None
+    notify_to: Optional[str] = None

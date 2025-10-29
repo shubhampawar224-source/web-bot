@@ -32,3 +32,11 @@ class Website(Base):
             "about": about_dict,
             "links": links_list
         }
+class Contact(Base):
+    __tablename__ = "contacts"
+    id = Column(Integer, primary_key=True)
+    fname = Column(String(100))
+    lname = Column(String(100))
+    email = Column(String(150))
+    phone_number = Column(String(20))
+    created_at = Column(DateTime, default=datetime.now)
