@@ -25,10 +25,45 @@
       height: 100%;
     }
   </style>
+
+  <script>
+    // compute base URL robustly:
+    // 1) try to derive from the loader script (if the widget is loaded via a loader script)
+    // 2) fallback to the current page origin (works when widgets.html is served directly)
+    (function () {
+      const scriptEl = document.currentScript || document.querySelector('script[src*="widget.js"], script[src*="loader.js"]');
+      let BASE_URL = location.origin;
+      try {
+        if (scriptEl && scriptEl.src) {
+          BASE_URL = new URL(scriptEl.src).origin;
+        }
+      } catch (e) {
+        BASE_URL = location.origin;
+      }
+      // expose for debugging if needed (remove in production)
+      console.log('Widget base URL:', BASE_URL);
+
+      // set iframe src after DOM is ready to avoid literal template tokens and encoding issues
+      function setIframeSrc() {
+        const iframe = document.querySelector('#voice-widget iframe');
+        if (!iframe) return;
+        // ensure we don't accidentally include template strings
+        iframe.src = BASE_URL + './index.html';
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', setIframeSrc, { once: true });
+      } else {
+        setIframeSrc();
+      }
+    })();
+  </script>
 </head>
+
 <body>
   <div id="voice-widget">
-    <iframe src="/static/voice_inner.html"></iframe>
+    <!-- avoid template placeholder here; JS will populate src -->
+    <iframe src="about:blank" title="Voice assistant"></iframe>
   </div>
 </body>
 </html>

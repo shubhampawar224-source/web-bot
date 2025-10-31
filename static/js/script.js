@@ -137,7 +137,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (typingDiv && typingDiv.parentNode) typingDiv.remove();
     }
 
-    async function typeMessage(containerEl, resp, speed = 1) {
+    async function typeMessage(containerEl, resp, speed = 2) {
         const html = formatResponse(resp);
 
         // If HTML contains tags (links/lists etc.), don't type char-by-char (avoids broken tags)
@@ -244,7 +244,7 @@ document.addEventListener("DOMContentLoaded", () => {
                                     metadata: { conversationId: parsed.conversation_id || null },
                                     delayMs: 2000,
                                     animation: "slide-left"
-                                });
+                                }); 
                             } else {
                                 // fallback: show modal after delay
                                 setTimeout(() => {

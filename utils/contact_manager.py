@@ -1,18 +1,3 @@
-import os
-import logging
-import smtplib
-from email.message import EmailMessage
-from typing import Optional, Dict
-from dotenv import load_dotenv
-from database.db import SessionLocal
-from model.models import Contact
-from sqlalchemy.exc import SQLAlchemyError
-from datetime import datetime, timezone
-import re
-
-load_dotenv(override=False)
-logger = logging.getLogger(__name__)
-
 from email.message import EmailMessage
 from datetime import datetime, timezone
 import logging
@@ -208,57 +193,3 @@ class ContactManager:
             server.quit()
         except Exception as e:
             logger.exception("SMTP connection/send failed: %s", e)
-    def save(self, payload: Dict) -> Contact:
-        """Save contact to DB and return Contact instance."""
-        db = self.db_factory()
-        try:
-            c = Contact(
-                fname=payload.get("fname"),
-                lname=payload.get("lname"),
-                email=payload.get("email"),
-                phone_number=payload.get("phone_number"),
-                created_at=payload.get("created_at")  # optional override
-            )
-            db.add(c)
-            db.commit()
-            db.refresh(c)
-            return c
-        except SQLAlchemyError as e:
-            db.rollback()
-            logger.exception("DB save failed: %s", e)
-            raise
-        finally:
-            db.close()
-
-    def save_and_notify(self, payload: Dict, background_tasks=None, notify_to: Optional[str] = None) -> int:
-        """
-        Save contact and optionally schedule email notification.
-        - payload: dict with contact fields + optional metadata
-        - background_tasks: FastAPI BackgroundTasks or None
-        Returns saved contact id.
-        """
-        contact_obj = self.save(payload)
-        contact_dict = {
-            "id": contact_obj.id,
-            "fname": contact_obj.fname,
-            "lname": contact_obj.lname,
-            "email": contact_obj.email,
-            "phone_number": contact_obj.phone_number,
-            "created_at": contact_obj.created_at.isoformat() if hasattr(contact_obj.created_at, "isoformat") else str(contact_obj.created_at),
-            "metadata": payload.get("metadata", {}),
-            "notify_to": notify_to or payload.get("notify_to")
-        }
-
-        if background_tasks is not None:
-            background_tasks.add_task(self.send_email_sync, contact_dict, notify_to or payload.get("notify_to"))
-        else:
-            # synchronous fallback
-            try:
-                self.send_email_sync(contact_dict, notify_to or payload.get("notify_to"))
-            except Exception:
-                logger.exception("Synchronous email send failed")
-
-        return contact_obj.id
-
-
-

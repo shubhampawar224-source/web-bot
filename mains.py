@@ -1,4 +1,3 @@
-
 import base64
 import io
 import os
@@ -6,12 +5,13 @@ import re
 import time
 import uuid
 from dotenv import load_dotenv
+from flask import render_template_string, Flask, request
 import loges
 from utils.voice_bot_helper import refine_text_with_gpt, retrieve_faiss_response
 from utils.query_senetizer import is_safe_query
 from database.db import init_db
 from utils.scraper import build_about
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request, Response
 from pydantic import BaseModel, HttpUrl
 from fastapi import FastAPI, WebSocket
 from typing import Optional, List
@@ -29,7 +29,6 @@ from voice_config.voice_helper import *
 from utils.email_send import ContactManager
 
 
-
 # from cache_manager import load_website_text
 from utils.llm_tools import get_answer_from_db
 from utils.vector_store import (
@@ -40,7 +39,8 @@ from utils.vector_store import (
     query_similar_texts
 )
 
-load_dotenv(override=True)
+load_dotenv()
+ALLOWED_IFRAME_ORIGINS = os.getenv("ALLOWED_IFRAME_ORIGINS", "")  # space-separated list e.g. "https://siteA.com https://siteB.com"
 
 
 # ---------------- Disable HuggingFace Tokenizer Warning ----------------
@@ -58,13 +58,29 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
+@app.middleware("http")
+async def allow_iframe(request, call_next):
+    response = await call_next(request)
+
+    # Allow embedding anywhere
+    response.headers["Content-Security-Policy"] = "frame-ancestors *;"
+    
+    # Old browser fallback
+    response.headers["X-Frame-Options"] = "ALLOWALL"
+    
+    # Allow widget JS to fetch API
+    response.headers["Access-Control-Allow-Origin"] = "*"
+
+    return response
+
+
 # Add CSP + Security middleware
 app.add_middleware(SecurityHeadersMiddleware)
-
 app.mount("/static", StaticFiles(directory="static"), name="static")
 init_db()
-voice_assistant = VoiceAssistant()
 
+
+voice_assistant = VoiceAssistant()
 # ---------------- Helper ----------------
 def get_session_history(session_id: str):
     results = collection.get(
@@ -177,7 +193,6 @@ async def get_all_firms():
     finally:
         db.close()
 
-# ...existing code...
 @app.post("/save-contact")
 async def save_contact(payload: ContactIn, background_tasks: BackgroundTasks):
     try:
@@ -199,40 +214,40 @@ async def get_history(session_id: str):
 
 @app.get("/widget")
 async def get_widget():
-    return FileResponse("static/widget.html")
+    return FileResponse("static/widgets.html")
   
 # ----------------- WebSocket voice assistant ----------------
 
-@app.websocket("/ws/voice")
-async def ws_voice(ws: WebSocket):
-    await ws.accept()
-    session_id = str(ws.client.host)  # or uuid.uuid4() for uniqueness
-    print(f"🎧 Voice session started: {session_id}")
+@app.get("/chat_widget", response_class=HTMLResponse)
+def chat_ui():
+    with open("static/index.html") as f:
+        return f.read()
 
-    try:
-        # Send greeting
-        greeting = "Hello! I’m your AI voice assistant. How can I help you today?"
-        await voice_assistant.safe_send(ws, greeting)
+@app.get("/config")
+def get_config():
+    return {
+        "baseUrl": os.getenv("WIDGET_BASE_URL")  # only public value
+    }
 
-        # Listen loop
-        while True:
+@app.middleware("http")
+async def frame_headers_middleware(request: Request, call_next):
+    resp = await call_next(request)
+
+    # remove restrictive headers if present (MutableHeaders: delete instead of pop)
+    for hdr in ("Content-Security-Policy", "X-Frame-Options", "Permissions-Policy"):
+        if hdr in resp.headers:
             try:
-                data = await ws.receive_json()
-            except WebSocketDisconnect:
-                print("⚠️ Client disconnected during receive.")
-                break
+                del resp.headers[hdr]
+            except Exception:
+                pass
 
-            if not data.get("audio") or data.get("silence"):
-                continue
+    if ALLOWED_IFRAME_ORIGINS:
+        origins = ALLOWED_IFRAME_ORIGINS.split()
+        allowed = " ".join(origins)
+        resp.headers["Content-Security-Policy"] = f"frame-ancestors 'self' {allowed};"
+        # do NOT re-add Permissions-Policy that blocks unload; only add explicit safe feature policies if you understand them
+    else:
+        resp.headers["Content-Security-Policy"] = "frame-ancestors *;"
 
-            audio_bytes = base64.b64decode(data["audio"])
-            exit_signal = await voice_assistant.process_audio(ws, audio_bytes, session_id)
-            if exit_signal == "exit":
-                break
+    return resp
 
-    except Exception as e:
-        print(f"💥 WebSocket error: {e}")
-    finally:
-        if ws.client_state.name == "CONNECTED":
-            await ws.close()
-        print(f"🔒 Session {session_id} closed.")
