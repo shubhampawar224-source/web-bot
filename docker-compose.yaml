@@ -1,8 +1,8 @@
-version: "3.9"
+version: "3.11"
 services:
-  voice-assistant:
+  web-assistant:
     build: .
-    container_name: voice_assistant
+    container_name: web_assistant
     ports:
       - "8000:8000"
     volumes:

@@ -1,5 +1,5 @@
 # Base image
-FROM python:3.12-slim
+FROM python:3.11-slim
 
 # Set working directory
 WORKDIR /app
@@ -22,8 +22,9 @@ ENV HF_HOME=/root/.cache/huggingface
 COPY requirements.txt .
 
 # Install Python dependencies
+RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install -U langchain-community langchain-openai
+# RUN pip install -U langchain-community langchain-openai
 
 # Copy project files
 COPY . .
