@@ -1,36 +1,47 @@
-# Base image
+# Use a specific slim-bullseye tag (more reliable resolver)
 FROM python:3.11-slim
 
-# Set working directory
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    DEBIAN_FRONTEND=noninteractive \
+    HF_HOME=/root/.cache/huggingface \
+    PATH=/root/.cargo/bin:$PATH
+
 WORKDIR /app
 
-# Install system dependencies for audio + build tools
-RUN apt-get update && apt-get install -y \
+# System build deps (do NOT install rustc/cargo via apt; use rustup below)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
     gcc \
     g++ \
     make \
     python3-dev \
+    pkg-config \
+    curl \
+    ca-certificates \
     ffmpeg \
     libsndfile1 \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-    
-ENV HF_HOME=/root/.cache/huggingface
+    libicu-dev \
+    libxml2-dev \
+  && rm -rf /var/lib/apt/lists/*
 
+# Install rustup (stable toolchain) so cargo supports edition=2021
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
+  && . /root/.cargo/env \
+  && rustup default stable \
+  && rustc --version \
+  && cargo --version
 
-# Copy requirements first for caching
-COPY requirements.txt .
+# Copy requirements first for layer caching
+COPY requirements.txt /app/requirements.txt
 
-# Install Python dependencies
-RUN pip install --upgrade pip
-RUN pip install --no-cache-dir -r requirements.txt
-# RUN pip install -U langchain-community langchain-openai
+# Upgrade pip & install python deps
+RUN pip install --upgrade pip setuptools wheel \
+ && pip install --no-cache-dir -r /app/requirements.txt
 
-# Copy project files
-COPY . .
+# Copy app source
+COPY . /app
 
-# Expose port
 EXPOSE 8000
 
-# Start FastAPI using Uvicorn
-CMD ["uvicorn", "mains:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["uvicorn", "mains:app", "--host", "0.0.0.0", "--port", "8000"]
