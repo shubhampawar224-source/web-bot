@@ -8,6 +8,9 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 # from langchain.chat_models import ChatOpenAI
 from langchain_openai import ChatOpenAI
+import httpx
+import openai
+from openai import OpenAI
 
 from database.db import SessionLocal
 from model.models import Firm, Website
@@ -15,8 +18,105 @@ from utils.vector_store import collection, embedding_model, query_similar_texts
 from utils.prompt_engine import my_prompt_function, session_memory
 from config import OPENAI_API_KEY
 
-# ---------------- LLM Setup ----------------
-llm = ChatOpenAI(model_name="gpt-4o", temperature=0, openai_api_key=OPENAI_API_KEY)
+# Debug API key loading
+if OPENAI_API_KEY:
+    print(f"✅ OpenAI API key loaded (starts with: {OPENAI_API_KEY[:10]}...)")
+else:
+    print("❌ OpenAI API key not found in environment variables")
+
+# ---------------- LLM Setup with Error Handling ----------------
+def create_llm_client():
+    """Create LLM client with proper timeout and retry settings"""
+    try:
+        # Create direct OpenAI client as fallback
+        openai_client = OpenAI(
+            api_key=OPENAI_API_KEY,
+            timeout=30.0,  # 30 second timeout
+            max_retries=3
+        )
+        
+        # Create LangChain ChatOpenAI with custom HTTP client
+        custom_http_client = httpx.Client(
+            timeout=30.0,
+            limits=httpx.Limits(max_connections=10, max_keepalive_connections=5)
+        )
+        
+        llm = ChatOpenAI(
+            model_name="gpt-4o", 
+            temperature=0, 
+            openai_api_key=OPENAI_API_KEY,
+            http_client=custom_http_client,
+            request_timeout=30
+        )
+        
+        return llm, openai_client
+    except Exception as e:
+        print(f"Error creating LLM client: {e}")
+        return None, None
+
+llm, openai_client = create_llm_client()
+
+def test_connectivity():
+    """Test connectivity to OpenAI API"""
+    try:
+        if openai_client is not None:
+            # Make a simple API call to test connectivity
+            response = openai_client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[{"role": "user", "content": "Hello"}],
+                max_tokens=5,
+                timeout=10
+            )
+            print("✅ OpenAI API connectivity test successful")
+            return True
+    except httpx.ConnectError:
+        print("❌ Network connectivity issue - cannot reach OpenAI API")
+        return False
+    except openai.AuthenticationError:
+        print("❌ Invalid OpenAI API key")
+        return False
+    except Exception as e:
+        print(f"❌ Connectivity test failed: {e}")
+        return False
+
+def call_llm_with_fallback(prompt_text: str, max_retries: int = 3) -> str:
+    """Call LLM with fallback to direct OpenAI client if LangChain fails"""
+    
+    # Try LangChain ChatOpenAI first
+    for attempt in range(max_retries):
+        try:
+            if llm is not None:
+                print(f"Attempting LangChain call (attempt {attempt + 1}/{max_retries})")
+                response_obj = llm.invoke(prompt_text)
+                return response_obj.content
+        except (httpx.ConnectError, openai.APIConnectionError, Exception) as e:
+            print(f"LangChain attempt {attempt + 1} failed: {e}")
+            if attempt < max_retries - 1:
+                import time
+                time.sleep(2 ** attempt)  # Exponential backoff
+            continue
+    
+    # Fallback to direct OpenAI client
+    for attempt in range(max_retries):
+        try:
+            if openai_client is not None:
+                print(f"Attempting direct OpenAI call (attempt {attempt + 1}/{max_retries})")
+                response = openai_client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[{"role": "user", "content": prompt_text}],
+                    temperature=0,
+                    timeout=30
+                )
+                return response.choices[0].message.content
+        except (httpx.ConnectError, openai.APIConnectionError, Exception) as e:
+            print(f"Direct OpenAI attempt {attempt + 1} failed: {e}")
+            if attempt < max_retries - 1:
+                import time
+                time.sleep(2 ** attempt)  # Exponential backoff
+            continue
+    
+    # If all attempts fail, return error message
+    return "I'm currently experiencing connectivity issues. Please try again in a moment."
 
 # ---------------- Session Memory Utilities ----------------
 def update_session_suggestions(session_id: str, suggestions: List[str]):
@@ -111,9 +211,13 @@ def get_answer_from_db(query: str, firm_id: int, session_id: Optional[str] = Non
             Urls= links_list,
         )
 
-        # 6️⃣ LLM response
-        response_obj = llm.invoke(prompt_text)
-        response_text = response_obj.content
+        # 6️⃣ LLM response with fallback handling
+        print("Calling LLM for response...")
+        response_text = call_llm_with_fallback(prompt_text)
+        
+        # Check if we got a connectivity error message
+        if "connectivity issues" in response_text:
+            return response_text
 
         # 7️⃣ Extract follow-up suggestions & update session
         new_suggestions = extract_suggestions_from_response(response_text)
@@ -145,6 +249,18 @@ def get_answer_from_db(query: str, firm_id: int, session_id: Optional[str] = Non
         update_session_firm(session_id, firm_id)
         return answer_text
 
+    except httpx.ConnectError as e:
+        print(f"[Network Error in get_answer_from_db]: Connection failed - {e}")
+        return "I'm having trouble connecting to my AI service. Please check your internet connection and try again."
+    except openai.APIConnectionError as e:
+        print(f"[OpenAI Connection Error in get_answer_from_db]: {e}")
+        return "I'm having trouble reaching the AI service. Please try again in a moment."
+    except openai.RateLimitError as e:
+        print(f"[Rate Limit Error in get_answer_from_db]: {e}")
+        return "I'm receiving too many requests right now. Please wait a moment and try again."
+    except openai.AuthenticationError as e:
+        print(f"[Authentication Error in get_answer_from_db]: {e}")
+        return "There's an issue with my AI service configuration. Please contact support."
     except Exception as e:
-        print(f"[Error in get_answer_from_db]: {e}")
-        return "Sorry, I couldn’t retrieve relevant information right now."
+        print(f"[General Error in get_answer_from_db]: {type(e).__name__}: {e}")
+        return "Sorry, I encountered an unexpected issue. Please try again."

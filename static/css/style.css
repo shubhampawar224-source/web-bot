@@ -1,11 +1,68 @@
 /* ---------- GLOBAL ---------- */
-body {
+html, body {
   font-family: 'Inter', 'Roboto', sans-serif;
   background-color: #f5f6fa;
   color: #2c3e50;
   margin: 0;
   padding: 0;
   overflow-x: hidden;
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  box-sizing: border-box;
+}
+
+/* Ensure all positioned elements stay within viewport */
+html {
+  overflow: hidden;
+}
+
+body {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Force all positioned elements to stay within bounds */
+.chat-container,
+#contactModal,
+.modal,
+.popup,
+.overlay {
+  max-width: 100vw !important;
+  max-height: 100vh !important;
+  box-sizing: border-box !important;
+}
+
+/* Specific override for chat container positioning */
+#chat-container.chat-container {
+  position: absolute !important;
+  top: 70px !important; /* 60px navbar + 10px margin */
+  right: 20px !important;
+  left: auto !important;
+  bottom: auto !important;
+  width: 450px !important;
+  height: calc(100vh - 90px) !important; /* Full height minus navbar and margins */
+  max-width: calc(100vw - 40px) !important;
+  max-height: calc(100vh - 90px) !important;
+}
+
+/* Alternative positioning for chat box below navbar - full width */
+.chat-box-below-navbar {
+  position: absolute !important;
+  top: 70px !important; /* 60px navbar + 10px margin */
+  left: 20px !important;
+  right: 20px !important;
+  bottom: 20px !important;
+  width: calc(100% - 40px) !important;
+  height: calc(100vh - 90px) !important;
+  max-width: calc(100vw - 40px) !important;
+  max-height: calc(100vh - 90px) !important;
+}
+
+/* Prevent any element from going outside viewport */
+* {
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 /* ---------- NAVBAR ---------- */
@@ -86,6 +143,7 @@ body {
 }
 
 .sidebar-content input[type="url"],
+.sidebar-content input[type="email"],
 .sidebar-content select {
   width: 100%;
   padding: 8px;
@@ -97,6 +155,7 @@ body {
 }
 
 .sidebar-content input[type="url"]:focus,
+.sidebar-content input[type="email"]:focus,
 .sidebar-content select:focus {
   border-color: #4a90e2;
   box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.15);
@@ -176,12 +235,18 @@ body {
 }
 
 /* Chat Container */
-.chat-container {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  width: 450px;       /* ⬅️ Wider */
-  height: 640px;      /* ⬅️ Taller chatbot */
+.chat-container,
+#chat-container {
+  position: absolute !important;
+  top: 70px !important; /* 60px navbar + 10px margin */
+  right: 20px !important;
+  bottom: 20px !important;
+  width: 450px;
+  height: calc(100vh - 110px) !important; /* Full height minus navbar and margins */
+  max-width: calc(100vw - 40px) !important;
+  max-height: calc(100vh - 110px) !important;
+  min-width: 300px;
+  min-height: 400px;
   background-color: #ffffff;
   border-radius: 16px;
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.15);
@@ -191,6 +256,8 @@ body {
   z-index: 2100;
   transition: all 0.3s ease;
   font-family: 'Inter', sans-serif;
+  /* Ensure it never goes outside viewport */
+  left: auto;
 }
 
 /* Header */
@@ -238,6 +305,81 @@ body {
 }
 
 /* Typing Indicator */
+.typing-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 15px;
+  font-size: 0.85rem;
+  color: #4a90e2;
+  font-style: italic;
+  background-color: #f8f9fa;
+  border-radius: 18px;
+  margin-bottom: 8px;
+  animation: fadeInTyping 0.3s ease-in;
+  border: 1px solid #e3f2fd;
+}
+
+.typing-indicator span:first-child {
+  margin-right: 8px;
+  font-weight: 500;
+}
+
+.typing-indicator .dot {
+  width: 8px;
+  height: 8px;
+  background-color: #4a90e2;
+  border-radius: 50%;
+  animation: typingDots 1.5s infinite ease-in-out;
+  margin: 0 1px;
+}
+
+.typing-indicator .dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-indicator .dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+.typing-indicator .dot:nth-child(4) {
+  animation-delay: 0.6s;
+}
+
+@keyframes fadeInTyping {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeOutTyping {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes typingDots {
+  0%, 60%, 100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  30% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+
+/* Legacy support for .chat-typing */
 .chat-typing {
   display: flex;
   align-items: center;
@@ -313,15 +455,32 @@ body {
   top: 20px;
   right: 20px;
   min-width: 220px;
+  max-width: 400px;
   background-color: #2ecc71; /* success green */
   color: white;
   padding: 12px 18px;
   border-radius: 8px;
   font-weight: 500;
   box-shadow: 0 4px 10px rgba(0,0,0,0.15);
-  display: none;
+  opacity: 0;
+  transform: translateY(-20px);
+  transition: all 0.3s ease;
   z-index: 9999;
-  animation: fadeInOut 3s ease forwards;
+  word-wrap: break-word;
+  line-height: 1.4;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.toast.success {
+  background-color: #2ecc71;
+}
+
+.toast.error {
+  background-color: #e74c3c;
 }
 
 @keyframes fadeInOut {

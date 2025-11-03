@@ -20,12 +20,74 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // ---------- Chat Toggle ----------
     chatIcon.onclick = () => {
-        chatContainer.style.display = chatContainer.style.display === "flex" ? "none" : "flex";
-        if (!greeted) {
-            addMessage("Assistant is here, how may I help you? 😊", "bot-msg");
-            greeted = true;
+        const isVisible = chatContainer.style.display === "flex";
+        chatContainer.style.display = isVisible ? "none" : "flex";
+        
+        if (!isVisible) {
+            // Force positioning with inline styles to override any CSS conflicts
+            chatContainer.style.position = "absolute";
+            chatContainer.style.top = "70px"; // Below navbar (60px) + margin
+            chatContainer.style.right = "20px";
+            chatContainer.style.bottom = "20px";
+            chatContainer.style.left = "auto";
+            chatContainer.style.width = "450px";
+            chatContainer.style.height = "calc(100vh - 110px)"; // Full height minus navbar and margins
+            chatContainer.style.maxWidth = "calc(100vw - 40px)";
+            chatContainer.style.maxHeight = "calc(100vh - 110px)";
+            chatContainer.style.zIndex = "2100";
+            
+            // Ensure chat container stays within bounds when opening
+            setTimeout(() => adjustChatPosition(), 100);
+            
+            if (!greeted) {
+                addMessage("Assistant is here, how may I help you? 😊", "bot-msg");
+                greeted = true;
+            }
         }
     };
+
+    // Function to adjust chat position to stay within viewport
+    function adjustChatPosition() {
+        const container = chatContainer;
+        if (!container) return;
+        
+        // Force absolute positioning
+        container.style.position = "absolute";
+        
+        // Get viewport dimensions
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        const navbarHeight = 60; // Navbar height
+        const margin = 20; // Base margin
+        
+        // Get container dimensions
+        const containerWidth = 450; // Fixed width
+        const availableHeight = viewportHeight - navbarHeight - (margin * 2); // Height minus navbar and margins
+        
+        // Calculate safe positions
+        const maxRight = Math.max(10, viewportWidth - containerWidth - 10);
+        const topPosition = navbarHeight + 10; // Below navbar + margin
+        
+        // Set safe position below navbar
+        container.style.top = topPosition + "px";
+        container.style.right = Math.min(margin, maxRight) + "px";
+        container.style.bottom = margin + "px";
+        container.style.left = "auto";
+        
+        // Ensure dimensions don't exceed viewport
+        container.style.width = Math.min(450, viewportWidth - 40) + "px";
+        container.style.height = Math.min(availableHeight, availableHeight) + "px";
+        
+        console.log("Chat positioned below navbar at:", {
+            top: container.style.top,
+            right: container.style.right,
+            bottom: container.style.bottom,
+            width: container.style.width,
+            height: container.style.height,
+            viewport: { width: viewportWidth, height: viewportHeight },
+            availableHeight: availableHeight
+        });
+    }
 
     // ---------- Sidebar Toggle ----------
     toggleBtn.onclick = () => {
@@ -41,14 +103,15 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     // ---------- Toast ----------
-    function showToast(msg, isError = false) {
-        toast.textContent = msg;
-        toast.style.backgroundColor = isError ? "#e74c3c" : "#2ecc71";
-        toast.style.display = "block";
-        toast.style.animation = "none";
-        toast.offsetHeight; // trigger reflow
-        toast.style.animation = "fadeInOut 3s ease forwards";
-        setTimeout(() => { toast.style.display = "none"; }, 3000);
+    function showToast(message, isError = false, duration = 3000) {
+        if (!toast) return;
+        
+        toast.textContent = message;
+        toast.className = `toast show ${isError ? 'error' : 'success'}`;
+        
+        setTimeout(() => {
+            toast.className = 'toast';
+        }, duration);
     }
 
     // ---------- Chat Formatting ----------
@@ -123,18 +186,33 @@ document.addEventListener("DOMContentLoaded", () => {
         typingDiv.style.fontSize = "0.85rem";
         typingDiv.style.display = "flex";
         typingDiv.style.alignItems = "center";
+        typingDiv.style.gap = "4px";
         typingDiv.innerHTML = `<span>Assistant is typing</span><span class="dot"></span><span class="dot"></span><span class="dot"></span>`;
         return typingDiv;
     }
 
     function showTypingIndicatorAfter(messageDiv) {
         const typingDiv = createTypingIndicator();
-        messageDiv.insertAdjacentElement('afterend', typingDiv);
+        // Add a slight delay to make it feel more natural
+        setTimeout(() => {
+            if (typingDiv.parentNode === null) {
+                messageDiv.insertAdjacentElement('afterend', typingDiv);
+                chatBox.scrollTop = chatBox.scrollHeight;
+            }
+        }, 300);
         return typingDiv;
     }
 
     function removeTypingIndicator(typingDiv) {
-        if (typingDiv && typingDiv.parentNode) typingDiv.remove();
+        if (typingDiv && typingDiv.parentNode) {
+            // Add fade out animation before removing
+            typingDiv.style.animation = "fadeOutTyping 0.2s ease-out forwards";
+            setTimeout(() => {
+                if (typingDiv.parentNode) {
+                    typingDiv.remove();
+                }
+            }, 200);
+        }
     }
 
     async function typeMessage(containerEl, resp, speed = 2) {
@@ -283,6 +361,19 @@ document.addEventListener("DOMContentLoaded", () => {
     sendBtn.addEventListener("click", sendMessage);
     userInput.addEventListener("keypress", e => { if (e.key === "Enter") sendMessage(); });
 
+    // Window resize handler to keep chat container in bounds
+    window.addEventListener("resize", () => {
+        if (chatContainer.style.display === "flex") {
+            adjustChatPosition();
+        }
+    });
+
+    // Ensure page content stays within bounds
+    document.addEventListener("DOMContentLoaded", () => {
+        document.body.style.overflow = "hidden";
+        document.documentElement.style.overflow = "hidden";
+    });
+
     // ---------- Load Firms ----------
     async function loadFirms(selectLast = false, newFirmId = null) {
         try {
@@ -319,16 +410,17 @@ document.addEventListener("DOMContentLoaded", () => {
         if (firmSelect.value) localStorage.setItem("selectedFirm", firmSelect.value);
     });
 
-    // ---------- Sidebar URL Injection ----------
+    // ---------- Sidebar URL Injection (Direct) ----------
     addBtn.addEventListener("click", async () => {
         const url = urlInput.value.trim();
+        
         if (!url) {
             showToast("Please enter a valid URL.", true);
             return;
         }
 
         urlLoader.style.display = "flex";
-        urlLoader.textContent = "Injecting URL... ⏳";
+        urlLoader.textContent = "Processing URL... �";
 
         try {
             const response = await fetch("/inject-url", {
@@ -339,26 +431,31 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const data = await response.json();
 
-            if (data.status === "exists") {
-                showToast(`⚠️ ${data.message}`, true);
-            } else if (data.status === "success") {
-                showToast("✅ URL added successfully!");
-
-                // Refresh firm list and select the new firm automatically
-                await loadFirms(true, data.data.firm_id);
-
-                // Add URL to sidebar
-                const entry = document.createElement("div");
-                entry.textContent = data.data.url;
-                urlList.appendChild(entry);
-
+            if (data.status === "success") {
+                showToast("✅ URL successfully processed and added to knowledge base!", false, 4000);
+                
+                // Clear the form
                 urlInput.value = "";
+                
+                // Show success message
+                setTimeout(() => {
+                    showToast("🎉 The website content is now available for the chatbot!", false, 3000);
+                }, 1500);
+                
+            } else if (data.status === "error") {
+                if (data.message.includes("already exists")) {
+                    showToast("⚠️ This URL is already available in our assistant's knowledge base.", true);
+                } else if (data.message.includes("Invalid URL")) {
+                    showToast("❌ Please enter a valid URL that starts with http:// or https://", true);
+                } else {
+                    showToast(`❌ ${data.message}`, true);
+                }
             } else {
-                showToast("Unexpected response from server", true);
+                showToast("❌ Unexpected response from server", true);
             }
         } catch (err) {
-            console.error(err);
-            showToast("Failed to add URL.", true);
+            console.error("URL injection error:", err);
+            showToast("❌ Failed to process URL. Please try again.", true);
         } finally {
             urlLoader.style.display = "none";
         }

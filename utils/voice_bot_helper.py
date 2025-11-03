@@ -18,7 +18,19 @@ except Exception:
 
 from utils.data_convert import build_or_load_faiss, embed_text
 
-faiss_index, faiss_texts, faiss_metadata = build_or_load_faiss()
+# Lazy loading for FAISS - only load when needed
+faiss_index = None
+faiss_texts = None
+faiss_metadata = None
+
+def get_faiss_data():
+    """Lazy load FAISS data only when first needed"""
+    global faiss_index, faiss_texts, faiss_metadata
+    if faiss_index is None:
+        print("Loading FAISS index...")
+        faiss_index, faiss_texts, faiss_metadata = build_or_load_faiss()
+        print("FAISS index loaded successfully!")
+    return faiss_index, faiss_texts, faiss_metadata
 
 # ----------------- Utilities -----------------
 MAX_CHARS = 3500
@@ -27,6 +39,7 @@ def truncate_text(text: str, max_chars: int = MAX_CHARS) -> str:
     return text[:max_chars] + " …" if len(text) > max_chars else text
 
 def retrieve_faiss_response(query: str, k: int = 1):
+    faiss_index, faiss_texts, faiss_metadata = get_faiss_data()
     query_emb = embed_text(query)
     D, I = faiss_index.search(query_emb, k)
     results = []

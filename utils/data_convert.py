@@ -17,10 +17,22 @@ FAISS_INDEX_PATH = os.path.join(VECTOR_STORE_DIR, "faiss_index.bin")
 FAISS_META_PATH = os.path.join(VECTOR_STORE_DIR, "faiss_metadata.pkl")
 
 # ---------------- TEXT EMBEDDING MODEL ----------------
-tokenizer = AutoTokenizer.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")
-text_model = AutoModel.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")
+# Lazy loading for models to speed up startup
+tokenizer = None
+text_model = None
+
+def get_models():
+    """Lazy load models only when first needed"""
+    global tokenizer, text_model
+    if tokenizer is None or text_model is None:
+        print("Loading SentenceTransformer models...")
+        tokenizer = AutoTokenizer.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")
+        text_model = AutoModel.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")
+        print("Models loaded successfully!")
+    return tokenizer, text_model
 
 def embed_text(text: str):
+    tokenizer, text_model = get_models()
     inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True)
     with torch.no_grad():
         embeddings = text_model(**inputs, output_hidden_states=True, return_dict=True).last_hidden_state
@@ -49,6 +61,21 @@ def build_or_load_faiss():
             texts.append(full_text)
             metadata.append({"website_id": w.id, "domain": w.domain, "firm_id": w.firm_id})
 
+    # Check if we have texts to create embeddings from
+    if not texts:
+        print("No website data found. Creating empty FAISS index...")
+        # Create a dummy embedding to get the dimension
+        dummy_embedding = embed_text("dummy text for dimension")
+        index = faiss.IndexFlatL2(dummy_embedding.shape[0])
+        
+        # Save empty index and metadata
+        faiss.write_index(index, FAISS_INDEX_PATH)
+        with open(FAISS_META_PATH, "wb") as f:
+            pickle.dump(([], []), f)
+        
+        print("Empty FAISS index created")
+        return index, [], []
+    
     embeddings = np.vstack([embed_text(t) for t in texts])
     index = faiss.IndexFlatL2(embeddings.shape[1])
     index.add(embeddings)

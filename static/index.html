@@ -2,10 +2,45 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DJF Web Assistant</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="./css/style.css">
 <link rel="stylesheet" href="./css/popup.css">
+<!-- Fallback CSS paths for iframe context -->
+<link rel="stylesheet" href="/static/css/style.css">
+<link rel="stylesheet" href="/static/css/popup.css">
+<style>
+  /* Additional CSS to ensure proper rendering in iframe */
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow-x: hidden;
+  }
+  
+  /* Ensure all positioned elements work properly in iframe context */
+  .chat-container,
+  #chat-container {
+    position: absolute !important;
+  }
+  
+  /* Force proper box-sizing */
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+  
+  /* Debug styles to ensure CSS is working */
+  body {
+    background-color: #f5f6fa !important;
+  }
+  
+  .navbar {
+    background-color: #2c3e50 !important;
+    color: #ecf0f1 !important;
+  }
+</style>
 
 </head>
 
@@ -37,10 +72,9 @@
 
         <!-- Inject URLs -->
         <h4>Inject URLs</h4>
-        <input type="url" id="sidebar-url" placeholder="https://example.com/page">
-        <button id="sidebar-add" class="btn">Add</button>
-        <!-- <div id="sidebar-url-list"></div> -->
-        <div id="url-loader" class="loader-overlay" style="display:none">Injecting URL...</div>
+        <input type="url" id="sidebar-url" placeholder="https://example.com/page" style="margin-bottom: 8px;">
+        <button id="sidebar-add" class="btn">Inject URL</button>
+        <div id="url-loader" class="loader-overlay" style="display:none">Processing URL...</div>
 
     </div>
 </div>
@@ -107,5 +141,58 @@
 <!-- load popup helper BEFORE main chat script so handle/show functions exist when script.js runs -->
 <script src="./js/popup.js"></script>
 <script src="./js/script.js"></script>
+
+<script>
+// Handle iframe embedding and CSS loading
+document.addEventListener('DOMContentLoaded', function() {
+  console.log('Index.html loaded in iframe context');
+  
+  // Check if we're in an iframe
+  const isInIframe = window !== window.parent;
+  
+  if (isInIframe) {
+    console.log('Running inside iframe - widget mode');
+    
+    // Notify parent that iframe is ready
+    try {
+      window.parent.postMessage({
+        type: 'IFRAME_READY',
+        timestamp: Date.now()
+      }, '*');
+    } catch (e) {
+      console.warn('Could not send ready message to parent:', e);
+    }
+    
+    // Debug CSS loading
+    const stylesheets = document.querySelectorAll('link[rel="stylesheet"]');
+    stylesheets.forEach((link, index) => {
+      link.addEventListener('load', () => {
+        console.log(`Stylesheet ${index + 1} loaded:`, link.href);
+      });
+      link.addEventListener('error', () => {
+        console.error(`Stylesheet ${index + 1} failed to load:`, link.href);
+      });
+    });
+    
+    // Ensure chat container positioning works in iframe
+    setTimeout(() => {
+      const chatContainer = document.getElementById('chat-container');
+      if (chatContainer) {
+        console.log('Chat container found, ensuring proper styling');
+        chatContainer.style.position = 'absolute';
+        chatContainer.style.zIndex = '2100';
+      }
+    }, 1000);
+  }
+  
+  // Listen for messages from parent widget
+  window.addEventListener('message', function(event) {
+    if (event.data.type === 'WIDGET_CONFIG') {
+      console.log('Received widget config:', event.data.config);
+      // Handle any configuration from parent
+    }
+  });
+});
+</script>
 </body>
 </html>

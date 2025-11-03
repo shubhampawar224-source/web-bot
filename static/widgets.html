@@ -2,37 +2,95 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AI Voice Assistant</title>
   <style>
+    * {
+      box-sizing: border-box;
+    }
+    
+    body {
+      margin: 0;
+      padding: 0;
+    }
+
     #voice-widget {
       position: fixed;
-      bottom: 20px;
-      left: 10px;
-      right: 20px;
-      width: 100%;
-      height: 100%;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
       background: white;
-      border-radius: 16px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+      border-radius: 0;
+      box-shadow: none;
       overflow: hidden;
       display: flex;
       flex-direction: column;
       font-family: sans-serif;
       z-index: 99999;
     }
+    
+    /* Specific styling for chat windows/popups within the widget */
+    #voice-widget .chat-popup,
+    #voice-widget .chat-window,
+    #voice-widget .modal,
+    #voice-widget .dialog {
+      position: absolute !important;
+      max-width: calc(100% - 40px) !important;
+      max-height: calc(100% - 40px) !important;
+      top: 50% !important;
+      left: 50% !important;
+      transform: translate(-50%, -50%) !important;
+      z-index: 1000 !important;
+    }
+    
     #voice-widget iframe {
       border: none;
       width: 100%;
       height: 100%;
+      overflow: auto; /* Allow scrolling if needed */
     }
   </style>
+  
   <script>
+    // Ensure iframe loads properly and CSS is applied
+    document.addEventListener('DOMContentLoaded', function() {
+      const iframe = document.querySelector('#voice-widget iframe');
+      
+      iframe.addEventListener('load', function() {
+        console.log('Widget iframe loaded successfully');
+        
+        // Optional: Send configuration to iframe if needed
+        try {
+          iframe.contentWindow.postMessage({
+            type: 'WIDGET_CONFIG',
+            config: {
+              isEmbedded: true,
+              parentOrigin: window.location.origin
+            }
+          }, '*');
+        } catch (e) {
+          console.warn('Could not send config to iframe:', e);
+        }
+      });
+      
+      // Listen for messages from iframe
+      window.addEventListener('message', function(event) {
+        if (event.origin !== window.location.origin) return;
+        
+        if (event.data.type === 'IFRAME_READY') {
+          console.log('Iframe reports it is ready');
+        }
+      });
+    });
+  </script>
+  <!-- <script>
     const widgetScript = document.currentScript || document.querySelector('script[src*="widget.js"]');
 const BASE_URL = new URL(widgetScript.src).origin;
 
 console.log("Auto Server:", BASE_URL);
 
-  </script>
+  </script> -->
 </head>
 
 <!-- <lovable-widget src="http://127.0.0.1:8000/chat_widget"></lovable-widget> -->
@@ -45,65 +103,3 @@ console.log("Auto Server:", BASE_URL);
   </div>
 </body>
 </html>
-<!-- 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>AI Voice Assistant</title>
-  <style>
-    #voice-widget {
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      width: 360px;
-      height: 500px;
-      background: white;
-      border-radius: 16px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      font-family: sans-serif;
-      z-index: 99999;
-    }
-    #voice-widget iframe {
-      border: none;
-      width: 100%;
-      height: 100%;
-    }
-  </style>
-
-  <script>
-    // compute base URL robustly:
-    // 1) try to derive from the loader script (if the widget is loaded via a loader script)
-    // 2) fallback to the current page origin (works when widgets.html is served directly)
-    (function () {
-      const scriptEl = document.currentScript || document.querySelector('script[src*="widget.js"], script[src*="loader.js"]');
-      let BASE_URL = location.origin;
-      try {
-        if (scriptEl && scriptEl.src) {
-          BASE_URL = new URL(scriptEl.src).origin;
-        }
-      } catch (e) {
-        BASE_URL = location.origin;
-      }
-      // expose for debugging if needed (remove in production)
-      console.log('Widget base URL:', BASE_URL);
-
-      // set iframe src after DOM is ready to avoid literal template tokens and encoding issues
-      function setIframeSrc() {
-        const iframe = document.querySelector('#voice-widget iframe');
-        if (!iframe) return;
-        // ensure we don't accidentally include template strings
-        iframe.src = BASE_URL + '/index.html';
-      }
-
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', setIframeSrc, { once: true });
-      } else {
-        setIframeSrc();
-      }
-    })();
-  </script>
-</head> -->
