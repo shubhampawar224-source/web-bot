@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>URL Injection Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f6fa;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        input[type="url"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e1e8ed;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.2s;
+        }
+        input[type="url"]:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+        .btn {
+            background: #3498db;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .btn:hover {
+            background: #2980b9;
+        }
+        .btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 16px;
+            border-radius: 8px;
+            font-weight: 500;
+            display: none;
+        }
+        .status.processing {
+            background: #dbeafe;
+            color: #1e40af;
+            border: 1px solid #93c5fd;
+        }
+        .status.success {
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+        }
+        .status.error {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fca5a5;
+        }
+        .status.warning {
+            background: #fef3c7;
+            color: #92400e;
+            border: 1px solid #fcd34d;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e1e8ed;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+        .progress-fill {
+            height: 100%;
+            background: #3498db;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Background URL Injection Test</h1>
+        <p>Test the new background processing system for URL injection. No more waiting for slow websites!</p>
+        
+        <form id="injection-form">
+            <div class="form-group">
+                <label for="url-input">Website URL:</label>
+                <input type="url" id="url-input" placeholder="https://example.com" required>
+            </div>
+            <button type="submit" class="btn" id="submit-btn">Inject URL</button>
+        </form>
+        
+        <div id="status" class="status">
+            <div id="status-message"></div>
+            <div class="progress-bar" id="progress-bar" style="display: none;">
+                <div class="progress-fill" id="progress-fill"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('injection-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const urlInput = document.getElementById('url-input');
+            const submitBtn = document.getElementById('submit-btn');
+            const statusDiv = document.getElementById('status');
+            const statusMessage = document.getElementById('status-message');
+            const progressBar = document.getElementById('progress-bar');
+            const progressFill = document.getElementById('progress-fill');
+            
+            const url = urlInput.value.trim();
+            
+            if (!url) {
+                showStatus('Please enter a valid URL', 'error');
+                return;
+            }
+            
+            // Validate URL format
+            try {
+                new URL(url);
+            } catch {
+                showStatus('Please enter a valid URL starting with http:// or https://', 'error');
+                return;
+            }
+            
+            // Disable form
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Processing...';
+            
+            try {
+                // Start URL injection
+                const response = await fetch('/inject-url', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ url: url })
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    const taskId = data.task_id;
+                    showStatus('URL processing started in background...', 'processing');
+                    progressBar.style.display = 'block';
+                    
+                    // Monitor task progress
+                    monitorTaskProgress(taskId);
+                } else {
+                    showStatus(data.message, 'error');
+                    resetForm();
+                }
+            } catch (error) {
+                console.error('Injection error:', error);
+                showStatus('Failed to start URL processing. Please try again.', 'error');
+                resetForm();
+            }
+            
+            function showStatus(message, type) {
+                statusMessage.textContent = message;
+                statusDiv.className = `status ${type}`;
+                statusDiv.style.display = 'block';
+            }
+            
+            function updateProgress(progress) {
+                progressFill.style.width = progress + '%';
+            }
+            
+            function resetForm() {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Inject URL';
+                progressBar.style.display = 'none';
+                updateProgress(0);
+            }
+            
+            async function monitorTaskProgress(taskId) {
+                const maxChecks = 60; // 5 minutes maximum
+                let checks = 0;
+                
+                const checkProgress = async () => {
+                    try {
+                        const response = await fetch(`/task-status/${taskId}`);
+                        const data = await response.json();
+                        
+                        if (data.status === 'success' && data.task) {
+                            const task = data.task;
+                            const progress = task.progress || 0;
+                            const status = task.status;
+                            const message = task.message || '';
+                            
+                            // Update progress and message
+                            updateProgress(progress);
+                            showStatus(`📊 ${message} (${progress}%)`, 'processing');
+                            
+                            if (status === 'completed') {
+                                const result = task.result || {};
+                                showStatus(`✅ Successfully processed ${result.indexed_chunks || 0} content chunks!`, 'success');
+                                setTimeout(resetForm, 3000);
+                                return;
+                            } else if (status === 'failed') {
+                                showStatus(`❌ Processing failed: ${message}`, 'error');
+                                resetForm();
+                                return;
+                            }
+                            
+                            // Continue monitoring
+                            checks++;
+                            if (checks < maxChecks) {
+                                setTimeout(checkProgress, 5000);
+                            } else {
+                                showStatus('⚠️ Processing is taking longer than expected...', 'warning');
+                                resetForm();
+                            }
+                        } else {
+                            showStatus('❌ Failed to get task status', 'error');
+                            resetForm();
+                        }
+                    } catch (error) {
+                        console.error('Task monitoring error:', error);
+                        checks++;
+                        if (checks < maxChecks) {
+                            setTimeout(checkProgress, 5000);
+                        } else {
+                            showStatus('❌ Lost connection to task monitoring', 'error');
+                            resetForm();
+                        }
+                    }
+                };
+                
+                // Start monitoring
+                setTimeout(checkProgress, 2000);
+            }
+        });
+    </script>
+</body>
+</html>

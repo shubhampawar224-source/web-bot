@@ -222,15 +222,6 @@
     </div>
 
     <script>
-        // Check for redirect messages from admin logout/session expiry
-        document.addEventListener('DOMContentLoaded', function() {
-            const redirectMessage = sessionStorage.getItem('login_message');
-            if (redirectMessage) {
-                showError(redirectMessage);
-                sessionStorage.removeItem('login_message'); // Clear the message
-            }
-        });
-
         const loginForm = document.getElementById('login-form');
         const submitBtn = document.getElementById('submit-btn');
         const loading = document.getElementById('loading');

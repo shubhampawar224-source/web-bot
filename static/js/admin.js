@@ -155,6 +155,12 @@ class AdminDashboard {
         if (refreshUsers) {
             refreshUsers.addEventListener('click', () => this.loadUsers());
         }
+
+        // Merge duplicate firms button
+        const mergeDuplicateFirms = document.getElementById('merge-duplicate-firms');
+        if (mergeDuplicateFirms) {
+            mergeDuplicateFirms.addEventListener('click', () => this.handleMergeDuplicateFirms());
+        }
     }
 
     async handleLogin(e) {
@@ -604,7 +610,7 @@ class AdminDashboard {
         console.log('🔍 Rendering URL requests table with data:', requests.slice(0, 2)); // Log first 2 items for debugging
         
         if (requests.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="text-center">No URL requests found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center">No URL requests found</td></tr>';
             return;
         }
 
@@ -618,7 +624,12 @@ class AdminDashboard {
                         <a href="${request.url}" target="_blank" title="${request.url}">
                             ${this.truncateUrl(request.url)}
                         </a>
-                        ${request.firm_name ? `<br><small style="color: #666;">Firm: ${request.firm_name}</small>` : ''}
+                    </div>
+                </td>
+                <td>
+                    <div class="firm-cell">
+                        <i class="fas fa-building"></i>
+                        ${request.firm_name || 'Unknown'}
                     </div>
                 </td>
                 <td>
@@ -1284,15 +1295,12 @@ class AdminDashboard {
             const data = await response.json();
 
             if (data.status === 'success') {
-                this.showInjectionStatus(`✅ ${data.message}`, 'success');
-                this.showToast('URL successfully injected and processed!', 'success');
+                const taskId = data.task_id;
+                this.showInjectionStatus('✅ URL processing started in background...', 'processing');
+                this.showToast('URL processing started! Monitoring progress...', 'info');
                 
-                // Clear form after short delay
-                setTimeout(() => {
-                    this.hideUrlInjectionForm();
-                    this.loadUrlRequests(); // Refresh URL requests table
-                    this.loadDashboardStats(); // Refresh dashboard stats
-                }, 2000);
+                // Monitor task progress
+                this.monitorTaskProgress(taskId, url);
                 
             } else {
                 this.showInjectionStatus(`❌ ${data.message}`, 'error');
@@ -1303,6 +1311,73 @@ class AdminDashboard {
             this.showInjectionStatus('❌ Failed to process URL. Please try again.', 'error');
             this.showToast('Failed to inject URL. Please try again.', 'error');
         }
+    }
+
+    // Monitor background task progress
+    async monitorTaskProgress(taskId, url) {
+        const maxChecks = 60; // Maximum 5 minutes (60 * 5 seconds)
+        let checks = 0;
+        
+        const checkProgress = async () => {
+            try {
+                const response = await fetch(`/task-status/${taskId}`);
+                const data = await response.json();
+                
+                if (data.status === 'success' && data.task) {
+                    const task = data.task;
+                    const progress = task.progress || 0;
+                    const status = task.status;
+                    const message = task.message || '';
+                    
+                    // Update status display with progress
+                    this.showInjectionStatus(`📊 ${message} (${progress}%)`, 'processing');
+                    
+                    if (status === 'completed') {
+                        const result = task.result || {};
+                        this.showInjectionStatus(`✅ Successfully processed ${result.indexed_chunks || 0} content chunks!`, 'success');
+                        this.showToast('URL successfully injected and processed!', 'success');
+                        
+                        // Clear form and refresh data
+                        setTimeout(() => {
+                            this.hideUrlInjectionForm();
+                            this.loadUrlRequests();
+                            this.loadDashboardStats();
+                        }, 2000);
+                        
+                        return; // Stop monitoring
+                    } else if (status === 'failed') {
+                        const error = task.error || 'Unknown error';
+                        this.showInjectionStatus(`❌ Processing failed: ${message}`, 'error');
+                        this.showToast(`Processing failed: ${message}`, 'error');
+                        return; // Stop monitoring
+                    }
+                    
+                    // Continue monitoring if still processing
+                    checks++;
+                    if (checks < maxChecks) {
+                        setTimeout(checkProgress, 5000); // Check every 5 seconds
+                    } else {
+                        this.showInjectionStatus('⚠️ Processing is taking longer than expected...', 'warning');
+                        this.showToast('Processing is taking longer than expected. Please check back later.', 'warning');
+                    }
+                } else {
+                    this.showInjectionStatus('❌ Failed to get task status', 'error');
+                    this.showToast('Failed to monitor task progress', 'error');
+                }
+            } catch (error) {
+                console.error('Task monitoring error:', error);
+                checks++;
+                if (checks < maxChecks) {
+                    setTimeout(checkProgress, 5000); // Retry after 5 seconds
+                } else {
+                    this.showInjectionStatus('❌ Lost connection to task monitoring', 'error');
+                    this.showToast('Lost connection to task monitoring', 'error');
+                }
+            }
+        };
+        
+        // Start monitoring after a short delay
+        setTimeout(checkProgress, 2000);
     }
 
     getProgressPercentage(request) {
@@ -1463,6 +1538,42 @@ class AdminDashboard {
 
     closeModal() {
         document.getElementById('modal-overlay').classList.remove('show');
+    }
+
+    // Merge duplicate firms
+    async handleMergeDuplicateFirms() {
+        if (!confirm('Are you sure you want to merge duplicate firms? This action cannot be undone.')) {
+            return;
+        }
+
+        try {
+            this.showToast('Merging duplicate firms...', 'info');
+
+            const response = await this.makeAuthenticatedRequest('/admin/merge-duplicate-firms', {
+                method: 'POST'
+            });
+
+            const data = await response.json();
+
+            if (data.status === 'success') {
+                this.showToast(`Successfully merged ${data.merged_count} duplicate firms!`, 'success');
+                
+                // Refresh firms data and dashboard stats
+                this.loadDashboardStats();
+                
+                // If we're currently viewing firms section, refresh it
+                const firmsSection = document.getElementById('firms-section');
+                if (firmsSection && firmsSection.classList.contains('active')) {
+                    // Refresh firms table if it exists
+                    console.log('Refreshing firms table...');
+                }
+            } else {
+                this.showToast(data.message || 'Failed to merge duplicate firms', 'error');
+            }
+        } catch (error) {
+            console.error('Error merging duplicate firms:', error);
+            this.showToast('Failed to merge duplicate firms. Please try again.', 'error');
+        }
     }
 }
 

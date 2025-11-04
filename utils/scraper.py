@@ -14,11 +14,12 @@ import httpx
 from utils.url_helper import clean_html  # reuse your helper
 from database.db import SessionLocal
 from model.models import Firm, Website
+from utils.firm_manager import FirmManager
 
 MAX_PAGES = 10000      # Limit crawl size
-CONCURRENCY = 10       # Adjust based on server/network
-TIMEOUT = 15           # Per-request timeout in seconds
-RETRIES = 3
+CONCURRENCY = 5        # Reduced from 10 to be more conservative with server resources
+TIMEOUT = 10           # Reduced from 15 to fail faster on slow sites
+RETRIES = 2            # Reduced from 3 to speed up processing
 BACKOFF = 0.5
 
 logger = logging.getLogger(__name__)
@@ -185,14 +186,14 @@ async def build_about(url: str, base_dir="scraped_data"):
 
     about_data = {
         "source_url": url,
-        "firm_name": clean_domain(title),
+        "firm_name": FirmManager.normalize_firm_name(url),  # Use consistent firm naming
         "tagline": tagline,
         "meta_description": meta_desc,
         "short_description": first_p,
         "full_text": " ".join(all_texts)
     }
 
-    # Save to DB safely
+    # Save to DB safely using centralized firm manager
     firm_id = save_to_db(about_data, all_links)
     about_data["firm_id"] = firm_id  # include firm_id in returned data
     about_data["full_text"]=" ".join(all_texts)
@@ -204,21 +205,18 @@ def save_to_db(about_obj, links_list):
     """Store firm + website data in DB and return firm_id safely."""
     db = SessionLocal()
     try:
-        domain = urlparse(about_obj["source_url"]).netloc
-        firm_name = about_obj.get("firm_name", domain)
-
-        # Get or create firm
-        firm = db.query(Firm).filter_by(name=firm_name).first()
-        if not firm:
-            firm = Firm(name=firm_name)
-            db.add(firm)
-            db.commit()
-            db.refresh(firm)  # ensures firm.id is available
+        # Use centralized firm manager to prevent duplicates
+        firm_id = FirmManager.get_or_create_firm(
+            url=about_obj["source_url"],
+            title=about_obj.get("firm_name"),
+            db=db
+        )
 
         # Get or create website
         website = db.query(Website).filter_by(base_url=about_obj["source_url"]).first()
         if not website:
-            website = Website(domain=domain, base_url=about_obj["source_url"], firm_id=firm.id)
+            domain = urlparse(about_obj["source_url"]).netloc
+            website = Website(domain=domain, base_url=about_obj["source_url"], firm_id=firm_id)
             db.add(website)
             db.flush()  # assign PK immediately
 
@@ -226,8 +224,13 @@ def save_to_db(about_obj, links_list):
         website.add_scraped_data(about_obj, links_list)
 
         db.commit()
-        print(f"[DB] Stored {firm_name} ({domain}) data")
-        return firm.id
+        
+        # Get firm name for logging
+        firm = db.query(Firm).filter_by(id=firm_id).first()
+        firm_name = firm.name if firm else "Unknown"
+        print(f"[DB] Stored {firm_name} ({website.domain}) data")
+        
+        return firm_id
     except Exception as e:
         db.rollback()
         print(f"[DB ERROR] {e}")

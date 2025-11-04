@@ -16,6 +16,8 @@ from utils.voice_bot_helper import refine_text_with_gpt, retrieve_faiss_response
 from utils.query_senetizer import is_safe_query
 from database.db import init_db
 from utils.scraper import build_about
+from utils.background_tasks import task_manager
+from utils.firm_manager import FirmManager
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request, Response
 from pydantic import BaseModel, HttpUrl
 from fastapi import FastAPI, WebSocket
@@ -50,6 +52,20 @@ from utils.vector_store import (
 
 load_dotenv()
 ALLOWED_IFRAME_ORIGINS = os.getenv("ALLOWED_IFRAME_ORIGINS", "")  # space-separated list e.g. "https://siteA.com https://siteB.com"
+
+def get_firm_name_for_url(url: str, db: Session) -> str:
+    """Helper function to get firm name for a URL"""
+    try:
+        # Check if this URL has an associated website and firm
+        website = db.query(Website).filter(Website.base_url == url).first()
+        if website and website.firm:
+            return website.firm.name
+        else:
+            # Try to get firm name from URL using firm manager
+            return FirmManager.normalize_firm_name(url)
+    except Exception as e:
+        print(f"⚠️ Could not get firm info for URL {url}: {e}")
+        return "Unknown"
 
 
 # ---------------- Disable HuggingFace Tokenizer Warning ----------------
@@ -253,53 +269,109 @@ async def chat_url_specific(data: dict):
 
 @app.post("/inject-url")
 async def inject_url(payload: URLPayload):
-    """Direct URL injection without email confirmation"""
-    db: Session = SessionLocal()
+    """Direct URL injection without email confirmation - uses background tasks"""
     try:
         url_str = str(payload.url)
         
-        # Check if URL already exists
-        existing_site = db.query(Website).filter(Website.base_url == url_str).first()
-        if existing_site:
-            firm_name = existing_site.firm.name if existing_site.firm else "Unknown"
-            return {"status": "error", "message": f"This URL already exists in our database (Firm: {firm_name})"}
-
-        # Process the URL using the scraper
-        about_obj = await build_about(url_str)
+        # Validate URL format
+        if not url_str.startswith(('http://', 'https://')):
+            return {"status": "error", "message": "URL must start with http:// or https://"}
         
-        if not about_obj:
-            return {"status": "error", "message": "Failed to scrape content from the URL"}
+        # Check if URL already exists quickly
+        db: Session = SessionLocal()
+        try:
+            existing_site = db.query(Website).filter(Website.base_url == url_str).first()
+            if existing_site:
+                firm_name = existing_site.firm.name if existing_site.firm else "Unknown"
+                return {"status": "error", "message": f"This URL already exists in our database (Firm: {firm_name})"}
+        finally:
+            db.close()
 
-        full_text = about_obj.get("full_text", "").strip()
-        if not full_text:
-            return {"status": "error", "message": "No text content found on the webpage"}
-            
-        # Process and store the content
-        chunks = chunk_text(full_text)
-        metadata = {
-            "type": "website",
-            "url": url_str,
-            "firm_name": about_obj.get("firm_name"),
-            "session_id": payload.session_id or "global"
-        }
-        add_text_chunks_to_collection(chunks, metadata)
+        # Create background task for URL processing
+        task_id = await task_manager.create_task(
+            url=url_str,
+            session_id=payload.session_id or "global",
+            injected_by="user"
+        )
 
         return {
             "status": "success",
-            "message": f"Successfully processed and added {len(chunks)} content chunks to knowledge base",
+            "message": "URL processing started in background",
+            "task_id": task_id,
             "data": {
                 "url": url_str,
-                "firm_name": about_obj.get("firm_name"),
-                "firm_id": about_obj.get("firm_id"),
-                "indexed_chunks": len(chunks)
+                "task_id": task_id,
+                "status": "processing"
             }
         }
 
     except Exception as e:
         print(f"Error in inject_url: {e}")
-        return {"status": "error", "message": f"Failed to process URL: {str(e)}"}
-    finally:
-        db.close()
+        return {"status": "error", "message": f"Failed to start URL processing: {str(e)}"}
+
+@app.get("/task-status/{task_id}")
+async def get_task_status(task_id: str):
+    """Get the status of a background task"""
+    try:
+        task_status = await task_manager.get_task_status(task_id)
+        
+        if not task_status:
+            return {"status": "error", "message": "Task not found"}
+        
+        return {
+            "status": "success",
+            "task": task_status
+        }
+    except Exception as e:
+        print(f"Error getting task status: {e}")
+        return {"status": "error", "message": "Failed to get task status"}
+
+@app.get("/admin/tasks")
+async def get_all_tasks(request: Request):
+    """Admin endpoint to view all current tasks"""
+    admin_info = await verify_admin_auth(request)
+    
+    try:
+        all_tasks = []
+        async with task_manager._lock:
+            for task_id, task in task_manager.tasks.items():
+                # Don't expose sensitive data, just essential info
+                task_summary = {
+                    "id": task_id,
+                    "url": task.get("url"),
+                    "status": task.get("status"),
+                    "progress": task.get("progress", 0),
+                    "message": task.get("message"),
+                    "created_at": task.get("created_at").isoformat() if task.get("created_at") else None,
+                    "injected_by": task.get("injected_by")
+                }
+                all_tasks.append(task_summary)
+        
+        return {
+            "status": "success",
+            "tasks": all_tasks,
+            "total_tasks": len(all_tasks)
+        }
+    except Exception as e:
+        print(f"Error getting all tasks: {e}")
+        return {"status": "error", "message": "Failed to get tasks list"}
+
+@app.post("/admin/merge-duplicate-firms")
+async def admin_merge_duplicate_firms(request: Request):
+    """Admin endpoint to merge duplicate firms"""
+    admin_info = await verify_admin_auth(request)
+    
+    try:
+        merged_count = FirmManager.merge_duplicate_firms()
+        
+        return {
+            "status": "success",
+            "message": f"Successfully merged {merged_count} duplicate firms",
+            "merged_count": merged_count
+        }
+    except Exception as e:
+        print(f"Error merging duplicate firms: {e}")
+        return {"status": "error", "message": f"Failed to merge duplicate firms: {str(e)}"}
 
 @app.get("/firms")
 async def get_all_firms():
@@ -807,9 +879,24 @@ async def get_user_urls(request: Request):
             
             url_data = []
             for url in urls:
+                # Get firm information for the URL
+                firm_name = None
+                try:
+                    # Check if this URL has an associated website and firm
+                    website = db.query(Website).filter(Website.base_url == url.url).first()
+                    if website and website.firm:
+                        firm_name = website.firm.name
+                    else:
+                        # Try to get firm name from URL using firm manager
+                        from utils.firm_manager import FirmManager
+                        firm_name = FirmManager.normalize_firm_name(url.url)
+                except Exception as e:
+                    print(f"⚠️ Could not get firm info for URL {url.url}: {e}")
+                
                 url_data.append({
                     "id": url.id,
                     "url": url.url,
+                    "firm_name": firm_name,
                     "description": getattr(url, 'description', ''),
                     "status": getattr(url, 'status', 'pending'),
                     "created_at": url.created_at.isoformat(),
@@ -1039,9 +1126,10 @@ async def get_admin_stats(request: Request):
         try:
             from model.url_injection_models import URLInjectionRequest
             from model.user_models import User
+            from model.models import Contact, Firm, Website
             
             # URL injection stats
-            total_requests = db.query(URLInjectionRequest).count()
+            total_url_requests = db.query(URLInjectionRequest).count()
             pending_requests = db.query(URLInjectionRequest).filter(
                 URLInjectionRequest.status == "pending"
             ).count()
@@ -1049,39 +1137,65 @@ async def get_admin_stats(request: Request):
                 URLInjectionRequest.status == "approved"
             ).count()
             
+            # Website stats (these are already processed URLs)
+            total_websites = db.query(Website).count()
+            
+            # Count unique URLs to avoid double counting
+            # URLs can exist in both URLInjectionRequest and Website tables
+            unique_urls = set()
+            
+            # Add all unique URLs from both tables
+            injection_urls = db.query(URLInjectionRequest.url).all()
+            for url_tuple in injection_urls:
+                unique_urls.add(url_tuple[0])
+            
+            website_urls = db.query(Website.base_url).all()
+            for url_tuple in website_urls:
+                unique_urls.add(url_tuple[0])
+            
+            # Total unique URLs across the system
+            total_urls = len(unique_urls)
+            
             # User stats
             total_users = db.query(User).count()
             active_users = db.query(User).filter(User.is_active == True).count()
             users_with_urls = db.query(User.id).join(URLInjectionRequest).distinct().count()
             
-            # Contact stats (if contacts model exists)
+            # Contact stats
             total_contacts = 0
             try:
                 total_contacts = db.query(Contact).count()
-            except:
-                pass
+            except Exception as e:
+                print(f"Contact count error: {e}")
+                total_contacts = 0
             
-            # Firm stats (if firms model exists) 
+            # Firm stats
             total_firms = 0
             try:
                 total_firms = db.query(Firm).count()
-            except:
-                pass
+            except Exception as e:
+                print(f"Firm count error: {e}")
+                total_firms = 0
             
             stats = {
+                "total_urls": total_urls,
+                "pending_urls": pending_requests,
+                "total_contacts": total_contacts,
+                "total_firms": total_firms,
                 "url_requests": {
-                    "total": total_requests,
+                    "total": total_url_requests,
                     "pending": pending_requests,
                     "approved": approved_requests,
-                    "rejected": total_requests - pending_requests - approved_requests
+                    "rejected": total_url_requests - pending_requests - approved_requests
+                },
+                "websites": {
+                    "total": total_websites
                 },
                 "users": {
                     "total": total_users,
                     "active": active_users,
                     "with_urls": users_with_urls
-                },
-                "contacts": total_contacts,
-                "firms": total_firms
+                }
             }
             
             return {"status": "success", "stats": stats}
@@ -1228,6 +1342,7 @@ async def get_url_requests(request: Request, status: str = "all"):
                     "id": req.id,
                     "request_id": req.request_id,
                     "url": req.url,
+                    "firm_name": get_firm_name_for_url(req.url, db),
                     "requester_email": req.requester_email,
                     "is_confirmed": req.is_confirmed,
                     "is_processed": req.is_processed,
@@ -1265,6 +1380,7 @@ async def get_all_urls(request: Request):
                 "id": f"req_{req.id}",
                 "request_id": req.request_id,
                 "url": req.url,
+                "firm_name": get_firm_name_for_url(req.url, db),
                 "requester_email": req.requester_email,
                 "is_confirmed": req.is_confirmed,
                 "is_processed": req.is_processed,
@@ -1614,51 +1730,6 @@ async def get_user_url_requests(request: Request):
     except Exception as e:
         return {"status": "error", "message": f"Error fetching user URLs: {str(e)}"}
 
-@app.get("/admin/users")
-async def get_admin_users(request: Request):
-    """Get all users for admin management"""
-    admin_info = await verify_admin_auth(request)
-    
-    try:
-        db: Session = SessionLocal()
-        try:
-            from model.user_models import User
-            from model.url_injection_models import URLInjectionRequest
-            
-            # Get all users
-            users = db.query(User).order_by(User.created_at.desc()).all()
-            
-            user_data = []
-            for user in users:
-                # Count URLs for each user
-                url_count = db.query(URLInjectionRequest).filter(
-                    URLInjectionRequest.user_id == user.id
-                ).count() if hasattr(URLInjectionRequest, 'user_id') else 0
-                
-                user_data.append({
-                    "id": user.id,
-                    "first_name": user.first_name,
-                    "last_name": user.last_name,
-                    "full_name": f"{user.first_name} {user.last_name}",
-                    "email": user.email,
-                    "phone": user.phone,
-                    "is_active": user.is_active,
-                    "created_at": user.created_at.isoformat(),
-                    "last_login": user.last_login.isoformat() if user.last_login else None,
-                    "url_count": url_count
-                })
-            
-            return {
-                "status": "success",
-                "users": user_data,
-                "total": len(user_data)
-            }
-        finally:
-            db.close()
-            
-    except Exception as e:
-        return {"status": "error", "message": f"Error fetching users: {str(e)}"}
-
 # Manual URL Injection Models
 class ManualURLInjectionRequest(BaseModel):
     url: str
@@ -1717,7 +1788,7 @@ async def manual_url_injection(payload: ManualURLInjectionRequest, request: Requ
 
 @app.post("/admin/inject-url")
 async def admin_inject_url(payload: URLPayload, request: Request):
-    """Admin URL injection endpoint - directly inject and process URLs"""
+    """Admin URL injection endpoint - uses background tasks for better performance"""
     admin_info = await verify_admin_auth(request)
     
     try:
@@ -1727,52 +1798,38 @@ async def admin_inject_url(payload: URLPayload, request: Request):
         if not url_str.startswith(('http://', 'https://')):
             return {"status": "error", "message": "URL must start with http:// or https://"}
         
+        # Quick check if URL already exists
         db: Session = SessionLocal()
         try:
-            # Check if URL already exists
             existing_site = db.query(Website).filter(Website.base_url == url_str).first()
             if existing_site:
                 firm_name = existing_site.firm.name if existing_site.firm else "Unknown"
                 return {"status": "error", "message": f"This URL already exists in our database (Firm: {firm_name})"}
-
-            # Process the URL using the scraper
-            about_obj = await build_about(url_str)
-            
-            if not about_obj:
-                return {"status": "error", "message": "Failed to scrape content from the URL. Please check if the website is accessible."}
-
-            full_text = about_obj.get("full_text", "").strip()
-            if not full_text:
-                return {"status": "error", "message": "No text content found on the webpage to add to knowledge base."}
-                
-            # Process and store the content
-            chunks = chunk_text(full_text)
-            metadata = {
-                "type": "website",
-                "url": url_str,
-                "firm_name": about_obj.get("firm_name"),
-                "session_id": "admin_injected",
-                "injected_by": admin_info.get('username', 'admin')
-            }
-            add_text_chunks_to_collection(chunks, metadata)
-
-            return {
-                "status": "success",
-                "message": f"Successfully processed and added {len(chunks)} content chunks to knowledge base",
-                "data": {
-                    "url": url_str,
-                    "firm_name": about_obj.get("firm_name"),
-                    "indexed_chunks": len(chunks),
-                    "injected_by": admin_info.get('username', 'admin')
-                }
-            }
-            
         finally:
             db.close()
+
+        # Create background task for URL processing
+        task_id = await task_manager.create_task(
+            url=url_str,
+            session_id="admin_injected",
+            injected_by=admin_info.get('username', 'admin')
+        )
+
+        return {
+            "status": "success",
+            "message": "URL processing started in background",
+            "task_id": task_id,
+            "data": {
+                "url": url_str,
+                "task_id": task_id,
+                "status": "processing",
+                "injected_by": admin_info.get('username', 'admin')
+            }
+        }
             
     except Exception as e:
         print(f"Error in admin_inject_url: {e}")
-        return {"status": "error", "message": f"Failed to process URL: {str(e)}"}
+        return {"status": "error", "message": f"Failed to start URL processing: {str(e)}"}
 
 @app.delete("/admin/delete-url/{url_id}")
 async def admin_delete_url(url_id: str, request: Request):

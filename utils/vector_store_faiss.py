@@ -1,4 +1,4 @@
-# utils/vector_store.py
+# utils/vector_store_faiss.py
 
 import os
 import pickle
@@ -44,11 +44,7 @@ class FAISSVectorStore:
                 # Load metadata
                 with open(METADATA_FILE, 'r', encoding='utf-8') as f:
                     data = json.load(f)
-                    raw_metadata = data.get('metadata', {})
-                    
-                    # Expand optimized metadata
-                    self.metadata = self._expand_optimized_metadata(raw_metadata)
-                    
+                    self.metadata = data.get('metadata', {})
                     self.id_to_index = data.get('id_to_index', {})
                     self.index_to_id = data.get('index_to_id', {})
                     self.next_index = data.get('next_index', 0)
@@ -74,120 +70,29 @@ class FAISSVectorStore:
             self.next_index = 0
     
     def save_index(self):
-        """Save FAISS index and metadata to disk with automatic deduplication"""
+        """Save FAISS index and metadata to disk"""
         try:
             # Save FAISS index
             faiss.write_index(self.index, INDEX_FILE)
             
-            # Optimize metadata before saving
-            optimized_metadata = self._optimize_metadata_for_storage()
-            
             # Save metadata and mappings
             metadata_data = {
-                'metadata': optimized_metadata,
+                'metadata': self.metadata,
                 'id_to_index': self.id_to_index,
                 'index_to_id': self.index_to_id,
                 'next_index': self.next_index
             }
             with open(METADATA_FILE, 'w', encoding='utf-8') as f:
-                json.dump(metadata_data, f, ensure_ascii=False)
+                json.dump(metadata_data, f, ensure_ascii=False, indent=2)
             
             # Save documents
             with open(DOCUMENTS_FILE, 'w', encoding='utf-8') as f:
-                json.dump(self.documents, f, ensure_ascii=False)
+                json.dump(self.documents, f, ensure_ascii=False, indent=2)
                 
-            print(f"[FAISSVectorStore] Saved optimized index with {self.index.ntotal} vectors")
+            print(f"[FAISSVectorStore] Saved index with {self.index.ntotal} vectors")
             
         except Exception as e:
             print(f"[FAISSVectorStore] Error saving index: {e}")
-    
-    def _optimize_metadata_for_storage(self):
-        """Create storage-optimized metadata that reduces duplication"""
-        if not self.metadata:
-            return {}
-        
-        # Group metadata by URL to find patterns
-        url_groups = {}
-        for doc_id, meta in self.metadata.items():
-            url = meta.get('url', 'unknown')
-            if url not in url_groups:
-                url_groups[url] = []
-            url_groups[url].append((doc_id, meta))
-        
-        # Check if we can use references for common metadata
-        optimized = {}
-        url_templates = {}
-        
-        for url, doc_list in url_groups.items():
-            if len(doc_list) > 1:  # Multiple chunks from same URL
-                # Use first document as template
-                template = doc_list[0][1]
-                template_key = f"_template_{url.replace('://', '_').replace('/', '_').replace('.', '_')}"
-                url_templates[template_key] = template
-                
-                # Reference the template for all chunks
-                for doc_id, meta in doc_list:
-                    # Check if metadata is identical to template
-                    if meta == template:
-                        optimized[doc_id] = f"@ref:{template_key}"
-                    else:
-                        # Store differences only
-                        diff = {k: v for k, v in meta.items() if template.get(k) != v}
-                        if diff:
-                            optimized[doc_id] = {**diff, "_ref": template_key}
-                        else:
-                            optimized[doc_id] = f"@ref:{template_key}"
-            else:
-                # Single chunk, store normally
-                optimized[doc_list[0][0]] = doc_list[0][1]
-        
-        # Add templates to the optimized metadata
-        optimized.update(url_templates)
-        
-        # Calculate savings
-        original_size = len(json.dumps(self.metadata).encode('utf-8'))
-        optimized_size = len(json.dumps(optimized).encode('utf-8'))
-        
-        if original_size > optimized_size:
-            reduction = ((original_size - optimized_size) / original_size) * 100
-            print(f"[FAISSVectorStore] Metadata optimized: {reduction:.1f}% reduction ({original_size:,} → {optimized_size:,} bytes)")
-        
-        return optimized
-    
-    def _expand_optimized_metadata(self, raw_metadata):
-        """Expand optimized metadata back to full format"""
-        if not raw_metadata:
-            return {}
-        
-        # Find templates (keys starting with _template_)
-        templates = {k: v for k, v in raw_metadata.items() if k.startswith('_template_')}
-        
-        # Expand references
-        expanded = {}
-        for doc_id, meta_value in raw_metadata.items():
-            if doc_id.startswith('_template_'):
-                continue  # Skip templates
-            
-            if isinstance(meta_value, str) and meta_value.startswith('@ref:'):
-                # Direct reference to template
-                template_key = meta_value[5:]  # Remove '@ref:' prefix
-                if template_key in templates:
-                    expanded[doc_id] = templates[template_key].copy()
-            elif isinstance(meta_value, dict) and '_ref' in meta_value:
-                # Partial reference with differences
-                template_key = meta_value['_ref']
-                if template_key in templates:
-                    expanded_meta = templates[template_key].copy()
-                    # Apply differences
-                    for k, v in meta_value.items():
-                        if k != '_ref':
-                            expanded_meta[k] = v
-                    expanded[doc_id] = expanded_meta
-            else:
-                # Regular metadata
-                expanded[doc_id] = meta_value
-        
-        return expanded
     
     def add_documents(self, texts: List[str], metadatas: List[Dict[str, Any]], ids: Optional[List[str]] = None):
         """Add documents to the FAISS index"""
@@ -357,83 +262,6 @@ class FAISSVectorStore:
             "metadatas": matched_metadatas
         }
 
-    def query(self, query_embeddings: List[List[float]] = None, query_texts: List[str] = None, 
-              n_results: int = 10, where: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """
-        ChromaDB-compatible query method for backward compatibility
-        """
-        if query_texts:
-            query = query_texts[0]  # Use first query text
-        elif query_embeddings:
-            # Convert embedding back to text (this is a limitation, but for compatibility)
-            query = ""  # We'll search with empty query, filtered by metadata
-        else:
-            return {"documents": [[]], "metadatas": [[]], "ids": [[]]}
-        
-        results = self.search(query=query, n_results=n_results, filter_metadata=where)
-        
-        # Convert to ChromaDB format
-        documents = []
-        metadatas = []
-        ids = []
-        
-        for result in results:
-            documents.append(result["text"])
-            metadatas.append(result["metadata"])
-            ids.append(result["id"])
-        
-        return {
-            "documents": [documents],
-            "metadatas": [metadatas],
-            "ids": [ids]
-        }
-    
-    def get(self, ids: Optional[List[str]] = None, where: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """
-        ChromaDB-compatible get method for backward compatibility
-        """
-        if ids:
-            # Get specific documents by IDs
-            documents = []
-            metadatas = []
-            result_ids = []
-            
-            for doc_id in ids:
-                if doc_id in self.documents:
-                    documents.append(self.documents[doc_id])
-                    metadatas.append(self.metadata[doc_id])
-                    result_ids.append(doc_id)
-            
-            return {
-                "documents": documents,
-                "metadatas": metadatas,
-                "ids": result_ids
-            }
-        
-        elif where:
-            # Get documents by metadata filter
-            return self.get_documents_by_metadata(where)
-        
-        else:
-            # Get all documents
-            return {
-                "documents": list(self.documents.values()),
-                "metadatas": list(self.metadata.values()),
-                "ids": list(self.documents.keys())
-            }
-
-    def add(self, ids: List[str], embeddings: List[List[float]], documents: List[str], metadatas: List[Dict[str, Any]]):
-        """
-        ChromaDB-compatible add method for backward compatibility
-        """
-        self.add_documents(texts=documents, metadatas=metadatas, ids=ids)
-
-    def delete(self, ids: List[str]):
-        """
-        ChromaDB-compatible delete method for backward compatibility
-        """
-        self.delete_by_ids(ids)
-
 # Global instance
 vector_store = FAISSVectorStore()
 
@@ -453,7 +281,7 @@ def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50):
 def add_text_chunks_to_collection(chunks, metadata: dict):
     """
     Takes text chunks and metadata → stores in FAISS vector store.
-    Optimized version that avoids duplicating metadata for chunks from the same URL.
+    Optimized version that processes embeddings in batches for better performance.
     """
     if not chunks:
         print(f"[VectorStore] No chunks to add for {metadata.get('url')}")
@@ -462,33 +290,18 @@ def add_text_chunks_to_collection(chunks, metadata: dict):
     batch_size = 50  # Process in batches to avoid memory issues
     total_chunks = len(chunks)
     
-    # Extract common metadata that will be identical for all chunks
-    url = metadata.get('url', 'unknown')
-    common_metadata = {
-        'type': metadata.get('type'),
-        'url': url,
-        'firm_name': metadata.get('firm_name'),
-        'user_id': metadata.get('user_id'),
-        'user_email': metadata.get('user_email'),
-        'description': metadata.get('description'),
-        'request_id': metadata.get('request_id')
-    }
-    
     for batch_start in range(0, total_chunks, batch_size):
         batch_end = min(batch_start + batch_size, total_chunks)
         batch_chunks = chunks[batch_start:batch_end]
         
-        # Prepare batch data with minimal metadata
+        # Prepare batch data
         batch_ids = []
         batch_metadatas = []
         
         for i, chunk in enumerate(batch_chunks):
             chunk_index = batch_start + i
-            doc_id = f"{url}_chunk_{chunk_index}"
-            batch_ids.append(doc_id)
-            
-            # Use the common metadata for all chunks (no duplication)
-            batch_metadatas.append(common_metadata.copy())
+            batch_ids.append(f"{metadata.get('url', 'unknown')}_chunk_{chunk_index}")
+            batch_metadatas.append(metadata.copy())
         
         # Add batch to vector store
         vector_store.add_documents(
@@ -497,10 +310,9 @@ def add_text_chunks_to_collection(chunks, metadata: dict):
             ids=batch_ids
         )
         
-        print(f"[VectorStore] Added batch {batch_start + 1}-{batch_end} of {total_chunks} chunks for {url}")
+        print(f"[VectorStore] Added batch {batch_start + 1}-{batch_end} of {total_chunks} chunks for {metadata.get('url')}")
 
-    print(f"[VectorStore] Completed adding {total_chunks} chunks for {url}")
-    print(f"[VectorStore] Metadata optimization: Single template used for all {total_chunks} chunks")
+    print(f"[VectorStore] Completed adding {total_chunks} chunks for {metadata.get('url')}")
 
 # ---------------- Helper: Query Similar Texts ----------------
 def query_similar_texts(query: str, n_results: int = 10, doc_type: str = "website"):

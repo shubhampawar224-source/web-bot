@@ -654,6 +654,7 @@
                         <div class="url-item">
                             <div class="url-info">
                                 <h4>${url.url}</h4>
+                                ${url.firm_name ? `<p><i class="fas fa-building"></i> <strong>${url.firm_name}</strong></p>` : ''}
                                 <p><i class="fas fa-calendar"></i> Submitted: ${new Date(url.created_at).toLocaleDateString()}</p>
                                 ${url.description ? `<p><i class="fas fa-info-circle"></i> ${url.description}</p>` : ''}
                                 ${url.processed_at ? `<p><i class="fas fa-check"></i> Processed: ${new Date(url.processed_at).toLocaleDateString()}</p>` : ''}

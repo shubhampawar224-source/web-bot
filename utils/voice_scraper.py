@@ -14,6 +14,7 @@ import httpx
 from utils.url_helper import clean_html
 from database.db import SessionLocal
 from model.models import Firm, Website, Page, Link
+from utils.firm_manager import FirmManager
 
 # ========================================
 # CONFIG
@@ -197,20 +198,18 @@ def save_to_db(about_obj, all_links, all_texts_by_url):
     db = SessionLocal()
     try:
         domain = urlparse(about_obj["source_url"]).netloc
-        firm_name = about_obj.get("firm_name", domain)
-
-        # === Firm ===
-        firm = db.query(Firm).filter_by(name=firm_name).first()
-        if not firm:
-            firm = Firm(name=firm_name)
-            db.add(firm)
-            db.commit()
-            db.refresh(firm)
+        
+        # Use centralized firm manager to prevent duplicates
+        firm_id = FirmManager.get_or_create_firm(
+            url=about_obj["source_url"],
+            title=about_obj.get("firm_name"),
+            db=db
+        )
 
         # === Website ===
         website = db.query(Website).filter_by(base_url=about_obj["source_url"]).first()
         if not website:
-            website = Website(domain=domain, base_url=about_obj["source_url"], firm_id=firm.id)
+            website = Website(domain=domain, base_url=about_obj["source_url"], firm_id=firm_id)
             db.add(website)
             db.commit()
             db.refresh(website)
@@ -238,8 +237,12 @@ def save_to_db(about_obj, all_links, all_texts_by_url):
                 db.add(new_link)
 
         db.commit()
+        
+        # Get firm name for logging
+        firm = db.query(Firm).filter_by(id=firm_id).first()
+        firm_name = firm.name if firm else "Unknown"
         print(f"[DB] Stored {firm_name} ({domain}): {len(all_texts_by_url)} pages, {len(all_links)} links")
-        return firm.id
+        return firm_id
 
     except Exception as e:
         db.rollback()

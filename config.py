@@ -41,7 +41,7 @@ TO_EMAIL = os.getenv("TO_EMAIL")
 WEBSITE_URL = os.getenv("WEBSITE_URL")
 WIDGET_BASE_URL = os.getenv("WIDGET_BASE_URL", "http://127.0.0.1:8000/")
 CACHE_DIR = "website_cache"
-CHROMA_PERSIST_DIRECTORY = os.getenv("CHROMA_PERSIST_DIRECTORY", "./rag_db")
+FAISS_PERSIST_DIRECTORY = os.getenv("FAISS_PERSIST_DIRECTORY", "./rag_db_faiss")
 
 # Model Configuration
 MODEL_NAME = os.getenv("Model_name", "gpt-4o")

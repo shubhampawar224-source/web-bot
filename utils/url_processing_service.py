@@ -9,6 +9,7 @@ from model.url_injection_models import URLInjectionRequest
 from model.models import Website, Firm
 from utils.scraper import build_about
 from utils.vector_store import chunk_text, add_text_chunks_to_collection
+from utils.firm_manager import FirmManager
 import logging
 
 logger = logging.getLogger(__name__)
@@ -20,28 +21,9 @@ class URLProcessingService:
         self.max_retries = 3
     
     def get_firm_from_url(self, url: str, db: Session) -> Optional[int]:
-        """Extract domain from URL and find or create matching firm"""
+        """Extract domain from URL and find or create matching firm using centralized manager"""
         try:
-            parsed_url = urlparse(url)
-            domain = parsed_url.netloc.lower()
-            
-            # Remove www. prefix if present
-            if domain.startswith('www.'):
-                domain = domain[4:]
-            
-            # Look for existing firm by domain
-            firm = db.query(Firm).filter(Firm.name.ilike(f"%{domain}%")).first()
-            
-            if firm:
-                return firm.id
-            
-            # Create new firm if not found
-            firm_name = domain
-            new_firm = Firm(name=firm_name)
-            db.add(new_firm)
-            db.flush()  # Get the ID without committing
-            return new_firm.id
-            
+            return FirmManager.get_or_create_firm(url=url, db=db)
         except Exception as e:
             logger.error(f"Error determining firm from URL {url}: {e}")
             return None
