@@ -11,6 +11,7 @@ class Firm(Base):
     name = Column(String(255), unique=True, nullable=False)
     created_at = Column(DateTime, default=datetime.now)
     websites = relationship("Website", back_populates="firm")
+    url_requests = relationship("URLInjectionRequest", back_populates="firm")
     
 
 class Website(Base):
@@ -25,6 +26,8 @@ class Website(Base):
     scraped_data = Column(JSON, default={})
 
     firm = relationship("Firm", back_populates="websites")
+    pages = relationship("Page", back_populates="website", cascade="all, delete-orphan")
+    links = relationship("Link", back_populates="website", cascade="all, delete-orphan")
 
     def add_scraped_data(self, about_dict, links_list):
         """Merge scraped data into JSON field"""
@@ -32,6 +35,36 @@ class Website(Base):
             "about": about_dict,
             "links": links_list
         }
+
+
+class Page(Base):
+    __tablename__ = "pages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    url = Column(String(1000), unique=True, nullable=False)
+    title = Column(String(500))
+    meta_description = Column(Text)
+    content = Column(Text)
+    scraped_at = Column(DateTime, default=datetime.now)
+    website_id = Column(Integer, ForeignKey("websites.id"), nullable=False)
+
+    website = relationship("Website", back_populates="pages")
+
+
+class Link(Base):
+    __tablename__ = "links"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(500))
+    url = Column(String(1000))
+    website_id = Column(Integer, ForeignKey("websites.id"), nullable=False)
+    page_id = Column(Integer, ForeignKey("pages.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.now)
+
+    website = relationship("Website", back_populates="links")
+    page = relationship("Page")
+
+
 class Contact(Base):
     __tablename__ = "contacts"
     id = Column(Integer, primary_key=True)

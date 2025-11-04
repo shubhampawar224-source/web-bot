@@ -102,6 +102,17 @@ class AdminDashboard {
         if (urlInjectionForm) {
             urlInjectionForm.addEventListener('submit', (e) => this.handleUrlInjection(e));
         }
+
+        // User management tabs
+        document.querySelectorAll('.tab-btn').forEach(tab => {
+            tab.addEventListener('click', (e) => this.switchTab(e.target.dataset.tab));
+        });
+
+        // Refresh users button
+        const refreshUsers = document.getElementById('refresh-users');
+        if (refreshUsers) {
+            refreshUsers.addEventListener('click', () => this.loadUsers());
+        }
     }
 
     async handleLogin(e) {
@@ -140,6 +151,67 @@ class AdminDashboard {
         } catch (error) {
             console.error('Login error:', error);
             errorDiv.textContent = 'Login failed. Please try again.';
+            errorDiv.style.display = 'block';
+        }
+    }
+
+    async handleSignup(e) {
+        e.preventDefault();
+        
+        const username = document.getElementById('signup-username').value;
+        const email = document.getElementById('signup-email').value;
+        const fullName = document.getElementById('signup-full-name').value;
+        const password = document.getElementById('signup-password').value;
+        const confirmPassword = document.getElementById('signup-confirm-password').value;
+        const isSuperAdmin = document.getElementById('signup-super-admin').checked;
+        const errorDiv = document.getElementById('signup-error');
+
+        // Hide previous errors
+        errorDiv.style.display = 'none';
+
+        // Validate passwords match
+        if (password !== confirmPassword) {
+            errorDiv.textContent = 'Passwords do not match';
+            errorDiv.style.display = 'block';
+            return;
+        }
+
+        // Validate password strength
+        if (password.length < 6) {
+            errorDiv.textContent = 'Password must be at least 6 characters long';
+            errorDiv.style.display = 'block';
+            return;
+        }
+
+        try {
+            const response = await fetch('/admin/signup', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    username,
+                    email,
+                    full_name: fullName || null,
+                    password,
+                    is_super_admin: isSuperAdmin
+                }),
+            });
+
+            const data = await response.json();
+
+            if (data.status === 'success') {
+                this.showToast('Admin account created successfully! Please login.', 'success');
+                this.showLogin();
+                // Clear the signup form
+                document.getElementById('signup-form').reset();
+            } else {
+                errorDiv.textContent = data.message;
+                errorDiv.style.display = 'block';
+            }
+        } catch (error) {
+            console.error('Signup error:', error);
+            errorDiv.textContent = 'Signup failed. Please try again.';
             errorDiv.style.display = 'block';
         }
     }
@@ -660,6 +732,14 @@ class AdminDashboard {
     showLogin() {
         document.getElementById('loading-overlay').style.display = 'none';
         document.getElementById('admin-login').style.display = 'flex';
+        document.getElementById('admin-signup').style.display = 'none';
+        document.getElementById('admin-dashboard').style.display = 'none';
+    }
+
+    showSignup() {
+        document.getElementById('loading-overlay').style.display = 'none';
+        document.getElementById('admin-login').style.display = 'none';
+        document.getElementById('admin-signup').style.display = 'flex';
         document.getElementById('admin-dashboard').style.display = 'none';
     }
 
@@ -861,6 +941,159 @@ class AdminDashboard {
         if (request.is_confirmed) return 50;
         if (request.is_expired) return 0;
         return 25; // pending
+    }
+
+    // User Management Methods
+    switchTab(tabName) {
+        // Update tab buttons
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+
+        // Update tab content
+        document.querySelectorAll('.tab-content').forEach(content => {
+            content.classList.remove('active');
+        });
+        document.getElementById(`${tabName}-tab`).classList.add('active');
+
+        // Load appropriate data
+        if (tabName === 'regular-users') {
+            this.loadUsers();
+        } else if (tabName === 'admin-users') {
+            this.loadAdminUsers();
+        }
+    }
+
+    async loadUsers() {
+        try {
+            const response = await fetch('/admin/users', {
+                headers: {
+                    'Authorization': `Bearer ${this.authToken}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            const data = await response.json();
+
+            if (data.status === 'success') {
+                this.updateUserStats(data.users);
+                this.renderUsersTable(data.users);
+            } else {
+                this.showToast('Failed to load users', 'error');
+            }
+        } catch (error) {
+            console.error('Error loading users:', error);
+            this.showToast('Error loading users', 'error');
+        }
+    }
+
+    updateUserStats(users) {
+        const totalUsers = users.length;
+        const activeUsers = users.filter(user => user.is_active).length;
+        const usersWithUrls = users.filter(user => user.url_count > 0).length;
+
+        document.getElementById('total-users').textContent = totalUsers;
+        document.getElementById('active-users').textContent = activeUsers;
+        document.getElementById('users-with-urls').textContent = usersWithUrls;
+    }
+
+    renderUsersTable(users) {
+        const tbody = document.getElementById('users-tbody');
+        
+        if (users.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center">No users found</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = users.map(user => `
+            <tr>
+                <td>${user.full_name}</td>
+                <td>${user.email}</td>
+                <td>${user.phone || 'N/A'}</td>
+                <td>
+                    <span class="badge ${user.url_count > 0 ? 'badge-success' : 'badge-secondary'}">
+                        ${user.url_count || 0}
+                    </span>
+                    ${user.url_count > 0 ? `<button class="btn btn-sm btn-link" onclick="adminDashboard.showUserUrls(${user.id})">View</button>` : ''}
+                </td>
+                <td>${this.formatDate(user.created_at)}</td>
+                <td>
+                    <span class="badge ${user.is_active ? 'badge-success' : 'badge-danger'}">
+                        ${user.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                </td>
+                <td>
+                    <button class="btn btn-sm btn-secondary" onclick="adminDashboard.viewUserDetails(${user.id})">
+                        <i class="fas fa-eye"></i> View
+                    </button>
+                    ${user.url_count > 0 ? `
+                    <button class="btn btn-sm btn-primary" onclick="adminDashboard.manageUserUrls(${user.id})">
+                        <i class="fas fa-globe"></i> URLs
+                    </button>
+                    ` : ''}
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    async manageUserUrls(userId) {
+        try {
+            const response = await fetch('/admin/user-urls', {
+                headers: {
+                    'Authorization': `Bearer ${this.authToken}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            const data = await response.json();
+
+            if (data.status === 'success') {
+                const userUrls = data.user_urls.filter(url => url.user_id === userId);
+                this.showUserUrlModal(userUrls);
+            } else {
+                this.showToast('Failed to load user URLs', 'error');
+            }
+        } catch (error) {
+            console.error('Error loading user URLs:', error);
+            this.showToast('Error loading user URLs', 'error');
+        }
+    }
+
+    showUserUrlModal(userUrls) {
+        const modalHtml = `
+            <div class="modal-header">
+                <h3>User URL History</h3>
+                <button class="modal-close" onclick="adminDashboard.closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                ${userUrls.length === 0 ? '<p>No URL requests found.</p>' : 
+                    userUrls.map(url => `
+                        <div class="url-request-item">
+                            <div class="url-info">
+                                <h4>${url.url}</h4>
+                                <p><strong>Status:</strong> 
+                                    <span class="badge badge-${url.status === 'completed' ? 'success' : url.status === 'failed' ? 'danger' : 'warning'}">
+                                        ${url.status}
+                                    </span>
+                                </p>
+                                <p><strong>Submitted:</strong> ${new Date(url.created_at).toLocaleDateString()}</p>
+                                ${url.processed_at ? `<p><strong>Processed:</strong> ${new Date(url.processed_at).toLocaleDateString()}</p>` : ''}
+                                ${url.description ? `<p><strong>Description:</strong> ${url.description}</p>` : ''}
+                                ${url.notes ? `<p><strong>Notes:</strong> ${url.notes}</p>` : ''}
+                            </div>
+                        </div>
+                    `).join('')
+                }
+            </div>
+        `;
+
+        document.getElementById('modal-container').innerHTML = modalHtml;
+        document.getElementById('modal-overlay').classList.add('show');
+    }
+
+    closeModal() {
+        document.getElementById('modal-overlay').classList.remove('show');
     }
 }
 

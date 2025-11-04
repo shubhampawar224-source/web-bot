@@ -2,7 +2,8 @@ from datetime import datetime, timedelta
 from typing import Optional
 import uuid
 import secrets
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, ForeignKey
+from sqlalchemy.orm import relationship
 from database.db import Base
 
 class URLInjectionRequest(Base):
@@ -30,6 +31,15 @@ class URLInjectionRequest(Base):
     admin_created = Column(Boolean, default=False)  # Whether created through admin panel
     admin_username = Column(String(255), nullable=True)  # Admin who created the request
     
+    # User tracking for dashboard
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # Link to user who submitted
+    description = Column(Text, nullable=True)  # User-provided description
+    status = Column(String(20), default="pending")  # pending, approved, rejected, processing
+    firm_id = Column(Integer, ForeignKey("firms.id"), nullable=True)  # Associated firm
+    
+    # Relationships
+    firm = relationship("Firm", back_populates="url_requests")
+    
     @classmethod
     def create_request(cls, url: str, email: str, priority: str = "normal", notes: str = "") -> 'URLInjectionRequest':
         """Create a new URL injection request with confirmation token"""
@@ -45,6 +55,26 @@ class URLInjectionRequest(Base):
             expires_at=expires_at,
             priority=priority,
             notes=notes
+        )
+    
+    @classmethod
+    def create_user_request(cls, url: str, user_id: int, email: str, description: str = "") -> 'URLInjectionRequest':
+        """Create a new URL injection request from user dashboard"""
+        request_id = str(uuid.uuid4())
+        token = secrets.token_urlsafe(32)
+        expires_at = datetime.now() + timedelta(hours=72)  # 72 hour expiry for user requests
+        
+        return cls(
+            request_id=request_id,
+            url=url,
+            requester_email=email,
+            confirmation_token=token,
+            expires_at=expires_at,
+            user_id=user_id,
+            description=description,
+            is_confirmed=True,  # User requests are auto-confirmed
+            confirmed_at=datetime.now(),
+            status="pending"
         )
     
     def is_expired(self) -> bool:

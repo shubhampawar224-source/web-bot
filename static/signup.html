@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign Up - KitKool</title>
+    <link rel="stylesheet" href="/static/css/auth.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .auth-container {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 450px;
+            backdrop-filter: blur(10px);
+        }
+
+        .auth-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .auth-header h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2rem;
+            font-weight: 600;
+        }
+
+        .auth-header p {
+            color: #666;
+            font-size: 0.95rem;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 15px;
+        }
+
+        .form-row .form-group {
+            flex: 1;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        input[type="text"],
+        input[type="email"],
+        input[type="password"],
+        input[type="tel"] {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            background: #fff;
+        }
+
+        input[type="text"]:focus,
+        input[type="email"]:focus,
+        input[type="password"]:focus,
+        input[type="tel"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .password-requirements {
+            font-size: 0.8rem;
+            color: #666;
+            margin-top: 5px;
+            line-height: 1.4;
+        }
+
+        .requirement {
+            color: #e74c3c;
+            transition: color 0.3s ease;
+        }
+
+        .requirement.valid {
+            color: #27ae60;
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 10px;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .submit-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .auth-links {
+            text-align: center;
+            margin-top: 25px;
+            padding-top: 20px;
+            border-top: 1px solid #e1e5e9;
+        }
+
+        .auth-links a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s ease;
+        }
+
+        .auth-links a:hover {
+            color: #764ba2;
+        }
+
+        .error-message {
+            background: #fee;
+            color: #c33;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+            border-left: 4px solid #e74c3c;
+        }
+
+        .success-message {
+            background: #efe;
+            color: #363;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+            border-left: 4px solid #27ae60;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #ffffff;
+            border-top: 2px solid transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        @media (max-width: 480px) {
+            .auth-container {
+                padding: 30px 20px;
+            }
+
+            .form-row {
+                flex-direction: column;
+                gap: 0;
+            }
+
+            .auth-header h1 {
+                font-size: 1.7rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-header">
+            <h1>Create Account</h1>
+            <p>Join KitKool to access our services</p>
+        </div>
+
+        <div id="error-message" class="error-message hidden"></div>
+        <div id="success-message" class="success-message hidden"></div>
+
+        <form id="signup-form">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="first_name">First Name</label>
+                    <input type="text" id="first_name" name="first_name" required>
+                </div>
+                <div class="form-group">
+                    <label for="last_name">Last Name</label>
+                    <input type="text" id="last_name" name="last_name" required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="email">Email Address</label>
+                <input type="email" id="email" name="email" required>
+            </div>
+
+            <div class="form-group">
+                <label for="phone">Phone Number (Optional)</label>
+                <input type="tel" id="phone" name="phone" placeholder="+1 (555) 123-4567">
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required>
+                <div class="password-requirements">
+                    Password must contain:
+                    <div class="requirement" id="req-length">• At least 8 characters</div>
+                    <div class="requirement" id="req-upper">• One uppercase letter</div>
+                    <div class="requirement" id="req-lower">• One lowercase letter</div>
+                    <div class="requirement" id="req-number">• One number</div>
+                    <div class="requirement" id="req-special">• One special character</div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="confirm_password">Confirm Password</label>
+                <input type="password" id="confirm_password" name="confirm_password" required>
+            </div>
+
+            <button type="submit" class="submit-btn" id="submit-btn">
+                <span id="loading" class="loading hidden"></span>
+                <span id="submit-text">Create Account</span>
+            </button>
+        </form>
+
+        <div class="auth-links">
+            <p>Already have an account? <a href="/login">Sign In</a></p>
+        </div>
+    </div>
+
+    <script>
+        const signupForm = document.getElementById('signup-form');
+        const submitBtn = document.getElementById('submit-btn');
+        const loading = document.getElementById('loading');
+        const submitText = document.getElementById('submit-text');
+        const errorMessage = document.getElementById('error-message');
+        const successMessage = document.getElementById('success-message');
+        const passwordInput = document.getElementById('password');
+        const confirmPasswordInput = document.getElementById('confirm_password');
+
+        // Password validation requirements
+        const requirements = {
+            length: /^.{8,}$/,
+            upper: /[A-Z]/,
+            lower: /[a-z]/,
+            number: /\d/,
+            special: /[!@#$%^&*(),.?":{}|<>]/
+        };
+
+        function hideMessages() {
+            errorMessage.classList.add('hidden');
+            successMessage.classList.add('hidden');
+        }
+
+        function showError(message) {
+            hideMessages();
+            errorMessage.textContent = message;
+            errorMessage.classList.remove('hidden');
+        }
+
+        function showSuccess(message) {
+            hideMessages();
+            successMessage.textContent = message;
+            successMessage.classList.remove('hidden');
+        }
+
+        function validatePassword(password) {
+            const reqElements = {
+                length: document.getElementById('req-length'),
+                upper: document.getElementById('req-upper'),
+                lower: document.getElementById('req-lower'),
+                number: document.getElementById('req-number'),
+                special: document.getElementById('req-special')
+            };
+
+            let isValid = true;
+
+            for (const [key, regex] of Object.entries(requirements)) {
+                const element = reqElements[key];
+                if (regex.test(password)) {
+                    element.classList.add('valid');
+                } else {
+                    element.classList.remove('valid');
+                    isValid = false;
+                }
+            }
+
+            return isValid;
+        }
+
+        function validateForm() {
+            const firstName = document.getElementById('first_name').value.trim();
+            const lastName = document.getElementById('last_name').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const password = passwordInput.value;
+            const confirmPassword = confirmPasswordInput.value;
+
+            if (!firstName) {
+                showError('First name is required');
+                return false;
+            }
+
+            if (!lastName) {
+                showError('Last name is required');
+                return false;
+            }
+
+            if (!email) {
+                showError('Email is required');
+                return false;
+            }
+
+            if (!validatePassword(password)) {
+                showError('Please meet all password requirements');
+                return false;
+            }
+
+            if (password !== confirmPassword) {
+                showError('Passwords do not match');
+                return false;
+            }
+
+            return true;
+        }
+
+        // Real-time password validation
+        passwordInput.addEventListener('input', function() {
+            validatePassword(this.value);
+        });
+
+        // Password confirmation validation
+        confirmPasswordInput.addEventListener('input', function() {
+            const password = passwordInput.value;
+            const confirmPassword = this.value;
+            
+            if (confirmPassword && password !== confirmPassword) {
+                this.style.borderColor = '#e74c3c';
+            } else {
+                this.style.borderColor = '#e1e5e9';
+            }
+        });
+
+        signupForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            if (!validateForm()) {
+                return;
+            }
+
+            // Show loading state
+            submitBtn.disabled = true;
+            loading.classList.remove('hidden');
+            submitText.textContent = 'Creating Account...';
+
+            const formData = {
+                first_name: document.getElementById('first_name').value.trim(),
+                last_name: document.getElementById('last_name').value.trim(),
+                email: document.getElementById('email').value.trim(),
+                password: passwordInput.value,
+                phone: document.getElementById('phone').value.trim() || null
+            };
+
+            try {
+                const response = await fetch('/signup', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                const result = await response.json();
+
+                if (result.status === 'success') {
+                    showSuccess(result.message);
+                    
+                    // Store auth info if provided (auto-login)
+                    if (result.token && result.user) {
+                        localStorage.setItem('user_token', result.token);
+                        localStorage.setItem('user_info', JSON.stringify(result.user));
+                        
+                        // Redirect to user dashboard after a delay
+                        setTimeout(() => {
+                            window.location.href = '/dashboard';
+                        }, 2000);
+                    } else {
+                        // Redirect to login page
+                        setTimeout(() => {
+                            window.location.href = '/login';
+                        }, 2000);
+                    }
+                } else {
+                    showError(result.message || 'Registration failed');
+                }
+            } catch (error) {
+                console.error('Signup error:', error);
+                showError('Network error. Please try again.');
+            } finally {
+                // Reset loading state
+                submitBtn.disabled = false;
+                loading.classList.add('hidden');
+                submitText.textContent = 'Create Account';
+            }
+        });
+
+        // Clear messages when user starts typing
+        const inputs = signupForm.querySelectorAll('input');
+        inputs.forEach(input => {
+            input.addEventListener('input', hideMessages);
+        });
+    </script>
+</body>
+</html>

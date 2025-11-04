@@ -179,23 +179,57 @@ def load_firm_and_links(firm_id: int) -> Tuple[str, str, List[str]]:
 
 
 # ---------------- Main: Get Answer ----------------
-def get_answer_from_db(query: str, firm_id: int, session_id: Optional[str] = None) -> str:
+def get_answer_from_db(query: str, firm_id: int = None, session_id: Optional[str] = None, url_context: Optional[str] = None) -> str:
+    """Get answer from database - supports both firm_id and URL-specific context"""
     session_id = session_id or str(uuid.uuid4())
 
     try:
         # 1️⃣ Embed user query
         query_embedding = embedding_model.encode(query).tolist()
 
-        # 2️⃣ Retrieve top 5 firm-specific docs from vector DB
-        results = collection.query(
-            query_embeddings=[query_embedding],
-            n_results=5,
-            where={"$and": [{"type": "website"}, {"firm_id": str(firm_id)}]},
-        )
-        docs = results["documents"][0] if results["documents"] else []
+        docs = []
+        firm_name = "Assistant"
+        links_list = []
 
-        # 3️⃣ Load firm context & links
-        firm_name, links_list = load_firm_and_links(firm_id)
+        if url_context:
+            # URL-specific context - query user-submitted content
+            url_ids = [id.strip() for id in url_context.split(',') if id.strip()]
+            print(f"🔍 Searching vector DB for request_ids: {url_ids}")
+            
+            if url_ids:
+                # Query user_website type content with specific request_ids
+                # Note: ChromaDB uses $in operator for matching multiple values
+                results = collection.query(
+                    query_embeddings=[query_embedding],
+                    n_results=10,
+                    where={"$and": [
+                        {"type": "user_website"},
+                        {"request_id": {"$in": url_ids}}
+                    ]},
+                )
+                docs = results["documents"][0] if results["documents"] else []
+                print(f"📄 Found {len(docs)} documents from vector search")
+                
+                # Try to get firm name from metadata
+                if results["metadatas"] and results["metadatas"][0]:
+                    for metadata in results["metadatas"][0]:
+                        if metadata.get("firm_name"):
+                            firm_name = metadata["firm_name"]
+                            print(f"🏢 Extracted firm name from metadata: {firm_name}")
+                            break
+                        
+        elif firm_id:
+            # 2️⃣ Retrieve top 5 firm-specific docs from vector DB
+            results = collection.query(
+                query_embeddings=[query_embedding],
+                n_results=5,
+                where={"$and": [{"type": "website"}, {"firm_id": str(firm_id)}]},
+            )
+            docs = results["documents"][0] if results["documents"] else []
+
+            # 3️⃣ Load firm context & links
+            firm_name, links_list = load_firm_and_links(firm_id)
+        
         # 4️⃣ Merge retrieved docs + context
         MAX_DOC_CHARS = 5000
         docs = [d[:MAX_DOC_CHARS] for d in docs]

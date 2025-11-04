@@ -21,14 +21,58 @@ def init_db():
         from model.models import Firm, Website, Contact
         from model.url_injection_models import URLInjectionRequest
         from model.admin_models import AdminUser, AdminSession
+        from model.user_models import User, UserSession
         
         # Create all tables
         Base.metadata.create_all(bind=engine)
         print("✅ Database tables created successfully!")
         
+        # Run migration to add missing columns to existing tables
+        try:
+            migrate_existing_tables()
+        except Exception as e:
+            print(f"⚠️ Migration warning: {e}")
+        
     except Exception as e:
         print(f"❌ Error creating database tables: {e}")
         raise
+
+def migrate_existing_tables():
+    """Add missing columns to existing tables"""
+    from sqlalchemy import text
+    
+    with engine.connect() as connection:
+        # Check if url_injection_requests table exists
+        result = connection.execute(text("""
+            SELECT name FROM sqlite_master 
+            WHERE type='table' AND name='url_injection_requests';
+        """))
+        
+        if result.fetchone():
+            # Check existing columns
+            result = connection.execute(text("PRAGMA table_info(url_injection_requests)"))
+            columns = [row[1] for row in result.fetchall()]
+            
+            # Add missing columns
+            columns_to_add = [
+                ("user_id", "INTEGER"),
+                ("description", "TEXT"),
+                ("status", "VARCHAR(20) DEFAULT 'pending'")
+            ]
+            
+            for column_name, column_type in columns_to_add:
+                if column_name not in columns:
+                    try:
+                        connection.execute(text(f"""
+                            ALTER TABLE url_injection_requests 
+                            ADD COLUMN {column_name} {column_type}
+                        """))
+                        print(f"✅ Added missing column: {column_name}")
+                    except Exception as e:
+                        # Column might already exist, ignore the error
+                        pass
+            
+            connection.commit()
 
 def get_db():
     """Get database session"""

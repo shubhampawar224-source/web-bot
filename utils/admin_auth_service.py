@@ -144,17 +144,19 @@ class AdminAuthService:
         finally:
             db.close()
     
-    def create_admin_user(self, username: str, email: str, password: str, full_name: str = None, is_super_admin: bool = False) -> bool:
-        """Create new admin user"""
+    def create_admin_user(self, username: str, email: str, password: str, full_name: str = None, is_super_admin: bool = False) -> Tuple[bool, str]:
+        """Create new admin user with detailed error messages"""
         db: Session = SessionLocal()
         try:
-            # Check if username/email exists
-            existing = db.query(AdminUser).filter(
-                (AdminUser.username == username) | (AdminUser.email == email)
-            ).first()
+            # Check if username exists
+            existing_username = db.query(AdminUser).filter(AdminUser.username == username).first()
+            if existing_username:
+                return False, "Username already exists"
             
-            if existing:
-                return False
+            # Check if email exists
+            existing_email = db.query(AdminUser).filter(AdminUser.email == email).first()
+            if existing_email:
+                return False, "Email already exists"
             
             new_admin = AdminUser.create_admin(
                 username=username,
@@ -166,12 +168,13 @@ class AdminAuthService:
             
             db.add(new_admin)
             db.commit()
-            return True
+            print(f"✅ New admin created: {username}")
+            return True, "Admin user created successfully"
             
         except Exception as e:
             db.rollback()
             print(f"❌ Failed to create admin user: {e}")
-            return False
+            return False, "Failed to create admin user"
         finally:
             db.close()
 

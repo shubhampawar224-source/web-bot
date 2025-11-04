@@ -13,6 +13,7 @@ class Firm(Base):
 
     # Relationships
     websites = relationship("Website", back_populates="firm", cascade="all, delete-orphan")
+    url_requests = relationship("URLInjectionRequest", back_populates="firm")
 
 
 class Website(Base):

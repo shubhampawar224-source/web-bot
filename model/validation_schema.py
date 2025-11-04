@@ -64,3 +64,48 @@ class ContactIn(BaseModel):
     phone_number: Optional[str] = None
     metadata: Optional[dict] = None
     notify_to: Optional[str] = None
+
+# Admin Authentication Models
+class AdminLoginRequest(BaseModel):
+    username: str
+    password: str
+
+class AdminSignupRequest(BaseModel):
+    username: str
+    email: str
+    password: str
+    full_name: Optional[str] = None
+    is_super_admin: Optional[bool] = False
+
+class AdminResponse(BaseModel):
+    status: str
+    message: str
+    token: Optional[str] = None
+    admin: Optional[dict] = None
+
+# User Authentication Models
+class UserSignupRequest(BaseModel):
+    first_name: str
+    last_name: str
+    email: str
+    password: str
+    phone: Optional[str] = None
+
+class UserLoginRequest(BaseModel):
+    email: str
+    password: str
+
+class UserResponse(BaseModel):
+    status: str
+    message: str
+    token: Optional[str] = None
+    user: Optional[dict] = None
+
+class UserUrlRequest(BaseModel):
+    url: str
+    description: Optional[str] = None
+
+class UserUrlResponse(BaseModel):
+    status: str
+    message: str
+    urls: Optional[List[dict]] = None

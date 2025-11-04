@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Voice Assistant</title>
+  <title>Web Assistant</title>
   <style>
     * {
       box-sizing: border-box;
@@ -54,19 +54,77 @@
   
   <script>
     // Ensure iframe loads properly and CSS is applied
-    document.addEventListener('DOMContentLoaded', function() {
-      const iframe = document.querySelector('#voice-widget iframe');
+    document.addEventListener('DOMContentLoaded', async function() {
+      const iframe = document.querySelector('#widget-iframe');
+      
+      // Get URL parameters
+      const urlParams = new URLSearchParams(window.location.search);
+      const urls = urlParams.get('urls');
+      const userId = urlParams.get('user_id');
+      
+      let firmName = null;
+      let firmId = null;
+      
+      // Fetch firm information if URLs are provided
+      if (urls) {
+        try {
+          console.log('Fetching firm info for URLs:', urls);
+          const response = await fetch(`/widget/firm-info?urls=${urls}&user_id=${userId || ''}`);
+          const data = await response.json();
+          
+          console.log('Firm info response:', data);
+          
+          if (data.status === 'success' && data.firm_name) {
+            firmName = data.firm_name;
+            firmId = data.firm_id;
+            console.log('✅ Firm detected for widget:', firmName, 'ID:', firmId);
+          } else {
+            console.log('⚠️ No firm detected:', data);
+          }
+        } catch (error) {
+          console.error('❌ Error fetching firm info:', error);
+        }
+      } else {
+        console.log('No URLs provided to widget');
+      }
+      
+      // Build iframe URL with parameters
+      let iframeUrl = 'http://127.0.0.1:8000/static/index.html';
+      const params = new URLSearchParams();
+      
+      if (firmName) {
+        params.append('widget_firm', firmName);
+      }
+      if (firmId) {
+        params.append('widget_firm_id', firmId);
+      }
+      if (urls) {
+        params.append('widget_urls', urls);
+      }
+      if (userId) {
+        params.append('widget_user_id', userId);
+      }
+      
+      if (params.toString()) {
+        iframeUrl += '?' + params.toString();
+      }
+      
+      // Set iframe source
+      iframe.src = iframeUrl;
       
       iframe.addEventListener('load', function() {
         console.log('Widget iframe loaded successfully');
         
-        // Optional: Send configuration to iframe if needed
+        // Send configuration to iframe if needed
         try {
           iframe.contentWindow.postMessage({
             type: 'WIDGET_CONFIG',
             config: {
               isEmbedded: true,
-              parentOrigin: window.location.origin
+              parentOrigin: window.location.origin,
+              firmName: firmName,
+              urls: urls,
+              userId: userId
             }
           }, '*');
         } catch (e) {
@@ -99,7 +157,7 @@ console.log("Auto Server:", BASE_URL);
 
 <body>
   <div id="voice-widget">
-    <iframe src="http://127.0.0.1:8000/static/index.html"></iframe>
+    <iframe id="widget-iframe"></iframe>
   </div>
 </body>
 </html>

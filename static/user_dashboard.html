@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Dashboard - KitKool</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
+            line-height: 1.6;
+        }
+
+        .dashboard-container {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            color: #3b82f6;
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .user-name {
+            font-weight: 500;
+            color: #374151;
+        }
+
+        .logout-btn {
+            background: #ef4444;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            transition: background 0.2s;
+        }
+
+        .logout-btn:hover {
+            background: #dc2626;
+        }
+
+        .main-content {
+            padding: 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .card h3 {
+            color: #374151;
+            margin-bottom: 1rem;
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #3b82f6;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            color: #64748b;
+            font-size: 0.875rem;
+        }
+
+        .url-injection-section {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .section-actions {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .btn {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn:hover {
+            background: #2563eb;
+            transform: translateY(-1px);
+        }
+
+        .btn-widget {
+            background: #10b981;
+        }
+
+        .btn-widget:hover {
+            background: #059669;
+        }
+
+        .btn:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        .btn:disabled:hover {
+            background: #9ca3af;
+            transform: none;
+        }
+
+        .url-controls {
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .control-group {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .select-all-label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+            font-weight: 500;
+            color: #374151;
+        }
+
+        .select-all-checkbox {
+            width: 18px;
+            height: 18px;
+        }
+
+        .selected-count {
+            color: #3b82f6;
+            font-weight: 500;
+            font-size: 0.875rem;
+        }
+
+        .btn-success {
+            background: #10b981;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: #374151;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .url-form {
+            background: #f8fafc;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+            display: none;
+        }
+
+        .url-form.show {
+            display: block;
+        }
+
+        .url-list {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .url-item {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .url-info {
+            flex: 1;
+        }
+
+        .url-info h4 {
+            color: #374151;
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .url-info p {
+            color: #64748b;
+            font-size: 0.75rem;
+        }
+
+        .url-status-container {
+            text-align: center;
+            min-width: 120px;
+        }
+
+        .url-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            min-width: 120px;
+        }
+
+        .btn-launch {
+            background: #10b981;
+            padding: 0.5rem 1rem;
+            font-size: 0.8rem;
+        }
+
+        .btn-launch:hover {
+            background: #059669;
+        }
+
+        .btn-preview {
+            background: #6b7280;
+            padding: 0.5rem 1rem;
+            font-size: 0.8rem;
+        }
+
+        .btn-preview:hover {
+            background: #4b5563;
+        }
+
+        .btn-disabled {
+            background: #9ca3af;
+            padding: 0.5rem 1rem;
+            font-size: 0.8rem;
+            cursor: not-allowed;
+        }
+
+        .url-status {
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .status-pending {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .status-processing {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .status-approved {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .status-rejected {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .url-status-container {
+            text-align: right;
+        }
+
+        .status-note {
+            font-size: 0.75rem;
+            margin-top: 0.25rem;
+            color: #64748b;
+        }
+
+        .message {
+            padding: 1rem;
+            border-radius: 6px;
+            margin-bottom: 1rem;
+            display: none;
+        }
+
+        .message.success {
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+        }
+
+        .message.error {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fca5a5;
+        }
+
+        .message.info {
+            background: #dbeafe;
+            color: #1e40af;
+            border: 1px solid #93c5fd;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #64748b;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                padding: 1rem;
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .main-content {
+                padding: 1rem;
+            }
+
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .section-actions {
+                flex-direction: column;
+                gap: 0.5rem;
+                width: 100%;
+            }
+
+            .section-actions .btn {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .section-header {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 1rem;
+            }
+
+            .url-controls {
+                padding: 0.75rem;
+            }
+
+            .control-group {
+                flex-direction: column;
+                gap: 0.5rem;
+                align-items: stretch;
+            }
+
+            .url-item {
+                flex-direction: column;
+                gap: 0.75rem;
+                align-items: stretch;
+            }
+
+            .url-select {
+                order: 3;
+                align-self: flex-start;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Header -->
+        <header class="header">
+            <h1><i class="fas fa-robot"></i> My Chatbot Dashboard</h1>
+            <div class="user-info">
+                <span class="user-name" id="user-name">Loading...</span>
+                <button class="logout-btn" id="logout-btn">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Dashboard Stats -->
+            <div class="dashboard-grid">
+                <div class="card">
+                    <h3><i class="fas fa-link"></i> URL Requests</h3>
+                    <div class="stat-number" id="total-urls">-</div>
+                    <div class="stat-label">Total submitted</div>
+                </div>
+                <div class="card">
+                    <h3><i class="fas fa-check-circle"></i> Processed URLs</h3>
+                    <div class="stat-number" id="approved-urls">-</div>
+                    <div class="stat-label">Successfully processed</div>
+                </div>
+                <div class="card">
+                    <h3><i class="fas fa-exclamation-triangle"></i> Failed URLs</h3>
+                    <div class="stat-number" id="pending-urls">-</div>
+                    <div class="stat-label">Processing failed</div>
+                </div>
+            </div>
+
+            <!-- URL Injection Section -->
+            <div class="url-injection-section">
+                <div class="section-header">
+                    <h2 class="section-title">
+                        <i class="fas fa-globe"></i> Manage Your Chatbot URLs
+                    </h2>
+                    <div class="section-actions">
+                        <button class="btn" id="add-url-btn">
+                            <i class="fas fa-plus"></i> Add New URL
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Success/Error Messages -->
+                <div id="message" class="message"></div>
+
+                <!-- URL Submission Form -->
+                <div id="url-form" class="url-form">
+                    <h3>Add URL to Your Chatbot Knowledge Base</h3>
+                    <form id="url-submission-form">
+                        <div class="form-group">
+                            <label for="url-input">Website URL</label>
+                            <input type="url" id="url-input" name="url" required 
+                                   placeholder="https://example.com">
+                        </div>
+                        <div class="form-group">
+                            <label for="description-input">Description (Optional)</label>
+                            <textarea id="description-input" name="description" rows="3"
+                                      placeholder="Brief description of what this URL contains..."></textarea>
+                        </div>
+                        <div style="display: flex; gap: 1rem;">
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-plus"></i> Add to Chatbot
+                            </button>
+                            <button type="button" class="btn" id="cancel-url-btn" style="background: #6b7280;">
+                                <i class="fas fa-times"></i> Cancel
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- URL List -->
+                <div id="url-list" class="url-list">
+                    <div class="loading">Loading your URLs...</div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // User Dashboard JavaScript
+        class UserDashboard {
+            constructor() {
+                this.authToken = localStorage.getItem('user_token');
+                this.userInfo = JSON.parse(localStorage.getItem('user_info') || '{}');
+                this.urls = [];
+                
+                this.init();
+            }
+
+            init() {
+                if (!this.authToken) {
+                    window.location.href = '/signup';
+                    return;
+                }
+
+                this.bindEvents();
+                this.loadUserData();
+                this.loadUserUrls();
+            }
+
+            bindEvents() {
+                // Logout
+                document.getElementById('logout-btn').addEventListener('click', () => this.logout());
+                
+                // URL Form
+                document.getElementById('add-url-btn').addEventListener('click', () => this.showUrlForm());
+                document.getElementById('cancel-url-btn').addEventListener('click', () => this.hideUrlForm());
+                document.getElementById('url-submission-form').addEventListener('submit', (e) => this.submitUrl(e));
+                
+                // Make userDashboard available globally for button onclick handlers
+                window.userDashboard = this;
+            }
+
+            loadUserData() {
+                const userNameEl = document.getElementById('user-name');
+                if (this.userInfo.full_name) {
+                    userNameEl.textContent = this.userInfo.full_name;
+                } else if (this.userInfo.first_name && this.userInfo.last_name) {
+                    userNameEl.textContent = `${this.userInfo.first_name} ${this.userInfo.last_name}`;
+                } else {
+                    userNameEl.textContent = this.userInfo.email || 'User';
+                }
+            }
+
+            async loadUserUrls() {
+                try {
+                    const response = await fetch('/user/urls', {
+                        headers: {
+                            'Authorization': `Bearer ${this.authToken}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        this.urls = data.urls || [];
+                        this.updateStats();
+                        this.renderUrls();
+                    } else {
+                        this.showMessage('Failed to load URLs', 'error');
+                    }
+                } catch (error) {
+                    console.error('Error loading URLs:', error);
+                    this.showMessage('Error loading URLs', 'error');
+                }
+            }
+
+            updateStats() {
+                const totalUrls = this.urls.length;
+                const completedUrls = this.urls.filter(url => url.status === 'completed').length;
+                const failedUrls = this.urls.filter(url => url.status === 'failed').length;
+
+                document.getElementById('total-urls').textContent = totalUrls;
+                document.getElementById('approved-urls').textContent = completedUrls;
+                document.getElementById('pending-urls').textContent = failedUrls;
+            }
+
+            renderUrls() {
+                const urlList = document.getElementById('url-list');
+                
+                if (this.urls.length === 0) {
+                    urlList.innerHTML = `
+                        <div style="text-align: center; padding: 2rem; color: #64748b;">
+                            <i class="fas fa-globe" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;"></i>
+                            <p>No URLs submitted yet. Add your first URL to get started!</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                urlList.innerHTML = this.urls.map(url => {
+                    let statusBadge = '';
+                    let statusIcon = '';
+                    let canLaunch = url.status === 'completed';
+                    
+                    switch(url.status) {
+                        case 'processing':
+                            statusBadge = 'status-processing';
+                            statusIcon = 'fas fa-spinner fa-spin';
+                            break;
+                        case 'completed':
+                            statusBadge = 'status-approved';
+                            statusIcon = 'fas fa-check-circle';
+                            break;
+                        case 'failed':
+                            statusBadge = 'status-rejected';
+                            statusIcon = 'fas fa-times-circle';
+                            break;
+                        default:
+                            statusBadge = 'status-processing';
+                            statusIcon = 'fas fa-spinner fa-spin';
+                    }
+                    
+                    return `
+                        <div class="url-item">
+                            <div class="url-info">
+                                <h4>${url.url}</h4>
+                                <p><i class="fas fa-calendar"></i> Submitted: ${new Date(url.created_at).toLocaleDateString()}</p>
+                                ${url.description ? `<p><i class="fas fa-info-circle"></i> ${url.description}</p>` : ''}
+                                ${url.processed_at ? `<p><i class="fas fa-check"></i> Processed: ${new Date(url.processed_at).toLocaleDateString()}</p>` : ''}
+                            </div>
+                            <div class="url-status-container">
+                                <span class="url-status ${statusBadge}">
+                                    <i class="${statusIcon}"></i> ${url.status.toUpperCase()}
+                                </span>
+                                ${url.status === 'completed' ? '<div class="status-note">✅ Ready for chatbot</div>' : ''}
+                                ${url.status === 'failed' ? '<div class="status-note">❌ Processing failed</div>' : ''}
+                                ${url.status === 'processing' ? '<div class="status-note">⚡ Processing...</div>' : ''}
+                            </div>
+                            <div class="url-actions">
+                                ${canLaunch ? `
+                                    <button class="btn btn-launch" onclick="window.adminDashboard ? window.adminDashboard.launchUrlBot('${url.id}', '${url.url}') : window.userDashboard.launchUrlBot('${url.id}', '${url.url}')">
+                                        <i class="fas fa-rocket"></i> Launch Bot
+                                    </button>
+                                ` : `
+                                    <button class="btn btn-disabled" disabled>
+                                        <i class="fas fa-clock"></i> Not Ready
+                                    </button>
+                                `}
+                                ${canLaunch ? `
+                                    <button class="btn btn-preview" onclick="window.adminDashboard ? window.adminDashboard.previewUrl('${url.url}') : window.userDashboard.previewUrl('${url.url}')">
+                                        <i class="fas fa-external-link-alt"></i> Preview
+                                    </button>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            showUrlForm() {
+                document.getElementById('url-form').classList.add('show');
+                document.getElementById('add-url-btn').style.display = 'none';
+            }
+
+            hideUrlForm() {
+                document.getElementById('url-form').classList.remove('show');
+                document.getElementById('add-url-btn').style.display = 'inline-flex';
+                document.getElementById('url-submission-form').reset();
+            }
+
+            async submitUrl(e) {
+                e.preventDefault();
+                
+                const formData = new FormData(e.target);
+                const url = formData.get('url');
+                const description = formData.get('description');
+                
+                // Show loading state
+                const submitBtn = e.target.querySelector('button[type="submit"]');
+                const originalText = submitBtn.innerHTML;
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing URL...';
+                submitBtn.disabled = true;
+                
+                // Hide any previous messages
+                document.getElementById('message').style.display = 'none';
+
+                try {
+                    this.showMessage('🔄 Processing your URL... This may take a few moments for large websites.', 'info');
+                    
+                    const response = await fetch('/user/submit-url', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${this.authToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ url, description })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.status === 'success') {
+                        this.showMessage('✅ URL successfully processed! Content has been added to your chatbot knowledge base.', 'success');
+                        this.hideUrlForm();
+                        this.loadUserUrls(); // Refresh the list
+                    } else {
+                        this.showMessage(data.message || 'Failed to process URL', 'error');
+                    }
+                } catch (error) {
+                    console.error('Error submitting URL:', error);
+                    this.showMessage('❌ Error processing URL. Please try again.', 'error');
+                } finally {
+                    // Reset button state
+                    submitBtn.innerHTML = originalText;
+                    submitBtn.disabled = false;
+                }
+            }
+
+            showMessage(text, type) {
+                const messageEl = document.getElementById('message');
+                messageEl.textContent = text;
+                messageEl.className = `message ${type}`;
+                messageEl.style.display = 'block';
+                
+                setTimeout(() => {
+                    messageEl.style.display = 'none';
+                }, 5000);
+            }
+
+            launchUrlBot(urlId, urlText) {
+                // Launch bot for a specific URL
+                const widgetUrl = `/widget?urls=${urlId}&user_id=${this.userInfo.id}`;
+                const windowFeatures = 'width=800,height=600,scrollbars=yes,resizable=yes';
+                
+                const newWindow = window.open(widgetUrl, `ChatbotWidget_${urlId}`, windowFeatures);
+                
+                if (newWindow) {
+                    newWindow.focus();
+                    // Truncate URL for display if too long
+                    const displayUrl = urlText.length > 40 ? urlText.substring(0, 40) + '...' : urlText;
+                    this.showMessage(`🚀 Chatbot launched for: ${displayUrl}`, 'success');
+                } else {
+                    this.showMessage('⚠️ Please allow popups and try again', 'error');
+                    setTimeout(() => {
+                        if (confirm('Open chatbot widget in this tab?')) {
+                            window.open(widgetUrl, '_blank');
+                        }
+                    }, 2000);
+                }
+            }
+
+            previewUrl(url) {
+                // Open URL in new tab for preview
+                window.open(url, '_blank');
+                this.showMessage(`🔗 Opening ${url} in new tab`, 'info');
+            }
+
+            launchBotWidget() {
+                // Open the chatbot widget in a new window/tab
+                const widgetUrl = '/widget';
+                const windowFeatures = 'width=800,height=600,scrollbars=yes,resizable=yes';
+                
+                const newWindow = window.open(widgetUrl, 'ChatbotWidget', windowFeatures);
+                
+                if (newWindow) {
+                    // Focus the new window
+                    newWindow.focus();
+                    this.showMessage('🚀 Chatbot widget launched in new window!', 'success');
+                } else {
+                    // Fallback if popup was blocked
+                    this.showMessage('⚠️ Please allow popups and try again, or visit the widget directly.', 'error');
+                    // As fallback, navigate to the widget page in the same tab after 2 seconds
+                    setTimeout(() => {
+                        if (confirm('Open chatbot widget in this tab?')) {
+                            window.open(widgetUrl, '_blank');
+                        }
+                    }, 2000);
+                }
+            }
+
+            logout() {
+                localStorage.removeItem('user_token');
+                localStorage.removeItem('user_info');
+                window.location.href = '/signup';
+            }
+        }
+
+        // Initialize dashboard
+        new UserDashboard();
+    </script>
+</body>
+</html>

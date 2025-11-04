@@ -1,4 +1,14 @@
 document.addEventListener("DOMContentLoaded", () => {
+    // ---------- Widget Context Detection ----------
+    const urlParams = new URLSearchParams(window.location.search);
+    const widgetUrls = urlParams.get('widget_urls');
+    const widgetUserId = urlParams.get('widget_user_id');
+    const widgetFirm = urlParams.get('widget_firm');
+    const widgetFirmId = urlParams.get('widget_firm_id');
+    const isWidgetMode = !!(widgetUrls || widgetUserId);
+    
+    console.log('Widget context:', { widgetUrls, widgetUserId, widgetFirm, widgetFirmId, isWidgetMode });
+
     // ---------- DOM Elements ----------
     const chatIcon = document.getElementById("chat-icon");
     const chatContainer = document.getElementById("chat-container");
@@ -6,17 +16,47 @@ document.addEventListener("DOMContentLoaded", () => {
     const userInput = document.getElementById("user-input");
     const sendBtn = document.getElementById("send-btn");
     const toast = document.getElementById("toast");
-    const urlLoader = document.getElementById("url-loader");
 
     const sidebar = document.getElementById("left-sidebar");
     const toggleBtn = document.getElementById("sidebar-toggle");
     const closeBtn = document.getElementById("close-sidebar");
-    const addBtn = document.getElementById("sidebar-add");
-    const urlInput = document.getElementById("sidebar-url");
-    const urlList = document.getElementById("sidebar-url-list");
     const firmSelect = document.getElementById("firm-select");
 
     let greeted = false;
+
+    // ---------- Widget Mode Setup ----------
+    if (isWidgetMode) {
+        console.log('Initializing widget mode...');
+        
+        // Hide sidebar in widget mode
+        if (sidebar) {
+            sidebar.style.display = 'none';
+        }
+        if (toggleBtn) {
+            toggleBtn.style.display = 'none';
+        }
+        
+        // Auto-open chat and set greeting
+        setTimeout(() => {
+            chatContainer.style.display = "flex";
+            chatContainer.style.position = "absolute";
+            chatContainer.style.top = "20px";
+            chatContainer.style.right = "20px";
+            chatContainer.style.bottom = "20px";
+            chatContainer.style.left = "20px";
+            chatContainer.style.width = "auto";
+            chatContainer.style.height = "auto";
+            chatContainer.style.zIndex = "1000";
+            
+            // Widget-specific greeting
+            if (widgetFirm) {
+                addMessage(`Hello! I'm here to help you with questions about ${widgetFirm}. How can I assist you today? 😊`, "bot-msg");
+            } else {
+                addMessage("Hello! I'm here to help you with your questions. How can I assist you today? 😊", "bot-msg");
+            }
+            greeted = true;
+        }, 500);
+    }
 
     // ---------- Chat Toggle ----------
     chatIcon.onclick = () => {
@@ -275,11 +315,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // ---------- Send Message ----------
     async function sendMessage() {
+        console.log('🚀 sendMessage called');
         const query = userInput.value.trim();
         if (!query) return;
 
         const selectedFirm = getSelectedFirm();
-        if (!selectedFirm) {
+        
+        console.log('📋 Message context:', { 
+            query, 
+            isWidgetMode, 
+            widgetUrls, 
+            widgetFirmId, 
+            selectedFirm 
+        });
+        
+        // In widget mode with firm ID or URLs, firm selection is not required
+        if (!isWidgetMode && !selectedFirm) {
             showToast("Please select a firm.", true);
             return;
         }
@@ -289,11 +340,53 @@ document.addEventListener("DOMContentLoaded", () => {
         const typingDiv = showTypingIndicatorAfter(userMsgDiv);
 
         try {
-            const resp = await fetch("/chat", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ query, session_id: crypto.randomUUID(), firm_id: selectedFirm })
-            });
+            let resp;
+            
+            if (isWidgetMode && (widgetUrls || widgetFirmId)) {
+                // Use URL-specific chat endpoint for widget mode
+                console.log('🎯 Using URL-specific chat endpoint');
+                console.log('Widget URLs:', widgetUrls);
+                console.log('Widget User ID:', widgetUserId);
+                console.log('Widget Firm ID:', widgetFirmId);
+                
+                const payload = { 
+                    query, 
+                    session_id: crypto.randomUUID()
+                };
+                
+                // Add URL IDs if available
+                if (widgetUrls) {
+                    payload.url_ids = widgetUrls;
+                }
+                
+                // Add user ID if available
+                if (widgetUserId) {
+                    payload.user_id = widgetUserId;
+                }
+                
+                // Add firm ID if available
+                if (widgetFirmId) {
+                    payload.firm_id = parseInt(widgetFirmId);
+                }
+                
+                console.log('📤 Chat payload:', payload);
+                
+                resp = await fetch("/chat/url-specific", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+            } else {
+                // Use regular firm-based chat endpoint
+                console.log('🏢 Using firm-based chat endpoint');
+                console.log('Selected firm:', selectedFirm);
+                
+                resp = await fetch("/chat", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ query, session_id: crypto.randomUUID(), firm_id: selectedFirm })
+                });
+            }
 
             const data = await resp.json();
             removeTypingIndicator(typingDiv);
@@ -408,56 +501,5 @@ document.addEventListener("DOMContentLoaded", () => {
     // ---------- Save selected firm on change ----------
     firmSelect.addEventListener("change", () => {
         if (firmSelect.value) localStorage.setItem("selectedFirm", firmSelect.value);
-    });
-
-    // ---------- Sidebar URL Injection (Direct) ----------
-    addBtn.addEventListener("click", async () => {
-        const url = urlInput.value.trim();
-        
-        if (!url) {
-            showToast("Please enter a valid URL.", true);
-            return;
-        }
-
-        urlLoader.style.display = "flex";
-        urlLoader.textContent = "Processing URL... �";
-
-        try {
-            const response = await fetch("/inject-url", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ url })
-            });
-
-            const data = await response.json();
-
-            if (data.status === "success") {
-                showToast("✅ URL successfully processed and added to knowledge base!", false, 4000);
-                
-                // Clear the form
-                urlInput.value = "";
-                
-                // Show success message
-                setTimeout(() => {
-                    showToast("🎉 The website content is now available for the chatbot!", false, 3000);
-                }, 1500);
-                
-            } else if (data.status === "error") {
-                if (data.message.includes("already exists")) {
-                    showToast("⚠️ This URL is already available in our assistant's knowledge base.", true);
-                } else if (data.message.includes("Invalid URL")) {
-                    showToast("❌ Please enter a valid URL that starts with http:// or https://", true);
-                } else {
-                    showToast(`❌ ${data.message}`, true);
-                }
-            } else {
-                showToast("❌ Unexpected response from server", true);
-            }
-        } catch (err) {
-            console.error("URL injection error:", err);
-            showToast("❌ Failed to process URL. Please try again.", true);
-        } finally {
-            urlLoader.style.display = "none";
-        }
     });
 });

@@ -243,29 +243,83 @@
                     <h2><i class="fas fa-users"></i> User Management</h2>
                     <div class="section-actions">
                         <button id="add-admin-user" class="btn btn-primary">
-                            <i class="fas fa-user-plus"></i> Add Admin
+                            <i class="fas fa-user-shield"></i> Add Admin
+                        </button>
+                        <button id="refresh-users" class="btn btn-secondary">
+                            <i class="fas fa-sync-alt"></i> Refresh
                         </button>
                     </div>
                 </div>
 
+                <!-- User Management Tabs -->
+                <div class="tabs-container">
+                    <div class="tabs">
+                        <button class="tab-btn active" data-tab="regular-users">
+                            <i class="fas fa-users"></i> Regular Users
+                        </button>
+                        <button class="tab-btn" data-tab="admin-users">
+                            <i class="fas fa-user-shield"></i> Admin Users
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Regular Users Table -->
+                <div id="regular-users-tab" class="tab-content active">
+                    <div class="users-stats">
+                        <div class="stat-card">
+                            <div class="stat-number" id="total-users">-</div>
+                            <div class="stat-label">Total Users</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number" id="active-users">-</div>
+                            <div class="stat-label">Active Users</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number" id="users-with-urls">-</div>
+                            <div class="stat-label">Users with URLs</div>
+                        </div>
+                    </div>
+                    
+                    <div class="table-container">
+                        <table id="users-table" class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Phone</th>
+                                    <th>URLs Submitted</th>
+                                    <th>Registration Date</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="users-tbody">
+                                <!-- Dynamic content -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
                 <!-- Admin Users Table -->
-                <div class="table-container">
-                    <table id="admins-table" class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Username</th>
-                                <th>Email</th>
-                                <th>Full Name</th>
-                                <th>Role</th>
-                                <th>Last Login</th>
-                                <th>Status</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="admins-tbody">
-                            <!-- Dynamic content -->
-                        </tbody>
-                    </table>
+                <div id="admin-users-tab" class="tab-content">
+                    <div class="table-container">
+                        <table id="admins-table" class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Username</th>
+                                    <th>Email</th>
+                                    <th>Full Name</th>
+                                    <th>Role</th>
+                                    <th>Last Login</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admins-tbody">
+                                <!-- Dynamic content -->
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </section>
 
@@ -376,17 +430,16 @@
             <div class="login-divider">
                 <span>or</span>
             </div>
-            
-            <!-- Google Sign-In Button -->
-            <button id="google-signin-btn" class="btn btn-google btn-full">
-                <i class="fab fa-google"></i>
-                Sign in with Google
-            </button>
+            <!-- Signup Link -->
+            <div class="login-footer">
+                <p>Don't have an admin account? <a href="/admin/signup" id="show-signup">Create one</a></p>
+            </div>
             
             <div id="login-error" class="error-message" style="display: none;">
                 Invalid username or password
             </div>
         </div>
+    </div>
     </div>
 
     <!-- Modals -->

@@ -29,22 +29,13 @@ from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from model.validation_schema import ChatRequest, ContactIn, SecurityHeadersMiddleware, URLPayload
-
-# New models for URL injection with email confirmation
-class URLInjectionRequest(BaseModel):
-    url: HttpUrl
-    email: str
-
-class URLInjectionResponse(BaseModel):
-    status: str
-    message: str
-    request_id: Optional[str] = None
-from utils.voice_bot_helper import client
+from model.validation_schema import *
 from voice_config.voice_helper import *
 from utils.email_send import ContactManager
 from utils.url_confirmation_service import url_confirmation_service
 from utils.admin_auth_service import admin_auth_service
-from utils.google_oauth_service import google_oauth_service
+from utils.user_auth_service import user_auth_service
+from utils.url_processing_service import url_processing_service
 
 
 # from cache_manager import load_website_text
@@ -180,6 +171,130 @@ async def chat_endpoint(data: ChatRequest):
         db.close()
 
 
+@app.post("/chat/deeplearning")
+async def chat_deeplearning(data: dict):
+    """Simple API for https://learn.deeplearning.ai/ URL - directly calls chat with firm context"""
+    query = data.get("query")
+    url = data.get("url", "")
+    session_id = data.get("session_id") or str(uuid.uuid4())
+    
+    if not query:
+        return JSONResponse({"error": "Query is required"}, status_code=400)
+    
+    if not is_safe_query(query):
+        raise HTTPException(status_code=400, detail="Not valid query detected. please ask anything else.")
+    
+    # Check if URL matches the target URL
+    if "learn.deeplearning.ai" in url:
+        print(f"🎯 DeepLearning.ai chat: query='{query}', url='{url}'")
+        
+        db: Session = SessionLocal()
+        try:
+            # Find the firm for deeplearning.ai
+            firm = db.query(Firm).filter(Firm.name.ilike('%deeplearning%')).first()
+            
+            if firm:
+                print(f"✅ Found DeepLearning.ai firm: {firm.name} (ID: {firm.id})")
+                # Use the existing chat logic with firm context
+                answer = get_answer_from_db(query=query, session_id=session_id, firm_id=firm.id)
+            else:
+                print("⚠️ DeepLearning.ai firm not found, using general knowledge")
+                answer = get_answer_from_db(query=query, session_id=session_id)
+            
+            if answer == "CONVERSATION_ENDED":
+                answer = {
+                    "action": "SHOW_CONTACT_FORM",
+                    "message": "Before we finish, we would like to collect your contact details so our team can assist further."
+                }
+            
+            return {"answer": answer, "session_id": session_id, "url": url}
+            
+        finally:
+            db.close()
+    else:
+        return JSONResponse({"error": "This endpoint is only for learn.deeplearning.ai URLs"}, status_code=400)
+
+
+@app.post("/chat/url-specific")
+async def chat_url_specific(data: dict):
+    """Chat endpoint for URL-specific conversations launched from user dashboard"""
+    session_id = data.get("session_id") or str(uuid.uuid4())
+    query = data.get("query")
+    url_ids = data.get("url_ids")  # Comma-separated URL IDs
+    user_id = data.get("user_id")
+    firm_id = data.get("firm_id")  # Direct firm_id parameter
+    
+    print(f"🗨️ URL-specific chat: query='{query}', url_ids={url_ids}, user_id={user_id}, firm_id={firm_id}")
+    
+    if not query:
+        return JSONResponse({"error": "Query is required"}, status_code=400)
+    
+    if not is_safe_query(query):
+        raise HTTPException(status_code=400, detail="Not valid query detected. please ask anything else.")
+
+    db: Session = SessionLocal()
+    try:
+        request_ids = []
+        
+        # If firm_id is provided directly, use it
+        if firm_id:
+            print(f"🏢 Using provided firm_id: {firm_id}")
+            firm = db.query(Firm).filter(Firm.id == firm_id).first()
+            if firm:
+                print(f"✅ Found firm: {firm.name}")
+            else:
+                print(f"❌ Firm with ID {firm_id} not found")
+                
+        # If URL IDs provided, get request_ids and firm from URLs (if firm_id not already set)
+        elif url_ids:
+            from model.url_injection_models import URLInjectionRequest
+            url_id_list = [int(id.strip()) for id in url_ids.split(',') if id.strip().isdigit()]
+            print(f"📝 Parsed URL IDs: {url_id_list}")
+            
+            if url_id_list:
+                url_requests = db.query(URLInjectionRequest).filter(
+                    URLInjectionRequest.id.in_(url_id_list),
+                    URLInjectionRequest.status == "completed"
+                ).all()
+                
+                print(f"🔎 Found {len(url_requests)} completed URL requests")
+                
+                if url_requests:
+                    # Get request IDs for vector search
+                    request_ids = [url_req.request_id for url_req in url_requests]
+                    print(f"🔗 Request IDs for vector search: {request_ids}")
+                    
+                    # Get firm from first URL
+                    first_url = url_requests[0]
+                    if first_url.firm_id:
+                        firm_id = first_url.firm_id
+                        firm = db.query(Firm).filter(Firm.id == firm_id).first()
+                        print(f"🏢 Using firm: {firm.name if firm else 'Unknown'} (ID: {firm_id})")
+
+        # Use URL-specific context with request_ids
+        if request_ids:
+            print(f"🎯 Using URL-specific context with {len(request_ids)} request IDs")
+            answer = get_answer_from_db(query=query, session_id=session_id, url_context=','.join(request_ids))
+        elif firm_id:
+            print(f"🏢 Fallback to firm-based search (firm_id: {firm_id})")
+            answer = get_answer_from_db(query=query, session_id=session_id, firm_id=firm_id)
+        else:
+            print(f"🌐 Using general knowledge fallback")
+            answer = get_answer_from_db(query=query, session_id=session_id)
+            
+        if answer == "CONVERSATION_ENDED":
+            answer = {
+                "action": "SHOW_CONTACT_FORM",
+                "message": "Before we finish, we would like to collect your contact details so our team can assist further."
+            }
+        
+        print(f"✅ Generated answer: {answer[:100] if isinstance(answer, str) else str(answer)[:100]}...")
+        return {"answer": answer, "session_id": session_id}
+
+    finally:
+        db.close()
+
+
 @app.post("/inject-url")
 async def inject_url(payload: URLPayload):
     """Direct URL injection without email confirmation"""
@@ -269,8 +384,108 @@ async def get_history(session_id: str):
     return {"session_id": session_id, "history": get_session_history(session_id)}
 
 @app.get("/widget")
-async def get_widget():
+async def get_widget(urls: Optional[str] = None, user_id: Optional[int] = None, firm_id: Optional[int] = None):
+    """Serve widget with optional URL filtering and firm information"""
     return FileResponse("static/widgets.html")
+
+@app.get("/widget/firm-info")
+async def get_widget_firm_info(urls: Optional[str] = None, user_id: Optional[int] = None):
+    """Get firm information for widget based on URL IDs"""
+    try:
+        print(f"🔍 Widget firm-info request: urls={urls}, user_id={user_id}")
+        
+        db: Session = SessionLocal()
+        try:
+            if urls:
+                # Parse comma-separated URL IDs
+                url_id_list = [int(id.strip()) for id in urls.split(',') if id.strip().isdigit()]
+                print(f"📝 Parsed URL IDs: {url_id_list}")
+                
+                if url_id_list:
+                    from model.url_injection_models import URLInjectionRequest
+                    
+                    # Get the first URL's firm (assuming all URLs from same user would have same firm context)
+                    url_request = db.query(URLInjectionRequest).filter(
+                        URLInjectionRequest.id.in_(url_id_list),
+                        URLInjectionRequest.status == "completed"
+                    ).first()
+                    
+                    print(f"🔎 Found URL request: {url_request.url if url_request else 'None'}")
+                    print(f"🏢 Firm ID: {url_request.firm_id if url_request else 'None'}")
+                    
+                    if url_request and url_request.firm_id:
+                        firm = db.query(Firm).filter(Firm.id == url_request.firm_id).first()
+                        if firm:
+                            print(f"✅ Firm found: {firm.name}")
+                            return {
+                                "status": "success",
+                                "firm_id": firm.id,
+                                "firm_name": firm.name
+                            }
+                        else:
+                            print(f"❌ Firm with ID {url_request.firm_id} not found")
+                    else:
+                        print(f"⚠️ URL request has no firm_id or not found")
+                        
+                        # If no firm_id, try to assign one based on URL domain
+                        if url_request:
+                            from utils.url_processing_service import URLProcessingService
+                            url_service = URLProcessingService()
+                            firm_id = url_service.get_firm_from_url(url_request.url, db)
+                            
+                            if firm_id:
+                                url_request.firm_id = firm_id
+                                db.commit()
+                                
+                                firm = db.query(Firm).filter(Firm.id == firm_id).first()
+                                print(f"� Auto-assigned firm: {firm.name if firm else 'Unknown'}")
+                                return {
+                                    "status": "success", 
+                                    "firm_id": firm.id,
+                                    "firm_name": firm.name
+                                }
+            
+            print(f"�📤 Returning no firm info")
+            return {
+                "status": "success",
+                "firm_id": None,
+                "firm_name": None
+            }
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"❌ Widget firm-info error: {e}")
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+
+@app.get("/debug/vector-search")
+async def debug_vector_search(request_id: str):
+    """Debug endpoint to test vector search"""
+    try:
+        from utils.vector_store import collection
+        from sentence_transformers import SentenceTransformer
+        
+        embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+        query_embedding = embedding_model.encode("test query").tolist()
+        
+        # Search for specific request_id
+        results = collection.query(
+            query_embeddings=[query_embedding],
+            n_results=5,
+            where={"request_id": request_id}
+        )
+        
+        return {
+            "status": "success",
+            "found_documents": len(results["documents"][0]) if results["documents"] else 0,
+            "metadata": results["metadatas"][0] if results["metadatas"] else [],
+            "request_id_searched": request_id
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
   
 # ----------------- WebSocket voice assistant ----------------
 
@@ -285,190 +500,6 @@ def get_config():
         "baseUrl": os.getenv("WIDGET_BASE_URL")  # only public value
     }
 
-# ---------------- URL Injection with Email Confirmation ----------------
-
-@app.post("/request-url-injection", response_model=URLInjectionResponse)
-async def request_url_injection(payload: URLInjectionRequest):
-    """
-    Request URL injection with email confirmation.
-    Creates a pending request and sends confirmation email.
-    """
-    try:
-        url_str = str(payload.url)
-        email = payload.email.strip().lower()
-        
-        # Validate email format
-        import re
-        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-        if not re.match(email_pattern, email):
-            return URLInjectionResponse(
-                status="error",
-                message="Invalid email format"
-            )
-        
-        # Create request and send email
-        request = url_confirmation_service.create_and_send_request(url_str, email)
-        
-        if request:
-            return URLInjectionResponse(
-                status="success",
-                message=f"Confirmation email sent to {email}. Please check your inbox and click the confirmation link.",
-                request_id=request.request_id
-            )
-        else:
-            # Check if URL already exists or has pending request
-            db: Session = SessionLocal()
-            try:
-                existing_site = db.query(Website).filter(Website.base_url == url_str).first()
-                if existing_site:
-                    return URLInjectionResponse(
-                        status="error",
-                        message="This URL is already in our database"
-                    )
-                else:
-                    return URLInjectionResponse(
-                        status="error", 
-                        message="A pending confirmation request already exists for this URL or email sending failed"
-                    )
-            finally:
-                db.close()
-                
-    except Exception as e:
-        print(f"Error in request_url_injection: {e}")
-        return URLInjectionResponse(
-            status="error",
-            message="An error occurred while processing your request"
-        )
-
-@app.get("/confirm-url-injection/{token}")
-async def confirm_url_injection(token: str):
-    """
-    Confirm URL injection request using the email token.
-    Processes the URL immediately upon confirmation.
-    """
-    try:
-        success, message = url_confirmation_service.confirm_request(token)
-        
-        if success:
-            # Process confirmed requests immediately
-            background_tasks = BackgroundTasks()
-            background_tasks.add_task(process_confirmed_urls)
-            
-            html_response = f"""
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>✅ URL Injection Confirmed</title>
-                <style>
-                    body {{ font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; }}
-                    .success {{ color: #27ae60; }}
-                    .container {{ background-color: #f8f9fa; padding: 30px; border-radius: 10px; border: 2px solid #27ae60; }}
-                    .processing {{ color: #3498db; margin-top: 20px; }}
-                    .button {{ display: inline-block; background-color: #27ae60; color: white; padding: 10px 20px; 
-                              text-decoration: none; border-radius: 5px; margin-top: 20px; }}
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <h1 class="success">✅ Confirmation Successful!</h1>
-                    <p><strong>Your URL injection request has been confirmed and approved.</strong></p>
-                    <div class="processing">
-                        <p>🔄 The URL is now being processed and will be added to our assistant's knowledge base shortly.</p>
-                        <p>You can now close this window and continue using the chat assistant.</p>
-                    </div>
-                    <a href="#" onclick="window.close()" class="button">Close Window</a>
-                </div>
-            </body>
-            </html>
-            """
-            return HTMLResponse(content=html_response)
-        else:
-            error_html = f"""
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>❌ Confirmation Failed</title>
-                <style>
-                    body {{ font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; }}
-                    .error {{ color: #e74c3c; }}
-                    .container {{ background-color: #f8f9fa; padding: 30px; border-radius: 10px; border: 2px solid #e74c3c; }}
-                    .button {{ display: inline-block; background-color: #e74c3c; color: white; padding: 10px 20px; 
-                              text-decoration: none; border-radius: 5px; margin-top: 20px; }}
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <h1 class="error">❌ Confirmation Failed</h1>
-                    <p><strong>Error:</strong> {message}</p>
-                    <p>Please try requesting the URL injection again or contact support if the problem persists.</p>
-                    <a href="#" onclick="window.close()" class="button">Close Window</a>
-                </div>
-            </body>
-            </html>
-            """
-            return HTMLResponse(content=error_html)
-            
-    except Exception as e:
-        print(f"Error in confirm_url_injection: {e}")
-        return HTMLResponse(content=f"""
-        <!DOCTYPE html>
-        <html>
-        <head><title>❌ Error</title></head>
-        <body style="font-family: Arial, sans-serif; text-align: center; margin: 50px;">
-            <h1 style="color: #e74c3c;">❌ An Error Occurred</h1>
-            <p>Please try again later or contact support.</p>
-        </body>
-        </html>
-        """)
-
-async def process_confirmed_urls():
-    """Background task to process all confirmed URL requests"""
-    try:
-        confirmed_requests = url_confirmation_service.get_pending_confirmed_requests()
-        
-        for request in confirmed_requests:
-            try:
-                print(f"🔄 Processing confirmed URL: {request.url}")
-                
-                # Use existing scraper logic to add URL to database
-                db: Session = SessionLocal()
-                try:
-                    result = build_about(request.url, db)
-                    if result.get("status") == "success":
-                        print(f"✅ Successfully processed URL: {request.url}")
-                        url_confirmation_service.mark_request_processed(request.request_id)
-                    else:
-                        print(f"❌ Failed to process URL: {request.url} - {result.get('message', 'Unknown error')}")
-                finally:
-                    db.close()
-                    
-            except Exception as e:
-                print(f"❌ Error processing URL {request.url}: {e}")
-                
-    except Exception as e:
-        print(f"❌ Error in process_confirmed_urls: {e}")
-
-@app.get("/pending-url-requests")
-async def get_pending_requests():
-    """Get all pending URL injection requests (for admin purposes)"""
-    try:
-        pending = url_confirmation_service.get_pending_confirmed_requests()
-        return {
-            "status": "success",
-            "pending_requests": [
-                {
-                    "request_id": req.request_id,
-                    "url": req.url,
-                    "email": req.requester_email,
-                    "created_at": req.created_at.isoformat(),
-                    "confirmed_at": req.confirmed_at.isoformat() if req.confirmed_at else None
-                }
-                for req in pending
-            ]
-        }
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-
 # ---------------- Admin Panel Endpoints ----------------
 
 @app.get("/admin", response_class=HTMLResponse)
@@ -476,16 +507,31 @@ async def admin_panel():
     """Serve admin dashboard"""
     return FileResponse("static/admin.html")
 
-# Admin Authentication Models
-class AdminLoginRequest(BaseModel):
-    username: str
-    password: str
+@app.get("/admin/signup", response_class=HTMLResponse)
+async def admin_signup_page():
+    """Serve admin signup page"""
+    return FileResponse("static/admin-signup.html")
 
-class AdminResponse(BaseModel):
-    status: str
-    message: str
-    token: Optional[str] = None
-    admin: Optional[dict] = None
+@app.get("/signup", response_class=HTMLResponse)
+async def user_signup_page():
+    """Serve user signup page"""
+    return FileResponse("static/signup.html")
+
+@app.get("/login", response_class=HTMLResponse)
+async def user_login_page():
+    """Serve user login page"""
+    return FileResponse("static/login.html")
+
+@app.get("/login.html", response_class=HTMLResponse)
+async def user_login_page_redirect():
+    """Redirect /login.html to /login for backward compatibility"""
+    return FileResponse("static/login.html")
+
+@app.get("/dashboard", response_class=HTMLResponse)
+async def user_dashboard():
+    """Serve user dashboard"""
+    return FileResponse("static/user_dashboard.html")
+
 
 @app.post("/admin/login", response_model=AdminResponse)
 async def admin_login(payload: AdminLoginRequest):
@@ -513,6 +559,50 @@ async def admin_login(payload: AdminLoginRequest):
             message="Login failed"
         )
 
+@app.post("/admin/signup", response_model=AdminResponse)
+async def admin_signup(payload: AdminSignupRequest):
+    """Admin signup endpoint"""
+    try:
+        # Validate required fields
+        if not payload.username or not payload.email or not payload.password:
+            return AdminResponse(
+                status="error",
+                message="Username, email, and password are required"
+            )
+        
+        # Check password strength (basic validation)
+        if len(payload.password) < 6:
+            return AdminResponse(
+                status="error",
+                message="Password must be at least 6 characters long"
+            )
+        
+        # Create admin user
+        success, message = admin_auth_service.create_admin_user(
+            username=payload.username,
+            email=payload.email,
+            password=payload.password,
+            full_name=payload.full_name,
+            is_super_admin=payload.is_super_admin
+        )
+        
+        if success:
+            return AdminResponse(
+                status="success",
+                message=message
+            )
+        else:
+            return AdminResponse(
+                status="error",
+                message=message
+            )
+    except Exception as e:
+        print(f"❌ Admin signup error: {e}")
+        return AdminResponse(
+            status="error",
+            message="Signup failed"
+        )
+
 @app.post("/admin/logout")
 async def admin_logout(request: Request):
     """Admin logout endpoint"""
@@ -525,166 +615,6 @@ async def admin_logout(request: Request):
         return {"status": "success", "message": "Logged out successfully"}
     except Exception as e:
         return {"status": "error", "message": "Logout failed"}
-
-# Google OAuth endpoints
-@app.get("/admin/oauth/google")
-async def google_oauth_login():
-    """Initiate Google OAuth login"""
-    try:
-        state = secrets.token_urlsafe(32)
-        authorization_url = google_oauth_service.get_authorization_url(state)
-        
-        # Store state in a more secure way in production
-        return {
-            "status": "success",
-            "authorization_url": authorization_url,
-            "state": state
-        }
-    except Exception as e:
-        return {"status": "error", "message": "Failed to initiate OAuth login"}
-
-@app.get("/admin/oauth/callback")
-async def google_oauth_callback(request: Request, code: str = None, state: str = None, error: str = None):
-    """Handle Google OAuth callback"""
-    try:
-        if error:
-            return HTMLResponse(f"""
-            <!DOCTYPE html>
-            <html>
-            <head><title>Login Error</title></head>
-            <body style="font-family: Arial; text-align: center; margin: 50px;">
-                <h1 style="color: #e74c3c;">Authentication Error</h1>
-                <p>Error: {error}</p>
-                <p><a href="/admin">Return to Admin Login</a></p>
-            </body>
-            </html>
-            """)
-        
-        if not code:
-            return HTMLResponse("""
-            <!DOCTYPE html>
-            <html>
-            <head><title>Login Error</title></head>
-            <body style="font-family: Arial; text-align: center; margin: 50px;">
-                <h1 style="color: #e74c3c;">Authentication Error</h1>
-                <p>No authorization code received</p>
-                <p><a href="/admin">Return to Admin Login</a></p>
-            </body>
-            </html>
-            """)
-        
-        # Exchange code for token
-        token_data = await google_oauth_service.exchange_code_for_token(code)
-        if not token_data:
-            return HTMLResponse("""
-            <!DOCTYPE html>
-            <html>
-            <head><title>Login Error</title></head>
-            <body style="font-family: Arial; text-align: center; margin: 50px;">
-                <h1 style="color: #e74c3c;">Authentication Error</h1>
-                <p>Failed to exchange code for token</p>
-                <p><a href="/admin">Return to Admin Login</a></p>
-            </body>
-            </html>
-            """)
-        
-        # Get user info from Google
-        user_info = await google_oauth_service.get_user_info(token_data["access_token"])
-        if not user_info:
-            return HTMLResponse("""
-            <!DOCTYPE html>
-            <html>
-            <head><title>Login Error</title></head>
-            <body style="font-family: Arial; text-align: center; margin: 50px;">
-                <h1 style="color: #e74c3c;">Authentication Error</h1>
-                <p>Failed to get user information from Google</p>
-                <p><a href="/admin">Return to Admin Login</a></p>
-            </body>
-            </html>
-            """)
-        
-        # Create or update admin user
-        success, admin_user, message = google_oauth_service.create_or_update_admin_user(user_info)
-        if not success:
-            return HTMLResponse(f"""
-            <!DOCTYPE html>
-            <html>
-            <head><title>Access Denied</title></head>
-            <body style="font-family: Arial; text-align: center; margin: 50px;">
-                <h1 style="color: #e74c3c;">Access Denied</h1>
-                <p>{message}</p>
-                <p><a href="/admin">Return to Admin Login</a></p>
-            </body>
-            </html>
-            """)
-        
-        # Create admin session
-        session_token = google_oauth_service.create_admin_session(admin_user)
-        if not session_token:
-            return HTMLResponse("""
-            <!DOCTYPE html>
-            <html>
-            <head><title>Login Error</title></head>
-            <body style="font-family: Arial; text-align: center; margin: 50px;">
-                <h1 style="color: #e74c3c;">Session Error</h1>
-                <p>Failed to create admin session</p>
-                <p><a href="/admin">Return to Admin Login</a></p>
-            </body>
-            </html>
-            """)
-        
-        # Get admin info
-        admin_info = google_oauth_service.get_admin_info_dict(admin_user)
-        
-        # Prepare JSON string for JavaScript (escape single quotes)
-        admin_info_json = json.dumps(admin_info).replace("'", "\\'")
-        
-        # Return success page with auto-redirect to admin dashboard
-        return HTMLResponse(f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Login Successful</title>
-            <style>
-                body {{ font-family: Arial, sans-serif; text-align: center; margin: 50px; }}
-                .success {{ color: #27ae60; }}
-                .container {{ max-width: 500px; margin: 0 auto; padding: 30px; background: #f8f9fa; border-radius: 10px; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <h1 class="success">✅ Login Successful!</h1>
-                <p>Welcome, {admin_user.full_name}!</p>
-                <p>Redirecting to admin dashboard...</p>
-                <p><a href="/admin">Click here if not redirected automatically</a></p>
-            </div>
-            
-            <script>
-                // Store auth data and redirect
-                localStorage.setItem('admin_token', '{session_token}');
-                localStorage.setItem('admin_info', '{admin_info_json}');
-                
-                setTimeout(() => {{
-                    window.location.href = '/admin';
-                }}, 2000);
-            </script>
-        </body>
-        </html>
-        """)
-        
-    except Exception as e:
-        print(f"OAuth callback error: {e}")
-        return HTMLResponse(f"""
-        <!DOCTYPE html>
-        <html>
-        <head><title>Login Error</title></head>
-        <body style="font-family: Arial; text-align: center; margin: 50px;">
-            <h1 style="color: #e74c3c;">Authentication Error</h1>
-            <p>An unexpected error occurred during authentication</p>
-            <p><a href="/admin">Return to Admin Login</a></p>
-        </body>
-        </html>
-        """)
 
 # Admin middleware for authentication
 async def verify_admin_auth(request: Request):
@@ -701,7 +631,535 @@ async def verify_admin_auth(request: Request):
     
     return admin_info
 
+# User Authentication Endpoints
+@app.post("/signup", response_model=UserResponse)
+async def user_signup(payload: UserSignupRequest, request: Request):
+    """User registration endpoint"""
+    try:
+        # Get client IP and user agent for session tracking
+        client_ip = request.client.host if request.client else None
+        user_agent = request.headers.get("user-agent", "Unknown")
+        
+        success, message, user_info = user_auth_service.register_user(
+            first_name=payload.first_name,
+            last_name=payload.last_name,
+            email=payload.email,
+            password=payload.password,
+            phone=payload.phone
+        )
+        
+        if success:
+            # Auto-login after successful registration
+            login_success, token, login_user_info = user_auth_service.authenticate_user(
+                email=payload.email,
+                password=payload.password,
+                device_info=user_agent,
+                ip_address=client_ip
+            )
+            
+            if login_success:
+                return UserResponse(
+                    status="success",
+                    message="Registration successful. You are now logged in.",
+                    token=token,
+                    user=login_user_info
+                )
+            else:
+                return UserResponse(
+                    status="success",
+                    message="Registration successful. Please log in.",
+                    user=user_info
+                )
+        else:
+            return UserResponse(
+                status="error",
+                message=message
+            )
+            
+    except Exception as e:
+        print(f"❌ Signup error: {e}")
+        return UserResponse(
+            status="error",
+            message="Registration failed. Please try again."
+        )
+
+@app.post("/login", response_model=UserResponse)
+async def user_login(payload: UserLoginRequest, request: Request):
+    """User login endpoint"""
+    try:
+        # Get client IP and user agent for session tracking
+        client_ip = request.client.host if request.client else None
+        user_agent = request.headers.get("user-agent", "Unknown")
+        
+        success, token, user_info = user_auth_service.authenticate_user(
+            email=payload.email,
+            password=payload.password,
+            device_info=user_agent,
+            ip_address=client_ip
+        )
+        
+        if success:
+            return UserResponse(
+                status="success",
+                message="Login successful",
+                token=token,
+                user=user_info
+            )
+        else:
+            return UserResponse(
+                status="error",
+                message="Invalid email or password"
+            )
+            
+    except Exception as e:
+        print(f"❌ Login error: {e}")
+        return UserResponse(
+            status="error",
+            message="Login failed. Please try again."
+        )
+
+@app.post("/logout")
+async def user_logout(request: Request):
+    """User logout endpoint"""
+    try:
+        auth_header = request.headers.get("authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header.split(" ")[1]
+            user_auth_service.logout_user(token)
+        
+        return {"status": "success", "message": "Logged out successfully"}
+    except Exception as e:
+        return {"status": "error", "message": "Logout failed"}
+
+# User middleware for authentication
+async def verify_user_auth(request: Request):
+    """Verify user authentication"""
+    auth_header = request.headers.get("authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="No valid authentication token")
+    
+    token = auth_header.split(" ")[1]
+    valid, user_info = user_auth_service.validate_session(token)
+    
+    if not valid:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
+    return user_info
+
+@app.get("/profile")
+async def get_user_profile(request: Request):
+    """Get current user profile"""
+    try:
+        user_info = await verify_user_auth(request)
+        return {
+            "status": "success",
+            "user": user_info
+        }
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print(f"❌ Profile error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get profile")
+
+@app.put("/profile")
+async def update_user_profile(request: Request, first_name: str = None, last_name: str = None, phone: str = None):
+    """Update user profile"""
+    try:
+        user_info = await verify_user_auth(request)
+        
+        success, message = user_auth_service.update_user_profile(
+            user_id=user_info["id"],
+            first_name=first_name,
+            last_name=last_name,
+            phone=phone
+        )
+        
+        if success:
+            # Get updated user info
+            updated_user = user_auth_service.get_user_by_id(user_info["id"])
+            return {
+                "status": "success",
+                "message": message,
+                "user": updated_user
+            }
+        else:
+            return {
+                "status": "error",
+                "message": message
+            }
+            
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print(f"❌ Profile update error: {e}")
+        return {
+            "status": "error",
+            "message": "Failed to update profile"
+        }
+
+# User URL Management Endpoints
+@app.get("/user/urls", response_model=UserUrlResponse)
+async def get_user_urls(request: Request):
+    """Get user's submitted URLs"""
+    try:
+        user_info = await verify_user_auth(request)
+        
+        db: Session = SessionLocal()
+        try:
+            from model.url_injection_models import URLInjectionRequest
+            
+            # Try to query URLs, but handle the case where user_id column might not exist yet
+            try:
+                urls = db.query(URLInjectionRequest).filter(
+                    URLInjectionRequest.user_id == user_info["id"]
+                ).order_by(URLInjectionRequest.created_at.desc()).all()
+            except Exception as e:
+                # If user_id column doesn't exist, return empty list for now
+                print(f"⚠️ Could not query user URLs (likely missing user_id column): {e}")
+                urls = []
+            
+            url_data = []
+            for url in urls:
+                url_data.append({
+                    "id": url.id,
+                    "url": url.url,
+                    "description": getattr(url, 'description', ''),
+                    "status": getattr(url, 'status', 'pending'),
+                    "created_at": url.created_at.isoformat(),
+                    "processed_at": url.processed_at.isoformat() if url.processed_at else None
+                })
+            
+            return UserUrlResponse(
+                status="success",
+                message="URLs retrieved successfully",
+                urls=url_data
+            )
+        finally:
+            db.close()
+            
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print(f"❌ Get user URLs error: {e}")
+        return UserUrlResponse(
+            status="error",
+            message="Failed to retrieve URLs"
+        )
+
+@app.post("/user/submit-url", response_model=UserUrlResponse)
+async def submit_user_url(request: Request, payload: UserUrlRequest):
+    """Submit and immediately process a new URL for user's chatbot"""
+    try:
+        user_info = await verify_user_auth(request)
+        
+        db: Session = SessionLocal()
+        try:
+            from model.url_injection_models import URLInjectionRequest
+            from model.models import Website
+            
+            # Check if URL already exists
+            existing_site = db.query(Website).filter(Website.base_url == payload.url).first()
+            if existing_site:
+                firm_name = existing_site.firm.name if existing_site.firm else "Unknown"
+                return UserUrlResponse(
+                    status="error",
+                    message=f"This URL already exists in our database (Firm: {firm_name})"
+                )
+            
+            # Try to create new URL request with user_id, fallback to basic request if column doesn't exist
+            try:
+                new_url_request = URLInjectionRequest.create_user_request(
+                    url=payload.url,
+                    user_id=user_info["id"],
+                    email=user_info["email"],
+                    description=payload.description or ""
+                )
+                # Set status to approved and processing
+                new_url_request.status = "approved"
+                new_url_request.processing_status = "processing"
+            except Exception as e:
+                print(f"⚠️ Could not create user request (likely missing user_id column): {e}")
+                # Fallback to basic request creation
+                new_url_request = URLInjectionRequest.create_request(
+                    url=payload.url,
+                    email=user_info["email"],
+                    notes=payload.description or ""
+                )
+                new_url_request.is_confirmed = True
+                new_url_request.processing_status = "processing"
+            
+            db.add(new_url_request)
+            db.commit()
+            db.refresh(new_url_request)
+            
+            # Process the URL immediately (scrape and add to vector store)
+            try:
+                # Scrape the URL
+                about_obj = await build_about(payload.url)
+                
+                if not about_obj:
+                    new_url_request.processing_status = "failed"
+                    if hasattr(new_url_request, 'status'):
+                        new_url_request.status = "failed"
+                    new_url_request.notes = "Failed to scrape content from URL"
+                    db.commit()
+                    return UserUrlResponse(
+                        status="error",
+                        message="Failed to scrape content from URL"
+                    )
+                
+                full_text = about_obj.get("full_text", "").strip()
+                if not full_text:
+                    new_url_request.processing_status = "failed"
+                    if hasattr(new_url_request, 'status'):
+                        new_url_request.status = "failed"
+                    new_url_request.notes = "No text content found on webpage"
+                    db.commit()
+                    return UserUrlResponse(
+                        status="error",
+                        message="No text content found on webpage"
+                    )
+                
+                # Process and store in vector database
+                chunks = chunk_text(full_text)
+                metadata = {
+                    "type": "user_website",
+                    "url": payload.url,
+                    "firm_name": about_obj.get("firm_name"),
+                    "user_id": user_info["id"],
+                    "user_email": user_info["email"],
+                    "description": payload.description,
+                    "request_id": new_url_request.request_id
+                }
+                
+                add_text_chunks_to_collection(chunks, metadata)
+                
+                # Mark as completed
+                from datetime import datetime
+                new_url_request.is_processed = True
+                new_url_request.processing_status = "completed"
+                if hasattr(new_url_request, 'status'):
+                    new_url_request.status = "completed"
+                if hasattr(new_url_request, 'processed_at'):
+                    new_url_request.processed_at = datetime.now()
+                new_url_request.notes = f"Successfully processed {len(chunks)} content chunks"
+                if hasattr(new_url_request, 'content_type'):
+                    new_url_request.content_type = "website"
+                if hasattr(new_url_request, 'title'):
+                    new_url_request.title = about_obj.get("firm_name", "")
+                
+                db.commit()
+                
+                return UserUrlResponse(
+                    status="success",
+                    message=f"🎉 URL processed successfully! Added {len(chunks)} content chunks to your chatbot's knowledge base. Your chatbot now knows about this website!"
+                )
+                
+            except Exception as process_error:
+                new_url_request.processing_status = "failed"
+                if hasattr(new_url_request, 'status'):
+                    new_url_request.status = "failed"
+                new_url_request.notes = f"Processing error: {str(process_error)}"
+                db.commit()
+                return UserUrlResponse(
+                    status="error",
+                    message=f"Failed to process URL: {str(process_error)}"
+                )
+                
+        finally:
+            db.close()
+            
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print(f"❌ Submit URL error: {e}")
+        return UserUrlResponse(
+            status="error",
+            message="Failed to submit URL"
+        )
+
+@app.get("/user/chat-urls")
+async def get_user_chat_urls(user_id: Optional[int] = None, url_ids: Optional[str] = None):
+    """Get user's processed URLs for chat widget"""
+    try:
+        db: Session = SessionLocal()
+        try:
+            from model.url_injection_models import URLInjectionRequest
+            
+            query = db.query(URLInjectionRequest).filter(
+                URLInjectionRequest.status == "completed"
+            )
+            
+            if user_id:
+                query = query.filter(URLInjectionRequest.user_id == user_id)
+            
+            if url_ids:
+                # Parse comma-separated URL IDs
+                url_id_list = [int(id.strip()) for id in url_ids.split(',') if id.strip().isdigit()]
+                if url_id_list:
+                    query = query.filter(URLInjectionRequest.id.in_(url_id_list))
+            
+            urls = query.all()
+            
+            url_data = []
+            for url in urls:
+                firm_name = None
+                if url.firm_id:
+                    firm = db.query(Firm).filter(Firm.id == url.firm_id).first()
+                    if firm:
+                        firm_name = firm.name
+                
+                url_data.append({
+                    "id": url.id,
+                    "url": url.url,
+                    "description": url.description,
+                    "user_email": url.requester_email,
+                    "firm_id": url.firm_id,
+                    "firm_name": firm_name
+                })
+            
+            return {
+                "status": "success",
+                "urls": url_data,
+                "count": len(url_data)
+            }
+        finally:
+            db.close()
+            
+    except Exception as e:
+        return {
+            "status": "error", 
+            "message": f"Error fetching URLs: {str(e)}",
+            "urls": []
+        }
+
 @app.get("/admin/stats")
+async def get_admin_stats(request: Request):
+    """Get admin dashboard statistics"""
+    try:
+        # Verify admin authentication
+        auth_header = request.headers.get("authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="No valid authentication token")
+        
+        token = auth_header.split(" ")[1]
+        valid, admin_info = admin_auth_service.validate_session(token)
+        
+        if not valid:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+        
+        db: Session = SessionLocal()
+        try:
+            from model.url_injection_models import URLInjectionRequest
+            from model.user_models import User
+            
+            # URL injection stats
+            total_requests = db.query(URLInjectionRequest).count()
+            pending_requests = db.query(URLInjectionRequest).filter(
+                URLInjectionRequest.status == "pending"
+            ).count()
+            approved_requests = db.query(URLInjectionRequest).filter(
+                URLInjectionRequest.status == "approved"
+            ).count()
+            
+            # User stats
+            total_users = db.query(User).count()
+            active_users = db.query(User).filter(User.is_active == True).count()
+            users_with_urls = db.query(User.id).join(URLInjectionRequest).distinct().count()
+            
+            # Contact stats (if contacts model exists)
+            total_contacts = 0
+            try:
+                total_contacts = db.query(Contact).count()
+            except:
+                pass
+            
+            # Firm stats (if firms model exists) 
+            total_firms = 0
+            try:
+                total_firms = db.query(Firm).count()
+            except:
+                pass
+            
+            stats = {
+                "url_requests": {
+                    "total": total_requests,
+                    "pending": pending_requests,
+                    "approved": approved_requests,
+                    "rejected": total_requests - pending_requests - approved_requests
+                },
+                "users": {
+                    "total": total_users,
+                    "active": active_users,
+                    "with_urls": users_with_urls
+                },
+                "contacts": total_contacts,
+                "firms": total_firms
+            }
+            
+            return {"status": "success", "stats": stats}
+        finally:
+            db.close()
+            
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print(f"❌ Admin stats error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get statistics")
+
+@app.get("/admin/users")
+async def get_admin_users_list(request: Request):
+    """Get list of all users for admin management"""
+    try:
+        # Verify admin authentication
+        auth_header = request.headers.get("authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="No valid authentication token")
+        
+        token = auth_header.split(" ")[1]
+        valid, admin_info = admin_auth_service.validate_session(token)
+        
+        if not valid:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+        
+        db: Session = SessionLocal()
+        try:
+            from model.user_models import User
+            from model.url_injection_models import URLInjectionRequest
+            
+            # Get all users with URL submission count
+            users = db.query(User).order_by(User.created_at.desc()).all()
+            
+            user_data = []
+            for user in users:
+                # Count URLs submitted by this user
+                url_count = db.query(URLInjectionRequest).filter(
+                    URLInjectionRequest.user_id == user.id
+                ).count()
+                
+                user_data.append({
+                    "id": user.id,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "full_name": user.full_name,
+                    "email": user.email,
+                    "phone": user.phone,
+                    "url_count": url_count,
+                    "is_active": user.is_active,
+                    "is_verified": user.is_verified,
+                    "created_at": user.created_at.isoformat(),
+                    "last_login": user.last_login.isoformat() if user.last_login else None
+                })
+            
+            return {"status": "success", "users": user_data}
+        finally:
+            db.close()
+            
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print(f"❌ Get admin users error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get users")
 async def get_admin_stats(request: Request):
     """Get dashboard statistics"""
     admin_info = await verify_admin_auth(request)
@@ -1064,6 +1522,155 @@ async def bulk_process_urls(request: Request):
         return {"status": "error", "message": f"Bulk processing failed: {str(e)}"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+# User URL Management Admin Endpoints
+@app.post("/admin/approve-user-url/{request_id}")
+async def approve_user_url(request_id: str, request: Request):
+    """Approve a user's URL request and process it"""
+    admin_info = await verify_admin_auth(request)
+    
+    try:
+        # First approve the request
+        success, message = url_processing_service.approve_url_request(
+            request_id, 
+            admin_info.get('username', 'admin')
+        )
+        
+        if not success:
+            return {"status": "error", "message": message}
+        
+        # Then process the URL (scrape and add to vector store)
+        process_success, process_message = await url_processing_service.process_url_request(
+            request_id,
+            admin_info.get('username', 'admin')
+        )
+        
+        if process_success:
+            return {
+                "status": "success", 
+                "message": f"URL approved and processed successfully. {process_message}"
+            }
+        else:
+            return {
+                "status": "partial_success",
+                "message": f"URL approved but processing failed: {process_message}"
+            }
+            
+    except Exception as e:
+        return {"status": "error", "message": f"Error processing request: {str(e)}"}
+
+@app.post("/admin/reject-user-url/{request_id}")
+async def reject_user_url(request_id: str, request: Request, reason: str = None):
+    """Reject a user's URL request"""
+    admin_info = await verify_admin_auth(request)
+    
+    try:
+        success, message = url_processing_service.reject_url_request(
+            request_id,
+            reason,
+            admin_info.get('username', 'admin')
+        )
+        
+        if success:
+            return {"status": "success", "message": message}
+        else:
+            return {"status": "error", "message": message}
+            
+    except Exception as e:
+        return {"status": "error", "message": f"Error rejecting request: {str(e)}"}
+
+@app.get("/admin/user-urls")
+async def get_user_url_requests(request: Request):
+    """Get all user URL requests for admin management"""
+    admin_info = await verify_admin_auth(request)
+    
+    try:
+        db: Session = SessionLocal()
+        try:
+            from model.url_injection_models import URLInjectionRequest
+            from model.user_models import User
+            
+            # Get all user-submitted URL requests
+            url_requests = db.query(URLInjectionRequest).filter(
+                URLInjectionRequest.user_id.isnot(None)
+            ).order_by(URLInjectionRequest.created_at.desc()).all()
+            
+            user_urls = []
+            for url_req in url_requests:
+                # Get user info
+                user = db.query(User).filter(User.id == url_req.user_id).first()
+                user_name = f"{user.first_name} {user.last_name}" if user else "Unknown User"
+                
+                user_urls.append({
+                    "id": url_req.id,
+                    "request_id": url_req.request_id,
+                    "url": url_req.url,
+                    "description": url_req.description,
+                    "status": url_req.status,
+                    "processing_status": url_req.processing_status,
+                    "user_name": user_name,
+                    "user_email": url_req.requester_email,
+                    "created_at": url_req.created_at.isoformat(),
+                    "processed_at": url_req.processed_at.isoformat() if url_req.processed_at else None,
+                    "processed_by": url_req.processed_by,
+                    "notes": url_req.notes
+                })
+            
+            return {
+                "status": "success",
+                "user_urls": user_urls,
+                "total": len(user_urls)
+            }
+        finally:
+            db.close()
+            
+    except Exception as e:
+        return {"status": "error", "message": f"Error fetching user URLs: {str(e)}"}
+
+@app.get("/admin/users")
+async def get_admin_users(request: Request):
+    """Get all users for admin management"""
+    admin_info = await verify_admin_auth(request)
+    
+    try:
+        db: Session = SessionLocal()
+        try:
+            from model.user_models import User
+            from model.url_injection_models import URLInjectionRequest
+            
+            # Get all users
+            users = db.query(User).order_by(User.created_at.desc()).all()
+            
+            user_data = []
+            for user in users:
+                # Count URLs for each user
+                url_count = db.query(URLInjectionRequest).filter(
+                    URLInjectionRequest.user_id == user.id
+                ).count() if hasattr(URLInjectionRequest, 'user_id') else 0
+                
+                user_data.append({
+                    "id": user.id,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "full_name": f"{user.first_name} {user.last_name}",
+                    "email": user.email,
+                    "phone": user.phone,
+                    "is_active": user.is_active,
+                    "created_at": user.created_at.isoformat(),
+                    "last_login": user.last_login.isoformat() if user.last_login else None,
+                    "url_count": url_count
+                })
+            
+            return {
+                "status": "success",
+                "users": user_data,
+                "total": len(user_data)
+            }
+        finally:
+            db.close()
+            
+    except Exception as e:
+        return {"status": "error", "message": f"Error fetching users: {str(e)}"}
 
 # Manual URL Injection Models
 class ManualURLInjectionRequest(BaseModel):
