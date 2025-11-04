@@ -99,3 +99,73 @@ def query_similar_texts(query: str, n_results: int = 10, doc_type: str = "websit
             retrieved_chunks.append({"text": doc, "metadata": meta})
 
     return retrieved_chunks
+
+# ---------------- Helper: Delete Documents by URL ----------------
+def delete_documents_by_url(url: str):
+    """
+    Delete all documents/chunks from ChromaDB for a specific URL.
+    
+    Args:
+        url (str): The URL to delete documents for
+    
+    Returns:
+        int: Number of documents deleted
+    """
+    try:
+        # Query all documents with the specific URL in metadata
+        results = collection.get(
+            where={"url": url}
+        )
+        
+        if results and "ids" in results and results["ids"]:
+            doc_ids = results["ids"]
+            # Delete all documents with those IDs
+            collection.delete(ids=doc_ids)
+            print(f"[VectorStore] Deleted {len(doc_ids)} documents for URL: {url}")
+            return len(doc_ids)
+        else:
+            print(f"[VectorStore] No documents found for URL: {url}")
+            return 0
+            
+    except Exception as e:
+        print(f"[VectorStore] Error deleting documents for URL {url}: {e}")
+        return 0
+
+def delete_documents_by_ids(doc_ids: list):
+    """
+    Delete specific documents from ChromaDB by their IDs.
+    
+    Args:
+        doc_ids (list): List of document IDs to delete
+    
+    Returns:
+        int: Number of documents deleted
+    """
+    try:
+        if doc_ids:
+            collection.delete(ids=doc_ids)
+            print(f"[VectorStore] Deleted {len(doc_ids)} documents by IDs")
+            return len(doc_ids)
+        return 0
+    except Exception as e:
+        print(f"[VectorStore] Error deleting documents by IDs: {e}")
+        return 0
+
+def get_all_documents_by_url(url: str):
+    """
+    Get all document IDs and metadata for a specific URL.
+    
+    Args:
+        url (str): The URL to search for
+    
+    Returns:
+        dict: Documents data including IDs, documents, and metadata
+    """
+    try:
+        results = collection.get(
+            where={"url": url}
+        )
+        return results
+    except Exception as e:
+        print(f"[VectorStore] Error getting documents for URL {url}: {e}")
+        return {"ids": [], "documents": [], "metadatas": []}

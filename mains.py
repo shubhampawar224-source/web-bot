@@ -171,50 +171,6 @@ async def chat_endpoint(data: ChatRequest):
         db.close()
 
 
-@app.post("/chat/deeplearning")
-async def chat_deeplearning(data: dict):
-    """Simple API for https://learn.deeplearning.ai/ URL - directly calls chat with firm context"""
-    query = data.get("query")
-    url = data.get("url", "")
-    session_id = data.get("session_id") or str(uuid.uuid4())
-    
-    if not query:
-        return JSONResponse({"error": "Query is required"}, status_code=400)
-    
-    if not is_safe_query(query):
-        raise HTTPException(status_code=400, detail="Not valid query detected. please ask anything else.")
-    
-    # Check if URL matches the target URL
-    if "learn.deeplearning.ai" in url:
-        print(f"🎯 DeepLearning.ai chat: query='{query}', url='{url}'")
-        
-        db: Session = SessionLocal()
-        try:
-            # Find the firm for deeplearning.ai
-            firm = db.query(Firm).filter(Firm.name.ilike('%deeplearning%')).first()
-            
-            if firm:
-                print(f"✅ Found DeepLearning.ai firm: {firm.name} (ID: {firm.id})")
-                # Use the existing chat logic with firm context
-                answer = get_answer_from_db(query=query, session_id=session_id, firm_id=firm.id)
-            else:
-                print("⚠️ DeepLearning.ai firm not found, using general knowledge")
-                answer = get_answer_from_db(query=query, session_id=session_id)
-            
-            if answer == "CONVERSATION_ENDED":
-                answer = {
-                    "action": "SHOW_CONTACT_FORM",
-                    "message": "Before we finish, we would like to collect your contact details so our team can assist further."
-                }
-            
-            return {"answer": answer, "session_id": session_id, "url": url}
-            
-        finally:
-            db.close()
-    else:
-        return JSONResponse({"error": "This endpoint is only for learn.deeplearning.ai URLs"}, status_code=400)
-
-
 @app.post("/chat/url-specific")
 async def chat_url_specific(data: dict):
     """Chat endpoint for URL-specific conversations launched from user dashboard"""
@@ -615,6 +571,37 @@ async def admin_logout(request: Request):
         return {"status": "success", "message": "Logged out successfully"}
     except Exception as e:
         return {"status": "error", "message": "Logout failed"}
+
+@app.post("/admin/validate-session", response_model=AdminResponse)
+async def validate_admin_session(request: Request):
+    """Validate admin session token"""
+    try:
+        auth_header = request.headers.get("authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return AdminResponse(
+                status="error",
+                message="No valid authentication token"
+            )
+        
+        token = auth_header.split(" ")[1]
+        valid, admin_info = admin_auth_service.validate_session(token)
+        
+        if valid:
+            return AdminResponse(
+                status="success",
+                message="Session valid",
+                admin=admin_info
+            )
+        else:
+            return AdminResponse(
+                status="error",
+                message="Invalid or expired session"
+            )
+    except Exception as e:
+        return AdminResponse(
+            status="error",
+            message="Session validation failed"
+        )
 
 # Admin middleware for authentication
 async def verify_admin_auth(request: Request):
@@ -1786,6 +1773,248 @@ async def admin_inject_url(payload: URLPayload, request: Request):
     except Exception as e:
         print(f"Error in admin_inject_url: {e}")
         return {"status": "error", "message": f"Failed to process URL: {str(e)}"}
+
+@app.delete("/admin/delete-url/{url_id}")
+async def admin_delete_url(url_id: str, request: Request):
+    """Admin endpoint to delete a URL from any user"""
+    admin_info = await verify_admin_auth(request)
+    
+    db: Session = SessionLocal()
+    try:
+        from model.url_injection_models import URLInjectionRequest
+        from model.models import Website
+        
+        url_to_delete = None
+        requester_email = None
+        
+        # Handle different ID formats: "req_{id}" for URLInjectionRequest, "web_{id}" for Website
+        if url_id.startswith("req_"):
+            # URL Injection Request
+            actual_id = int(url_id.replace("req_", ""))
+            url_request = db.query(URLInjectionRequest).filter(URLInjectionRequest.id == actual_id).first()
+            
+            if not url_request:
+                return {"status": "error", "message": "URL request not found"}
+            
+            url_to_delete = url_request.url
+            requester_email = url_request.requester_email
+            
+            # Delete from vector store if it was processed
+            if url_request.is_processed:
+                try:
+                    from utils.vector_store import delete_documents_by_url
+                    deleted_count = delete_documents_by_url(url_to_delete)
+                    print(f"🗑️ Deleted {deleted_count} documents from vector store for URL: {url_to_delete}")
+                except Exception as e:
+                    print(f"❌ Error deleting from vector store: {e}")
+            
+            # Delete the URL request from database
+            db.delete(url_request)
+            
+        elif url_id.startswith("web_"):
+            # Direct Website injection
+            actual_id = int(url_id.replace("web_", ""))
+            website = db.query(Website).filter(Website.id == actual_id).first()
+            
+            if not website:
+                return {"status": "error", "message": "Website not found"}
+            
+            url_to_delete = website.base_url
+            requester_email = "Direct Injection"
+            
+            # Delete from vector store
+            try:
+                from utils.vector_store import delete_documents_by_url
+                deleted_count = delete_documents_by_url(url_to_delete)
+                print(f"🗑️ Deleted {deleted_count} documents from vector store for URL: {url_to_delete}")
+            except Exception as e:
+                print(f"❌ Error deleting from vector store: {e}")
+            
+            # Delete the website from database
+            db.delete(website)
+            
+        else:
+            # Legacy numeric ID - assume it's a URLInjectionRequest
+            try:
+                actual_id = int(url_id)
+                url_request = db.query(URLInjectionRequest).filter(URLInjectionRequest.id == actual_id).first()
+                
+                if not url_request:
+                    return {"status": "error", "message": "URL not found"}
+                
+                url_to_delete = url_request.url
+                requester_email = url_request.requester_email
+                
+                # Delete from vector store if processed
+                if url_request.is_processed:
+                    try:
+                        from utils.vector_store import delete_documents_by_url
+                        deleted_count = delete_documents_by_url(url_to_delete)
+                        print(f"🗑️ Deleted {deleted_count} documents from vector store for URL: {url_to_delete}")
+                    except Exception as e:
+                        print(f"❌ Error deleting from vector store: {e}")
+                
+                # Delete the URL request from database
+                db.delete(url_request)
+                
+            except ValueError:
+                return {"status": "error", "message": "Invalid URL ID format"}
+        
+        db.commit()
+        
+        print(f"🗑️ Admin {admin_info.get('username')} deleted URL: {url_to_delete} (originally from {requester_email})")
+        
+        return {
+            "status": "success", 
+            "message": f"Successfully deleted URL: {url_to_delete}",
+            "data": {
+                "deleted_url": url_to_delete,
+                "original_requester": requester_email,
+                "deleted_by": admin_info.get('username', 'admin')
+            }
+        }
+        
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Error deleting URL: {e}")
+        return {"status": "error", "message": f"Failed to delete URL: {str(e)}"}
+    finally:
+        db.close()
+
+@app.post("/admin/bulk-delete-urls")
+async def admin_bulk_delete_urls(payload: dict, request: Request):
+    """Admin endpoint to delete multiple URLs at once"""
+    admin_info = await verify_admin_auth(request)
+    
+    url_ids = payload.get('url_ids', [])
+    if not url_ids:
+        return {"status": "error", "message": "No URLs selected for deletion"}
+    
+    db: Session = SessionLocal()
+    try:
+        from model.url_injection_models import URLInjectionRequest
+        from model.models import Website
+        
+        deleted_urls = []
+        failed_deletions = []
+        
+        for url_id in url_ids:
+            try:
+                url_to_delete = None
+                requester_email = None
+                
+                # Handle different ID formats
+                if url_id.startswith("req_"):
+                    # URL Injection Request
+                    actual_id = int(url_id.replace("req_", ""))
+                    url_request = db.query(URLInjectionRequest).filter(URLInjectionRequest.id == actual_id).first()
+                    
+                    if url_request:
+                        url_to_delete = url_request.url
+                        requester_email = url_request.requester_email
+                        
+                        # Delete from vector store if processed
+                        if url_request.is_processed:
+                            try:
+                                from utils.vector_store import delete_documents_by_url
+                                deleted_count = delete_documents_by_url(url_to_delete)
+                                print(f"🗑️ Deleted {deleted_count} documents from vector store for URL: {url_to_delete}")
+                            except Exception as e:
+                                print(f"❌ Error deleting from vector store: {e}")
+                        
+                        # Delete from database
+                        db.delete(url_request)
+                        deleted_urls.append({
+                            "id": url_id,
+                            "url": url_to_delete,
+                            "requester": requester_email
+                        })
+                    else:
+                        failed_deletions.append({"id": url_id, "reason": "URL request not found"})
+                        
+                elif url_id.startswith("web_"):
+                    # Direct Website injection
+                    actual_id = int(url_id.replace("web_", ""))
+                    website = db.query(Website).filter(Website.id == actual_id).first()
+                    
+                    if website:
+                        url_to_delete = website.base_url
+                        requester_email = "Direct Injection"
+                        
+                        # Delete from vector store
+                        try:
+                            from utils.vector_store import delete_documents_by_url
+                            deleted_count = delete_documents_by_url(url_to_delete)
+                            print(f"🗑️ Deleted {deleted_count} documents from vector store for URL: {url_to_delete}")
+                        except Exception as e:
+                            print(f"❌ Error deleting from vector store: {e}")
+                        
+                        # Delete from database
+                        db.delete(website)
+                        deleted_urls.append({
+                            "id": url_id,
+                            "url": url_to_delete,
+                            "requester": requester_email
+                        })
+                    else:
+                        failed_deletions.append({"id": url_id, "reason": "Website not found"})
+                        
+                else:
+                    # Legacy numeric ID - assume URLInjectionRequest
+                    try:
+                        actual_id = int(url_id)
+                        url_request = db.query(URLInjectionRequest).filter(URLInjectionRequest.id == actual_id).first()
+                        
+                        if url_request:
+                            url_to_delete = url_request.url
+                            requester_email = url_request.requester_email
+                            
+                            # Delete from vector store if processed
+                            if url_request.is_processed:
+                                try:
+                                    from utils.vector_store import delete_documents_by_url
+                                    deleted_count = delete_documents_by_url(url_to_delete)
+                                    print(f"🗑️ Deleted {deleted_count} documents from vector store for URL: {url_to_delete}")
+                                except Exception as e:
+                                    print(f"❌ Error deleting from vector store: {e}")
+                            
+                            # Delete from database
+                            db.delete(url_request)
+                            deleted_urls.append({
+                                "id": url_id,
+                                "url": url_to_delete,
+                                "requester": requester_email
+                            })
+                        else:
+                            failed_deletions.append({"id": url_id, "reason": "URL not found"})
+                    except ValueError:
+                        failed_deletions.append({"id": url_id, "reason": "Invalid ID format"})
+                        
+            except Exception as e:
+                failed_deletions.append({"id": url_id, "reason": str(e)})
+        
+        db.commit()
+        
+        print(f"🗑️ Admin {admin_info.get('username')} bulk deleted {len(deleted_urls)} URLs")
+        
+        return {
+            "status": "success",
+            "message": f"Successfully deleted {len(deleted_urls)} URLs",
+            "data": {
+                "deleted_count": len(deleted_urls),
+                "failed_count": len(failed_deletions),
+                "deleted_urls": deleted_urls,
+                "failed_deletions": failed_deletions,
+                "deleted_by": admin_info.get('username', 'admin')
+            }
+        }
+        
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Error in bulk delete: {e}")
+        return {"status": "error", "message": f"Failed to delete URLs: {str(e)}"}
+    finally:
+        db.close()
 
 @app.middleware("http")
 async def frame_headers_middleware(request: Request, call_next):

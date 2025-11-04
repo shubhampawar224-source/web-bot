@@ -189,7 +189,7 @@
     <div class="auth-container">
         <div class="auth-header">
             <h1>Sign In</h1>
-            <p>Welcome back to KitKool</p>
+            <!-- <p>Welcome back to KitKool</p> -->
         </div>
 
         <div id="error-message" class="error-message hidden"></div>
@@ -222,6 +222,15 @@
     </div>
 
     <script>
+        // Check for redirect messages from admin logout/session expiry
+        document.addEventListener('DOMContentLoaded', function() {
+            const redirectMessage = sessionStorage.getItem('login_message');
+            if (redirectMessage) {
+                showError(redirectMessage);
+                sessionStorage.removeItem('login_message'); // Clear the message
+            }
+        });
+
         const loginForm = document.getElementById('login-form');
         const submitBtn = document.getElementById('submit-btn');
         const loading = document.getElementById('loading');

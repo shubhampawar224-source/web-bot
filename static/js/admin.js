@@ -8,10 +8,13 @@ class AdminDashboard {
         this.init();
     }
 
-    init() {
+    async init() {
+        console.log('🚀 Initializing AdminDashboard...');
+        
         // Check for OAuth callback
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.has('token') && urlParams.has('admin')) {
+            console.log('🔐 Handling OAuth callback...');
             // Handle OAuth callback
             this.handleOAuthCallback(urlParams);
             return;
@@ -19,13 +22,36 @@ class AdminDashboard {
 
         // Check authentication first
         if (this.authToken) {
-            this.showDashboard();
-            this.loadDashboardData();
+            console.log('🔑 Token found, validating session...');
+            // Validate session with backend
+            const isValid = await this.validateSession();
+            if (isValid) {
+                console.log('✅ Session valid, showing dashboard...');
+                this.showDashboard();
+                try {
+                    this.loadDashboardData();
+                } catch (error) {
+                    console.error('❌ Error loading dashboard data:', error);
+                }
+            } else {
+                console.log('❌ Session invalid, clearing and showing login...');
+                // Clear invalid session and redirect to login page
+                this.clearSession();
+                this.redirectToLogin('Session expired. Please login again.');
+            }
         } else {
-            this.showLogin();
+            console.log('🔓 No token found, showing login...');
+            // If we're on admin panel without token, redirect to login
+            this.redirectToLogin('Please login to access the admin panel.');
         }
 
+        console.log('🔧 Binding events...');
         this.bindEvents();
+        
+        // Check for redirect messages after showing login
+        this.checkForRedirectMessages();
+        
+        console.log('✅ AdminDashboard initialization complete');
     }
 
     bindEvents() {
@@ -70,6 +96,12 @@ class AdminDashboard {
             bulkProcessBtn.addEventListener('click', () => this.bulkProcessUrls());
         }
 
+        // Bulk delete URLs
+        const bulkDeleteBtn = document.getElementById('bulk-delete-urls');
+        if (bulkDeleteBtn) {
+            bulkDeleteBtn.addEventListener('click', () => this.confirmBulkDeleteUrls());
+        }
+
         // URL filters
         const urlStatusFilter = document.getElementById('url-status-filter');
         if (urlStatusFilter) {
@@ -84,8 +116,18 @@ class AdminDashboard {
         // Select all URLs checkbox
         const selectAllUrls = document.getElementById('select-all-urls');
         if (selectAllUrls) {
-            selectAllUrls.addEventListener('change', (e) => this.toggleSelectAllUrls(e.target.checked));
+            selectAllUrls.addEventListener('change', (e) => {
+                this.toggleSelectAllUrls(e.target.checked);
+                this.updateBulkDeleteButton();
+            });
         }
+
+        // Add event listener for individual URL checkboxes (will be bound when table is rendered)
+        document.addEventListener('change', (e) => {
+            if (e.target.classList.contains('url-checkbox')) {
+                this.updateBulkDeleteButton();
+            }
+        });
 
         // Admin URL injection form
         const showUrlInjection = document.getElementById('show-url-injection');
@@ -118,11 +160,16 @@ class AdminDashboard {
     async handleLogin(e) {
         e.preventDefault();
         
+        console.log('🔐 Admin login attempt started...');
+        
         const username = document.getElementById('username').value;
         const password = document.getElementById('password').value;
         const errorDiv = document.getElementById('login-error');
 
+        console.log('📋 Login credentials:', { username, password: '***' });
+
         try {
+            console.log('📤 Sending login request...');
             const response = await fetch('/admin/login', {
                 method: 'POST',
                 headers: {
@@ -131,25 +178,37 @@ class AdminDashboard {
                 body: JSON.stringify({ username, password }),
             });
 
+            console.log('📥 Login response status:', response.status);
             const data = await response.json();
+            console.log('📄 Login response data:', data);
 
             if (data.status === 'success') {
+                console.log('✅ Login successful, setting up session...');
                 this.authToken = data.token;
                 this.adminInfo = data.admin;
                 
                 localStorage.setItem('admin_token', this.authToken);
                 localStorage.setItem('admin_info', JSON.stringify(this.adminInfo));
                 
+                console.log('🔄 Showing dashboard...');
                 this.showDashboard();
-                this.loadDashboardData();
+                
+                console.log('📊 Loading dashboard data...');
+                try {
+                    this.loadDashboardData();
+                } catch (error) {
+                    console.error('❌ Error loading dashboard data (non-critical):', error);
+                }
                 
                 this.showToast('Login successful!', 'success');
+                console.log('✅ Admin login process completed successfully');
             } else {
+                console.log('❌ Login failed:', data.message);
                 errorDiv.textContent = data.message;
                 errorDiv.style.display = 'block';
             }
         } catch (error) {
-            console.error('Login error:', error);
+            console.error('❌ Login error:', error);
             errorDiv.textContent = 'Login failed. Please try again.';
             errorDiv.style.display = 'block';
         }
@@ -277,14 +336,94 @@ class AdminDashboard {
         } catch (error) {
             console.error('Logout error:', error);
         } finally {
-            this.authToken = null;
-            this.adminInfo = {};
-            
-            localStorage.removeItem('admin_token');
-            localStorage.removeItem('admin_info');
-            
-            this.showLogin();
+            this.clearSession();
             this.showToast('Logged out successfully', 'info');
+            
+            // Redirect to login page after a short delay to show the toast
+            setTimeout(() => {
+                window.location.href = '/admin';
+            }, 1000);
+        }
+    }
+
+    async validateSession() {
+        if (!this.authToken) {
+            return false;
+        }
+
+        try {
+            const response = await fetch('/admin/validate-session', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.authToken}`,
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+                // Update admin info if provided
+                if (data.admin) {
+                    this.adminInfo = data.admin;
+                    localStorage.setItem('admin_info', JSON.stringify(this.adminInfo));
+                }
+                return true;
+            } else {
+                console.log('Session validation failed:', data.message);
+                return false;
+            }
+        } catch (error) {
+            console.error('Session validation error:', error);
+            return false;
+        }
+    }
+
+    clearSession() {
+        this.authToken = null;
+        this.adminInfo = {};
+        localStorage.removeItem('admin_token');
+        localStorage.removeItem('admin_info');
+    }
+
+    redirectToLogin(message = 'Please login to continue.') {
+        // Store message in sessionStorage to show on login page
+        if (message) {
+            sessionStorage.setItem('admin_login_message', message);
+        }
+        
+        // Only redirect if we're not already on the admin login page
+        if (!window.location.pathname.includes('/admin')) {
+            console.log('🔄 Redirecting to admin login page...');
+            window.location.href = '/admin';
+        } else {
+            // If we're already on admin page, just show the login form
+            this.showLogin();
+        }
+    }
+
+    checkForRedirectMessages() {
+        const redirectMessage = sessionStorage.getItem('admin_login_message');
+        if (redirectMessage) {
+            // Show the message in the login error div
+            const errorDiv = document.getElementById('login-error');
+            if (errorDiv) {
+                errorDiv.textContent = redirectMessage;
+                errorDiv.style.display = 'block';
+                errorDiv.style.backgroundColor = '#fff3cd';
+                errorDiv.style.color = '#856404';
+                errorDiv.style.borderColor = '#ffeaa7';
+            }
+            
+            // Clear the message
+            sessionStorage.removeItem('admin_login_message');
+            
+            // Hide the message after 5 seconds
+            setTimeout(() => {
+                if (errorDiv) {
+                    errorDiv.style.display = 'none';
+                }
+            }, 5000);
         }
     }
 
@@ -462,6 +601,8 @@ class AdminDashboard {
     renderUrlRequestsTable(requests) {
         const tbody = document.getElementById('urls-tbody');
         
+        console.log('🔍 Rendering URL requests table with data:', requests.slice(0, 2)); // Log first 2 items for debugging
+        
         if (requests.length === 0) {
             tbody.innerHTML = '<tr><td colspan="6" class="text-center">No URL requests found</td></tr>';
             return;
@@ -470,7 +611,7 @@ class AdminDashboard {
         tbody.innerHTML = requests.map(request => `
             <tr>
                 <td>
-                    <input type="checkbox" class="url-checkbox" value="${request.request_id}">
+                    <input type="checkbox" class="url-checkbox" value="${request.id || request.request_id}">
                 </td>
                 <td>
                     <div class="url-cell">
@@ -519,6 +660,23 @@ class AdminDashboard {
                 window.open(url, '_blank');
             });
         });
+
+        // Delete URL buttons
+        document.querySelectorAll('.delete-url-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const button = e.target.closest('.delete-url-btn');
+                const urlId = button.getAttribute('data-url-id');
+                const url = button.getAttribute('data-url');
+                const requester = button.getAttribute('data-requester');
+                
+                console.log('🔍 Delete button clicked, extracted data:', { urlId, url, requester });
+                this.confirmDeleteUrl(urlId, url, requester);
+            });
+        });
+
+        // Update bulk delete button visibility
+        this.updateBulkDeleteButton();
     }
 
     async processUrl(requestId) {
@@ -582,6 +740,195 @@ class AdminDashboard {
         } catch (error) {
             console.error('Failed to bulk process URLs:', error);
             this.showToast('Failed to process URLs', 'error');
+        }
+    }
+
+    updateBulkDeleteButton() {
+        const bulkDeleteBtn = document.getElementById('bulk-delete-urls');
+        const selectedCheckboxes = document.querySelectorAll('.url-checkbox:checked');
+        
+        if (bulkDeleteBtn) {
+            if (selectedCheckboxes.length > 0) {
+                bulkDeleteBtn.style.display = 'inline-block';
+                bulkDeleteBtn.textContent = `Delete Selected (${selectedCheckboxes.length})`;
+            } else {
+                bulkDeleteBtn.style.display = 'none';
+            }
+        }
+    }
+
+    confirmDeleteUrl(urlId, url, requester) {
+        console.log('🔍 Delete URL called with:', { urlId, url, requester });
+        
+        if (!urlId || urlId === 'undefined') {
+            console.error('❌ Invalid URL ID:', urlId);
+            this.showToast('Error: Invalid URL ID', 'error');
+            return;
+        }
+        
+        // Show custom confirmation modal
+        this.showDeleteConfirmation(urlId, url, requester);
+    }
+
+    confirmBulkDeleteUrls() {
+        const selectedCheckboxes = document.querySelectorAll('.url-checkbox:checked');
+        const selectedCount = selectedCheckboxes.length;
+        
+        if (selectedCount === 0) {
+            this.showToast('Please select URLs to delete', 'warning');
+            return;
+        }
+
+        const urlIds = Array.from(selectedCheckboxes).map(cb => cb.value);
+        
+        // Show custom bulk confirmation modal
+        this.showBulkDeleteConfirmation(urlIds, selectedCount);
+    }
+
+    showDeleteConfirmation(urlId, url, requester) {
+        // Set the data for the modal
+        document.getElementById('delete-url-display').textContent = url;
+        document.getElementById('delete-requester-display').textContent = requester;
+        
+        // Set up the confirm button
+        const confirmBtn = document.getElementById('confirm-delete-btn');
+        confirmBtn.onclick = () => {
+            this.hideDeleteConfirmation();
+            this.deleteUrl(urlId);
+        };
+        
+        // Show the modal
+        const modal = document.getElementById('delete-confirmation-modal');
+        modal.style.display = 'flex';
+        
+        // Add click outside to close
+        modal.onclick = (e) => {
+            if (e.target === modal) {
+                this.hideDeleteConfirmation();
+            }
+        };
+        
+        // Add escape key listener
+        this.addEscapeKeyListener(() => this.hideDeleteConfirmation());
+    }
+
+    hideDeleteConfirmation() {
+        const modal = document.getElementById('delete-confirmation-modal');
+        modal.style.display = 'none';
+        this.removeEscapeKeyListener();
+    }
+
+    showBulkDeleteConfirmation(urlIds, count) {
+        // Set the data for the modal
+        document.getElementById('bulk-delete-count-display').textContent = `${count} URLs`;
+        document.getElementById('bulk-delete-confirmation-message').textContent = 
+            `Are you sure you want to delete ${count} selected URL(s)?`;
+        
+        // Set up the confirm button
+        const confirmBtn = document.getElementById('confirm-bulk-delete-btn');
+        confirmBtn.onclick = () => {
+            this.hideBulkDeleteConfirmation();
+            this.bulkDeleteUrls(urlIds);
+        };
+        
+        // Show the modal
+        const modal = document.getElementById('bulk-delete-confirmation-modal');
+        modal.style.display = 'flex';
+        
+        // Add click outside to close
+        modal.onclick = (e) => {
+            if (e.target === modal) {
+                this.hideBulkDeleteConfirmation();
+            }
+        };
+        
+        // Add escape key listener
+        this.addEscapeKeyListener(() => this.hideBulkDeleteConfirmation());
+    }
+
+    hideBulkDeleteConfirmation() {
+        const modal = document.getElementById('bulk-delete-confirmation-modal');
+        modal.style.display = 'none';
+        this.removeEscapeKeyListener();
+    }
+
+    addEscapeKeyListener(callback) {
+        this.escapeKeyHandler = (e) => {
+            if (e.key === 'Escape') {
+                callback();
+            }
+        };
+        document.addEventListener('keydown', this.escapeKeyHandler);
+    }
+
+    removeEscapeKeyListener() {
+        if (this.escapeKeyHandler) {
+            document.removeEventListener('keydown', this.escapeKeyHandler);
+            this.escapeKeyHandler = null;
+        }
+    }
+
+    async deleteUrl(urlId) {
+        try {
+            console.log('🗑️ Deleting URL with ID:', urlId);
+            
+            if (!urlId || urlId === 'undefined') {
+                throw new Error('Invalid URL ID provided');
+            }
+            
+            const response = await this.makeAuthenticatedRequest(`/admin/delete-url/${urlId}`, {
+                method: 'DELETE'
+            });
+
+            console.log('📥 Delete response status:', response.status);
+            const data = await response.json();
+            console.log('📄 Delete response data:', data);
+
+            if (data.status === 'success') {
+                this.showToast(`Successfully deleted URL: ${data.data.deleted_url}`, 'success');
+                this.loadUrlRequests(); // Refresh the table
+                this.loadDashboardStats(); // Refresh stats
+            } else {
+                this.showToast(`Failed to delete URL: ${data.message}`, 'error');
+            }
+        } catch (error) {
+            console.error('❌ Failed to delete URL:', error);
+            this.showToast('Failed to delete URL: ' + error.message, 'error');
+        }
+    }
+
+    async bulkDeleteUrls(urlIds) {
+        try {
+            console.log('🗑️ Bulk deleting URLs:', urlIds);
+            
+            const response = await this.makeAuthenticatedRequest('/admin/bulk-delete-urls', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.authToken}`
+                },
+                body: JSON.stringify({ url_ids: urlIds })
+            });
+
+            const data = await response.json();
+
+            if (data.status === 'success') {
+                const message = `Successfully deleted ${data.data.deleted_count} URL(s)`;
+                this.showToast(message, 'success');
+                
+                if (data.data.failed_count > 0) {
+                    this.showToast(`${data.data.failed_count} URL(s) failed to delete`, 'warning');
+                }
+                
+                this.loadUrlRequests(); // Refresh the table
+                this.loadDashboardStats(); // Refresh stats
+                this.updateBulkDeleteButton(); // Hide bulk delete button
+            } else {
+                this.showToast(`Failed to delete URLs: ${data.message}`, 'error');
+            }
+        } catch (error) {
+            console.error('Failed to bulk delete URLs:', error);
+            this.showToast('Failed to delete URLs', 'error');
         }
     }
 
@@ -732,27 +1079,38 @@ class AdminDashboard {
     showLogin() {
         document.getElementById('loading-overlay').style.display = 'none';
         document.getElementById('admin-login').style.display = 'flex';
-        document.getElementById('admin-signup').style.display = 'none';
         document.getElementById('admin-dashboard').style.display = 'none';
-    }
-
-    showSignup() {
-        document.getElementById('loading-overlay').style.display = 'none';
-        document.getElementById('admin-login').style.display = 'none';
-        document.getElementById('admin-signup').style.display = 'flex';
-        document.getElementById('admin-dashboard').style.display = 'none';
+        
+        // Check for redirect messages when showing login
+        setTimeout(() => this.checkForRedirectMessages(), 100);
     }
 
     showDashboard() {
-        document.getElementById('loading-overlay').style.display = 'none';
-        document.getElementById('admin-login').style.display = 'none';
-        document.getElementById('admin-dashboard').style.display = 'block';
+        console.log('🏠 showDashboard() called');
+        
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const adminLogin = document.getElementById('admin-login');
+        const adminDashboard = document.getElementById('admin-dashboard');
+        
+        console.log('📋 Dashboard elements:', {
+            loadingOverlay: !!loadingOverlay,
+            adminLogin: !!adminLogin,
+            adminDashboard: !!adminDashboard
+        });
+        
+        if (loadingOverlay) loadingOverlay.style.display = 'none';
+        if (adminLogin) adminLogin.style.display = 'none';
+        if (adminDashboard) adminDashboard.style.display = 'block';
         
         // Update admin name
         const adminNameEl = document.getElementById('admin-name');
-        if (adminNameEl) {
-            adminNameEl.textContent = this.adminInfo.full_name || this.adminInfo.username;
+        if (adminNameEl && this.adminInfo) {
+            const displayName = this.adminInfo.full_name || this.adminInfo.username || 'Administrator';
+            adminNameEl.textContent = displayName;
+            console.log('👤 Admin name updated to:', displayName);
         }
+        
+        console.log('✅ Dashboard should now be visible');
     }
 
     toggleSidebar() {
@@ -804,6 +1162,17 @@ class AdminDashboard {
                 </button>
             `;
         }
+
+        // Add delete button for all URLs (admin can delete any URL)
+        buttons += `
+            <button class="btn btn-sm btn-danger delete-url-btn" 
+                    data-url-id="${request.id}" 
+                    data-url="${request.url}" 
+                    data-requester="${request.requester_email || 'Direct Injection'}"
+                    title="Delete this URL permanently">
+                <i class="fas fa-trash"></i>
+            </button>
+        `;
 
         return buttons;
     }
@@ -1101,3 +1470,24 @@ class AdminDashboard {
 document.addEventListener('DOMContentLoaded', () => {
     window.adminDashboard = new AdminDashboard();
 });
+
+// Global functions for modal close buttons
+function hideDeleteConfirmation() {
+    const modal = document.getElementById('delete-confirmation-modal');
+    modal.style.display = 'none';
+    
+    // Remove escape key listener if exists
+    if (window.adminDashboard && window.adminDashboard.removeEscapeKeyListener) {
+        window.adminDashboard.removeEscapeKeyListener();
+    }
+}
+
+function hideBulkDeleteConfirmation() {
+    const modal = document.getElementById('bulk-delete-confirmation-modal');
+    modal.style.display = 'none';
+    
+    // Remove escape key listener if exists
+    if (window.adminDashboard && window.adminDashboard.removeEscapeKeyListener) {
+        window.adminDashboard.removeEscapeKeyListener();
+    }
+}
