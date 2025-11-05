@@ -106,9 +106,14 @@ class FAISSVectorStore:
         if not self.metadata:
             return {}
         
-        # Group metadata by URL to find patterns
+        # Group metadata by URL to find patterns, filter out corrupted entries
         url_groups = {}
         for doc_id, meta in self.metadata.items():
+            # Skip corrupted metadata entries
+            if not isinstance(meta, dict):
+                print(f"[WARNING] Skipping corrupted metadata in storage optimization: {doc_id}")
+                continue
+                
             url = meta.get('url', 'unknown')
             if url not in url_groups:
                 url_groups[url] = []
@@ -127,6 +132,11 @@ class FAISSVectorStore:
                 
                 # Reference the template for all chunks
                 for doc_id, meta in doc_list:
+                    # Safety check before comparison
+                    if not isinstance(meta, dict) or not isinstance(template, dict):
+                        optimized[doc_id] = meta  # Store as-is if corrupted
+                        continue
+                        
                     # Check if metadata is identical to template
                     if meta == template:
                         optimized[doc_id] = f"@ref:{template_key}"
@@ -223,6 +233,39 @@ class FAISSVectorStore:
         
         print(f"[FAISSVectorStore] Added {len(texts)} documents. Total: {self.index.ntotal}")
     
+    def _matches_complex_filter(self, metadata: Dict[str, Any], filter_metadata: Dict[str, Any]) -> bool:
+        """Handle complex metadata filtering including $and and $in operators"""
+        if not filter_metadata:
+            return True
+        
+        # Safety check: ensure metadata is a dictionary
+        if not isinstance(metadata, dict):
+            return False
+            
+        # Handle $and operator
+        if "$and" in filter_metadata:
+            conditions = filter_metadata["$and"]
+            for condition in conditions:
+                if not self._matches_complex_filter(metadata, condition):
+                    return False
+            return True
+        
+        # Handle regular key-value pairs
+        for key, value in filter_metadata.items():
+            if key.startswith("$"):
+                continue  # Skip operator keys
+                
+            if isinstance(value, dict) and "$in" in value:
+                # Handle $in operator
+                if metadata.get(key) not in value["$in"]:
+                    return False
+            else:
+                # Simple equality check
+                if metadata.get(key) != value:
+                    return False
+        
+        return True
+
     def search(self, query: str, n_results: int = 10, filter_metadata: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """Search for similar documents"""
         if self.index.ntotal == 0:
@@ -247,9 +290,14 @@ class FAISSVectorStore:
             metadata = self.metadata.get(doc_id, {})
             document = self.documents.get(doc_id, "")
             
+            # Safety check: ensure metadata is a dictionary
+            if not isinstance(metadata, dict):
+                print(f"[WARNING] Corrupted metadata for doc {doc_id}: {repr(metadata)}, skipping...")
+                continue
+            
             # Apply metadata filter if provided
             if filter_metadata:
-                if not all(metadata.get(k) == v for k, v in filter_metadata.items()):
+                if not self._matches_complex_filter(metadata, filter_metadata):
                     continue
             
             results.append({

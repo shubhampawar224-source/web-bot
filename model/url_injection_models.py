@@ -37,8 +37,7 @@ class URLInjectionRequest(Base):
     status = Column(String(20), default="pending")  # pending, approved, rejected, processing
     firm_id = Column(Integer, ForeignKey("firms.id"), nullable=True)  # Associated firm
     
-    # Relationships
-    firm = relationship("Firm", back_populates="url_requests")
+    # Note: No relationship to Firm to avoid circular dependencies
     
     @classmethod
     def create_request(cls, url: str, email: str, priority: str = "normal", notes: str = "") -> 'URLInjectionRequest':

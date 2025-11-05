@@ -89,7 +89,7 @@
       }
       
       // Build iframe URL with parameters
-      let iframeUrl = 'http://127.0.0.1:8000/static/index.html';
+      let iframeUrl = window.location.origin + '/static/index.html';
       const params = new URLSearchParams();
       
       if (firmName) {
@@ -134,7 +134,9 @@
       
       // Listen for messages from iframe
       window.addEventListener('message', function(event) {
-        if (event.origin !== window.location.origin) return;
+        // Allow messages from same origin or the iframe source
+        if (event.origin !== window.location.origin && 
+            event.origin !== new URL(iframeUrl).origin) return;
         
         if (event.data.type === 'IFRAME_READY') {
           console.log('Iframe reports it is ready');
@@ -142,19 +144,7 @@
       });
     });
   </script>
-  <!-- <script>
-    const widgetScript = document.currentScript || document.querySelector('script[src*="widget.js"]');
-const BASE_URL = new URL(widgetScript.src).origin;
-
-console.log("Auto Server:", BASE_URL);
-
-  </script> -->
 </head>
-
-<!-- <lovable-widget src="http://127.0.0.1:8000/chat_widget"></lovable-widget> -->
-
-<!-- <script src="http://127.0.0.1:8000/static/js/launcher.js"></script> -->
-
 <body>
   <div id="voice-widget">
     <iframe id="widget-iframe"></iframe>

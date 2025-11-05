@@ -548,7 +548,7 @@
 
             init() {
                 if (!this.authToken) {
-                    window.location.href = '/signup';
+                    window.location.href = '/login';
                     return;
                 }
 
@@ -811,7 +811,7 @@
             logout() {
                 localStorage.removeItem('user_token');
                 localStorage.removeItem('user_info');
-                window.location.href = '/signup';
+                window.location.href = '/login';
             }
         }
 

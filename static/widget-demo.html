@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Widget Integration Examples</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+        h1, h2 {
+            color: #333;
+        }
+        .integration-method {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .code-block {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            margin: 10px 0;
+        }
+        .demo-button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        .demo-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        .note {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 Chat Widget Integration Guide</h1>
+        <p>Simple JavaScript integration for embedding the chatbot widget into any website.</p>
+
+        <!-- Single Integration Method -->
+        <div class="integration-method">
+            <h2>📋 Universal Widget Integration</h2>
+            <p>Add this code before the closing <code>&lt;/body&gt;</code> tag on any website:</p>
+            
+            <div class="code-block">
+&lt;script src="http://127.0.0.1:8000/static/js/embed-script.js"&gt;&lt;/script&gt;
+&lt;script&gt;
+  ChatWidget.init({
+    apiUrl: 'http://127.0.0.1:8000',
+    targetUrl: 'https://learn.deeplearning.ai/',  // Custom URL for context
+    position: 'bottom-right',
+    autoOpen: false
+  });
+&lt;/script&gt;
+            </div>
+            
+            <button class="demo-button" onclick="loadWidget()">🚀 Test Live Demo</button>
+            <button class="demo-button" onclick="copyCode()">📋 Copy Code</button>
+        </div>
+
+        <!-- Configuration Options -->
+        <div class="integration-method">
+            <h2>⚙️ Configuration Options</h2>
+            <div class="code-block">
+ChatWidget.init({
+    apiUrl: 'http://127.0.0.1:8000',    // Your chatbot API URL
+    targetUrl: 'https://learn.deeplearning.ai/',  // Optional: specific URL for context
+    position: 'bottom-right',             // bottom-right, bottom-left, top-right, top-left
+    autoOpen: false                       // Auto-open chat on page load
+});
+
+// Examples:
+// For current page context: remove targetUrl or set it to window.location.href
+// For custom URL context: set targetUrl to any website URL
+// For general chat: set targetUrl to null
+            </div>
+        </div>
+
+        <!-- Important Notes -->
+        <div class="note warning">
+            <h3>⚠️ Setup Instructions:</h3>
+            <ul>
+                <li>Copy the code above and paste it before <code>&lt;/body&gt;</code> tag on any website</li>
+                <li>Replace <code>http://127.0.0.1:8000</code> with your actual domain when deploying</li>
+                <li>Set <code>targetUrl</code> to any website URL you want the chatbot to know about</li>
+                <li>Remove <code>targetUrl</code> to use current page context automatically</li>
+                <li>No authentication required - works on any website instantly</li>
+            </ul>
+        </div>
+
+        <div class="note success">
+            <h3>✅ What You Get:</h3>
+            <ul>
+                <li>🤖 AI chatbot with context about specific websites</li>
+                <li>📱 Mobile-friendly floating chat button</li>
+                <li>⚡ Instant setup - just copy & paste the code</li>
+                <li>🔒 No authentication or API keys needed</li>
+                <li>🎨 Beautiful, modern chat interface</li>
+                <li>🌐 Works on any website (WordPress, HTML, etc.)</li>
+            </ul>
+        </div>
+
+        <!-- Demo Controls -->
+        <div style="margin-top: 40px; text-align: center;">
+            <h3>🎮 Live Demo</h3>
+            <button class="demo-button" onclick="loadWidget()">Start Demo</button>
+            <button class="demo-button" onclick="removeWidget()">Remove Demo</button>
+            <button class="demo-button" onclick="showInfo()">Show Info</button>
+        </div>
+    </div>
+
+    <script>
+        let currentWidget = null;
+
+        function loadWidget() {
+            removeWidget();
+            
+            // Load the embed script if not already loaded
+            if (window.ChatWidget) {
+                currentWidget = ChatWidget.init({
+                    apiUrl: window.location.origin,
+                    targetUrl: 'https://learn.deeplearning.ai/',
+                    position: 'bottom-right',
+                    autoOpen: false
+                });
+                alert('🎉 Chat widget loaded! It will chat about DeepLearning.AI content.');
+            } else {
+                const script = document.createElement('script');
+                script.src = '/static/js/embed-script.js';
+                script.onload = function() {
+                    currentWidget = ChatWidget.init({
+                        apiUrl: window.location.origin,
+                        targetUrl: 'https://learn.deeplearning.ai/',
+                        position: 'bottom-right',
+                        autoOpen: false
+                    });
+                    alert('🎉 Chat widget loaded! It will chat about DeepLearning.AI content.');
+                };
+                document.head.appendChild(script);
+            }
+        }
+
+        function removeWidget() {
+            // Remove script-based widgets
+            const container = document.getElementById('chat-widget-container');
+            if (container) container.remove();
+            currentWidget = null;
+        }
+
+        function copyCode() {
+            const code = `<script src="http://127.0.0.1:8000/static/js/embed-script.js"></script>
+<script>
+  ChatWidget.init({
+    apiUrl: 'http://127.0.0.1:8000',
+    targetUrl: 'https://learn.deeplearning.ai/',
+    position: 'bottom-right',
+    autoOpen: false
+  });
+</script>`;
+            
+            navigator.clipboard.writeText(code).then(function() {
+                alert('📋 Code copied! This creates a chatbot that knows about DeepLearning.AI content.');
+            }).catch(function() {
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                textArea.value = code;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                alert('📋 Code copied! This creates a chatbot that knows about DeepLearning.AI content.');
+            });
+        }
+
+        function showInfo() {
+            const info = `🤖 Chat Widget Integration Info:
+
+📍 Current URL: ${window.location.href}
+🌐 API URL: ${window.location.origin}
+⚡ Widget Status: ${currentWidget ? 'Active' : 'Not loaded'}
+🎯 Target URL: https://learn.deeplearning.ai/
+
+🔗 Integration Endpoints:
+• Chat API: ${window.location.origin}/chat/public
+• Widget Script: ${window.location.origin}/static/js/embed-script.js
+• Demo Page: ${window.location.origin}/embed/demo
+
+💡 To use on external websites:
+1. Copy the integration code
+2. Replace 127.0.0.1:8000 with your domain
+3. Change targetUrl to any website you want to chat about
+4. Paste before </body> tag
+5. Widget works instantly!`;
+            
+            alert(info);
+        }
+    </script>
+</body>
+</html>

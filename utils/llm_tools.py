@@ -148,13 +148,13 @@ def extract_suggestions_from_response(response_text: str) -> List[str]:
 
 
 # ---------------- Helper: Load Firm & Links from DB ----------------
-def load_firm_and_links(firm_id: int) -> Tuple[str, str, List[str]]:
+def load_firm_and_links(firm_id: int) -> Tuple[str, List[str]]:
     """Fetch firm name and all links from websites associated with this firm."""
     db: Session = SessionLocal()
     try:
         firm = db.query(Firm).filter(Firm.id == firm_id).first()
         if not firm:
-            return "Unknown Firm", "", []
+            return "Unknown Firm", []
 
         websites = db.query(Website).filter(Website.firm_id == firm.id).all()
         links_list = []
@@ -162,7 +162,7 @@ def load_firm_and_links(firm_id: int) -> Tuple[str, str, List[str]]:
 
         for w in websites:
             # about_data = w.scraped_data.get("about", {}) if w.scraped_data else {}
-            links_data = w.scraped_data.get("links", []) if w.scraped_data else []
+            links_data = w.scraped_data.get("links", []) if w.scraped_data and isinstance(w.scraped_data, dict) else []
 
             # about_texts.append(about_data.get("full_text", ""))
             for link in links_data:
@@ -213,7 +213,7 @@ def get_answer_from_db(query: str, firm_id: int = None, session_id: Optional[str
                 # Try to get firm name from metadata
                 if results["metadatas"] and results["metadatas"][0]:
                     for metadata in results["metadatas"][0]:
-                        if metadata.get("firm_name"):
+                        if isinstance(metadata, dict) and metadata.get("firm_name"):
                             firm_name = metadata["firm_name"]
                             print(f"🏢 Extracted firm name from metadata: {firm_name}")
                             break
@@ -270,17 +270,18 @@ def get_answer_from_db(query: str, firm_id: int = None, session_id: Optional[str
             ids=[f"assistant_{session_id}_{uuid.uuid4()}"],
             embeddings=[answer_embedding],
             documents=[answer_text],
-            metadatas={
+            metadatas=[{
                 "type": "chat",
                 "role": "assistant",
                 "session_id": session_id,
-                "firm_id": str(firm_id),
+                "firm_id": str(firm_id) if firm_id else "general",
                 "timestamp": datetime.now().isoformat()
-            },
+            }],
         )
 
         # 🔟 Update last selected firm in session memory
-        update_session_firm(session_id, firm_id)
+        if firm_id:
+            update_session_firm(session_id, firm_id)
         return answer_text
 
     except httpx.ConnectError as e:

@@ -11,7 +11,6 @@ class Firm(Base):
     name = Column(String(255), unique=True, nullable=False)
     created_at = Column(DateTime, default=datetime.now)
     websites = relationship("Website", back_populates="firm")
-    url_requests = relationship("URLInjectionRequest", back_populates="firm")
     
 
 class Website(Base):
