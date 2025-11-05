@@ -27,23 +27,17 @@ document.addEventListener("DOMContentLoaded", () => {
     // ---------- Widget Mode Setup ----------
     if (isWidgetMode) {
         console.log('Initializing widget mode...');
-        console.log('Widget Firm ID:', widgetFirmId);
-        console.log('Widget URLs:', widgetUrls);
-        console.log('Widget User ID:', widgetUserId);
         
         // Hide sidebar in widget mode
         if (sidebar) {
             sidebar.style.display = 'none';
-            console.log('Sidebar hidden for widget mode');
         }
         if (toggleBtn) {
             toggleBtn.style.display = 'none';
-            console.log('Toggle button hidden for widget mode');
         }
         
         // Auto-open chat and set greeting
         setTimeout(() => {
-            console.log('Setting up widget chat interface...');
             chatContainer.style.display = "flex";
             chatContainer.style.position = "absolute";
             chatContainer.style.top = "20px";
@@ -55,16 +49,12 @@ document.addEventListener("DOMContentLoaded", () => {
             chatContainer.style.zIndex = "1000";
             
             // Widget-specific greeting
-            let greetingMessage = "Hello! I'm here to help you with your questions. How can I assist you today? 😊";
             if (widgetFirm) {
-                greetingMessage = `Hello! I'm here to help you with questions about ${widgetFirm}. How can I assist you today? 😊`;
-            } else if (widgetUrls) {
-                greetingMessage = "Hello! I'm here to help you with questions about the content you've shared. How can I assist you today? 😊";
+                addMessage(`Hello! I'm here to help you with questions about ${widgetFirm}. How can I assist you today? 😊`, "bot-msg");
+            } else {
+                addMessage("Hello! I'm here to help you with your questions. How can I assist you today? 😊", "bot-msg");
             }
-            
-            addMessage(greetingMessage, "bot-msg");
             greeted = true;
-            console.log('Widget greeting added:', greetingMessage);
         }, 500);
     }
 
@@ -320,12 +310,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function getSelectedFirm() {
-        // In widget mode, use the widget firm ID if available
-        if (isWidgetMode && widgetFirmId) {
-            return widgetFirmId;
-        }
-        // Otherwise use the firm selector
-        return firmSelect && firmSelect.value ? firmSelect.value : null;
+        return firmSelect.value || null;
     }
 
     // ---------- Send Message ----------

@@ -53,12 +53,30 @@ def retrieve_faiss_response(query: str, k: int = 1):
         return results[0]
     return {"text": "No relevant data found.", "metadata": {}}
 
-def _create_chat_completion(messages, model="gpt-4o-mini", temperature=0.7):
-    if _uses_new_openai:
-        return client.chat.completions.create(model=model, messages=messages, temperature=temperature)
+def _create_chat_completion(messages, model="gpt-4o-mini", temperature=0.7, custom_api_key=None):
+    """Create chat completion with optional custom API key"""
+    if custom_api_key:
+        # Use custom API key for this request
+        if _uses_new_openai:
+            from openai import OpenAI
+            custom_client = OpenAI(api_key=custom_api_key)
+            return custom_client.chat.completions.create(model=model, messages=messages, temperature=temperature)
+        else:
+            # For older openai package, temporarily set the API key
+            import openai
+            original_key = openai.api_key
+            try:
+                openai.api_key = custom_api_key
+                return openai.ChatCompletion.create(model=model, messages=messages, temperature=temperature)
+            finally:
+                openai.api_key = original_key
     else:
-        # Older openai package uses ChatCompletion.create
-        return client.ChatCompletion.create(model=model, messages=messages, temperature=temperature)
+        # Use default client
+        if _uses_new_openai:
+            return client.chat.completions.create(model=model, messages=messages, temperature=temperature)
+        else:
+            # Older openai package uses ChatCompletion.create
+            return client.ChatCompletion.create(model=model, messages=messages, temperature=temperature)
 
 def _extract_assistant_content(response):
     # New client: response.choices[0].message.content
@@ -68,7 +86,7 @@ def _extract_assistant_content(response):
         # Older client: response.choices[0]['message']['content']
         return response.choices[0]['message']['content']
 
-def refine_text_with_gpt(user_text: str, faiss_text: str) -> str:
+def refine_text_with_gpt(user_text: str, faiss_text: str, custom_api_key: str = None) -> str:
     """Refine the FAISS + STT response using GPT for contextual accuracy"""
     prompt = (
         f"You are a helpful assistant. The user said:\n{user_text}\n\n"
@@ -80,6 +98,7 @@ def refine_text_with_gpt(user_text: str, faiss_text: str) -> str:
             {"role": "system", "content": "You are an intelligent assistant."},
             {"role": "user", "content": prompt}
         ],
-        temperature=0.7
+        temperature=0.7,
+        custom_api_key=custom_api_key
     )
     return _extract_assistant_content(response)

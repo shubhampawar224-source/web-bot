@@ -24,6 +24,7 @@ cffi==2.0.0
 charset-normalizer==3.4.4
 chromadb==1.1.1
 click==8.3.0
+cryptography==44.0.0
 faiss-cpu==1.7.4
 cloudpathlib==0.23.0
 colorama==0.4.6

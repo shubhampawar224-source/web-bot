@@ -25,6 +25,7 @@ from typing import Optional, List
 from sqlalchemy.orm import Session
 from database.db import SessionLocal
 from model.models import Contact, Website, Firm
+from model.user_models import User
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
@@ -160,6 +161,7 @@ async def chat_endpoint(data: ChatRequest):
     session_id = data.session_id or str(uuid.uuid4())
     query = data.query
     firm_id = data.firm_id
+    user_id = data.user_id
     
     if not query or not firm_id:
         return JSONResponse({"error": "Query and firm are required"}, status_code=400)
@@ -174,8 +176,26 @@ async def chat_endpoint(data: ChatRequest):
         if not firm:
             return JSONResponse({"error": "Selected firm not found"}, status_code=404)
 
+        # Get user's custom API key if user_id is provided
+        custom_api_key = None
+        if user_id:
+            try:
+                user = db.query(User).filter(User.id == int(user_id)).first()
+                if user and user.has_gpt_api_key:
+                    custom_api_key = user.get_gpt_api_key()
+                    print(f"🔑 Using custom API key for user {user_id}")
+                else:
+                    print(f"📝 User {user_id} has no custom API key, using default")
+            except Exception as e:
+                print(f"⚠️ Error getting user API key: {e}")
+
         # Get firm-specific answer from vector DB
-        answer = get_answer_from_db(query=query, session_id=session_id, firm_id=firm.id)
+        answer = get_answer_from_db(
+            query=query, 
+            session_id=session_id, 
+            firm_id=firm.id,
+            custom_api_key=custom_api_key
+        )
         if answer == "CONVERSATION_ENDED":
             answer = {
                 "action": "SHOW_CONTACT_FORM",
@@ -243,16 +263,43 @@ async def chat_url_specific(data: dict):
                         firm = db.query(Firm).filter(Firm.id == firm_id).first()
                         print(f"🏢 Using firm: {firm.name if firm else 'Unknown'} (ID: {firm_id})")
 
+        # Get user's custom API key if user_id is provided
+        custom_api_key = None
+        if user_id:
+            try:
+                user = db.query(User).filter(User.id == int(user_id)).first()
+                if user and user.has_gpt_api_key:
+                    custom_api_key = user.get_gpt_api_key()
+                    print(f"🔑 Using custom API key for user {user_id}")
+                else:
+                    print(f"📝 User {user_id} has no custom API key, using default")
+            except Exception as e:
+                print(f"⚠️ Error getting user API key: {e}")
+
         # Use URL-specific context with request_ids
         if request_ids:
             print(f"🎯 Using URL-specific context with {len(request_ids)} request IDs")
-            answer = get_answer_from_db(query=query, session_id=session_id, url_context=','.join(request_ids))
+            answer = get_answer_from_db(
+                query=query, 
+                session_id=session_id, 
+                url_context=','.join(request_ids),
+                custom_api_key=custom_api_key
+            )
         elif firm_id:
             print(f"🏢 Fallback to firm-based search (firm_id: {firm_id})")
-            answer = get_answer_from_db(query=query, session_id=session_id, firm_id=firm_id)
+            answer = get_answer_from_db(
+                query=query, 
+                session_id=session_id, 
+                firm_id=firm_id,
+                custom_api_key=custom_api_key
+            )
         else:
             print(f"🌐 Using general knowledge fallback")
-            answer = get_answer_from_db(query=query, session_id=session_id)
+            answer = get_answer_from_db(
+                query=query, 
+                session_id=session_id,
+                custom_api_key=custom_api_key
+            )
             
         if answer == "CONVERSATION_ENDED":
             answer = {
@@ -1106,6 +1153,203 @@ async def get_user_chat_urls(user_id: Optional[int] = None, url_ids: Optional[st
             "message": f"Error fetching URLs: {str(e)}",
             "urls": []
         }
+
+# ============== User API Key Management Endpoints ==============
+
+@app.get("/user/api-key/status")
+async def get_user_api_key_status(request: Request):
+    """Get user's API key status"""
+    try:
+        # Verify user authentication
+        auth_header = request.headers.get("authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="No valid authentication token")
+        
+        token = auth_header.split(" ")[1]
+        valid, user_info = user_auth_service.validate_session(token)
+        
+        if not valid:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+        
+        db: Session = SessionLocal()
+        try:
+            user = db.query(User).filter(User.id == user_info['id']).first()
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
+            
+            has_key = user.has_gpt_api_key
+            
+            if has_key:
+                # Test if the key is still valid
+                api_key = user.get_gpt_api_key()
+                if api_key:
+                    # Simple validation - check if key looks correct
+                    if api_key.startswith('sk-'):
+                        message = "API key is configured and ready to use."
+                    else:
+                        message = "API key is configured but may be invalid."
+                        has_key = False
+                else:
+                    message = "API key configuration error."
+                    has_key = False
+            else:
+                message = "No API key configured. Using shared service."
+            
+            return {
+                "status": "success",
+                "has_key": has_key,
+                "message": message
+            }
+            
+        finally:
+            db.close()
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error getting API key status: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.post("/user/api-key/test")
+async def test_user_api_key(request: Request):
+    """Test if provided API key is valid"""
+    try:
+        # Verify user authentication
+        auth_header = request.headers.get("authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="No valid authentication token")
+        
+        token = auth_header.split(" ")[1]
+        valid, user_info = user_auth_service.validate_session(token)
+        
+        if not valid:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+        
+        data = await request.json()
+        api_key = data.get("api_key", "").strip()
+        
+        if not api_key:
+            return {"status": "error", "message": "API key is required"}
+        
+        # Test the API key
+        try:
+            from openai import OpenAI
+            test_client = OpenAI(api_key=api_key)
+            
+            # Make a simple test request
+            response = test_client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[{"role": "user", "content": "Hello"}],
+                max_tokens=5
+            )
+            
+            return {
+                "status": "success",
+                "message": "API key is valid and working properly"
+            }
+            
+        except Exception as e:
+            error_msg = str(e)
+            if "invalid" in error_msg.lower() or "unauthorized" in error_msg.lower():
+                return {"status": "error", "message": "Invalid API key"}
+            elif "quota" in error_msg.lower() or "billing" in error_msg.lower():
+                return {"status": "error", "message": "API key valid but quota exceeded or billing issue"}
+            else:
+                return {"status": "error", "message": f"API key test failed: {error_msg}"}
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error testing API key: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.post("/user/api-key")
+async def save_user_api_key(request: Request):
+    """Save user's OpenAI API key"""
+    try:
+        # Verify user authentication
+        auth_header = request.headers.get("authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="No valid authentication token")
+        
+        token = auth_header.split(" ")[1]
+        valid, user_info = user_auth_service.validate_session(token)
+        
+        if not valid:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+        
+        data = await request.json()
+        api_key = data.get("api_key", "").strip()
+        
+        if not api_key:
+            return {"status": "error", "message": "API key is required"}
+        
+        # Basic validation - just check if it looks like an OpenAI API key
+        if not api_key.startswith('sk-'):
+            return {"status": "error", "message": "Invalid API key format. OpenAI API keys should start with 'sk-'"}
+        
+        db: Session = SessionLocal()
+        try:
+            user = db.query(User).filter(User.id == user_info['id']).first()
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
+            
+            # Save encrypted API key
+            user.set_gpt_api_key(api_key)
+            db.commit()
+            
+            return {
+                "status": "success",
+                "message": "API key saved successfully"
+            }
+            
+        finally:
+            db.close()
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error saving API key: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.delete("/user/api-key")
+async def remove_user_api_key(request: Request):
+    """Remove user's OpenAI API key"""
+    try:
+        # Verify user authentication
+        auth_header = request.headers.get("authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="No valid authentication token")
+        
+        token = auth_header.split(" ")[1]
+        valid, user_info = user_auth_service.validate_session(token)
+        
+        if not valid:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+        
+        db: Session = SessionLocal()
+        try:
+            user = db.query(User).filter(User.id == user_info['id']).first()
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
+            
+            # Remove API key
+            user.set_gpt_api_key(None)
+            db.commit()
+            
+            return {
+                "status": "success",
+                "message": "API key removed successfully"
+            }
+            
+        finally:
+            db.close()
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error removing API key: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/admin/stats")
 async def get_admin_stats(request: Request):

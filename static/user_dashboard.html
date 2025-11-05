@@ -397,6 +397,170 @@
             display: none !important;
         }
 
+        /* API Key Management Styles */
+        .api-key-status {
+            margin-bottom: 1.5rem;
+        }
+
+        .status-card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .status-card.has-key {
+            background: #ecfdf5;
+            border-color: #10b981;
+        }
+
+        .status-card.no-key {
+            background: #fef3c7;
+            border-color: #f59e0b;
+        }
+
+        .status-card.error {
+            background: #fee2e2;
+            border-color: #ef4444;
+        }
+
+        .status-icon {
+            font-size: 1.5rem;
+            color: #64748b;
+        }
+
+        .status-card.has-key .status-icon {
+            color: #10b981;
+        }
+
+        .status-card.no-key .status-icon {
+            color: #f59e0b;
+        }
+
+        .status-card.error .status-icon {
+            color: #ef4444;
+        }
+
+        .status-content h4 {
+            margin: 0 0 0.25rem 0;
+            font-size: 1rem;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .status-content p {
+            margin: 0;
+            font-size: 0.875rem;
+            color: #64748b;
+        }
+
+        .api-key-info {
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .info-box {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .info-box:last-child {
+            margin-bottom: 0;
+        }
+
+        .info-box i {
+            color: #3b82f6;
+            font-size: 1.25rem;
+            margin-top: 0.25rem;
+        }
+
+        .info-box strong {
+            display: block;
+            color: #374151;
+            margin-bottom: 0.25rem;
+        }
+
+        .info-box p {
+            color: #64748b;
+            font-size: 0.875rem;
+            margin: 0;
+            line-height: 1.5;
+        }
+
+        .info-box a {
+            color: #3b82f6;
+            text-decoration: none;
+        }
+
+        .info-box a:hover {
+            text-decoration: underline;
+        }
+
+        .api-key-input-group {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .api-key-input-group input {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .btn-icon {
+            background: #f3f4f6;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            padding: 0.5rem;
+            cursor: pointer;
+            color: #6b7280;
+            transition: all 0.2s;
+        }
+
+        .btn-icon:hover {
+            background: #e5e7eb;
+            color: #374151;
+        }
+
+        .btn-secondary {
+            background: #6b7280;
+        }
+
+        .btn-secondary:hover {
+            background: #4b5563;
+        }
+
+        .btn-success {
+            background: #10b981;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .form-help {
+            display: block;
+            color: #6b7280;
+            font-size: 0.75rem;
+            margin-top: 0.25rem;
+        }
+
         @media (max-width: 768px) {
             .header {
                 padding: 1rem;
@@ -486,6 +650,88 @@
                 </div>
             </div>
 
+            <!-- API Key Management Section -->
+            <div class="url-injection-section">
+                <div class="section-header">
+                    <h2 class="section-title">
+                        <i class="fas fa-key"></i> GPT API Key Settings
+                    </h2>
+                    <div class="section-actions">
+                        <button class="btn" id="edit-api-key-btn">
+                            <i class="fas fa-edit"></i> Update API Key
+                        </button>
+                    </div>
+                </div>
+
+                <!-- API Key Status -->
+                <div class="api-key-status" id="api-key-status">
+                    <div class="status-card">
+                        <div class="status-icon">
+                            <i class="fas fa-info-circle"></i>
+                        </div>
+                        <div class="status-content">
+                            <h4>API Key Status</h4>
+                            <p id="api-key-status-text">Checking API key status...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- API Key Form -->
+                <div id="api-key-form" class="url-form" style="display: none;">
+                    <h3>Configure Your OpenAI GPT API Key</h3>
+                    <div class="api-key-info">
+                        <div class="info-box">
+                            <i class="fas fa-lightbulb"></i>
+                            <div>
+                                <strong>Why do you need an API key?</strong>
+                                <p>By providing your own OpenAI API key, you get unlimited access to the chatbot with your own GPT usage. 
+                                Without an API key, you'll use our shared service which may have limitations.</p>
+                            </div>
+                        </div>
+                        <div class="info-box">
+                            <i class="fas fa-link"></i>
+                            <div>
+                                <strong>How to get an API key:</strong>
+                                <p>1. Visit <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI API Keys</a><br>
+                                2. Create a new API key<br>
+                                3. Copy and paste it below</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <form id="api-key-form-element">
+                        <div class="form-group">
+                            <label for="api-key-input">OpenAI API Key</label>
+                            <div class="api-key-input-group">
+                                <input type="password" id="api-key-input" name="api_key" required 
+                                       placeholder="sk-...">
+                                <button type="button" id="toggle-api-key-visibility" class="btn-icon">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button type="button" id="test-api-key" class="btn btn-secondary">
+                                    <i class="fas fa-check"></i> Test Key
+                                </button>
+                            </div>
+                            <small class="form-help">Your API key is encrypted and stored securely. We never share or misuse your key.</small>
+                        </div>
+                        <div style="display: flex; gap: 1rem;">
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-save"></i> Save API Key
+                            </button>
+                            <button type="button" class="btn btn-secondary" id="cancel-api-key-btn">
+                                <i class="fas fa-times"></i> Cancel
+                            </button>
+                            <button type="button" class="btn btn-danger" id="remove-api-key-btn" style="display: none;">
+                                <i class="fas fa-trash"></i> Remove API Key
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Success/Error Messages for API Key -->
+                <div id="api-key-message" class="message"></div>
+            </div>
+
             <!-- URL Injection Section -->
             <div class="url-injection-section">
                 <div class="section-header">
@@ -555,6 +801,7 @@
                 this.bindEvents();
                 this.loadUserData();
                 this.loadUserUrls();
+                this.loadApiKeyStatus();
             }
 
             bindEvents() {
@@ -565,6 +812,14 @@
                 document.getElementById('add-url-btn').addEventListener('click', () => this.showUrlForm());
                 document.getElementById('cancel-url-btn').addEventListener('click', () => this.hideUrlForm());
                 document.getElementById('url-submission-form').addEventListener('submit', (e) => this.submitUrl(e));
+                
+                // API Key Management
+                document.getElementById('edit-api-key-btn').addEventListener('click', () => this.showApiKeyForm());
+                document.getElementById('cancel-api-key-btn').addEventListener('click', () => this.hideApiKeyForm());
+                document.getElementById('api-key-form-element').addEventListener('submit', (e) => this.submitApiKey(e));
+                document.getElementById('test-api-key').addEventListener('click', () => this.testApiKey());
+                document.getElementById('toggle-api-key-visibility').addEventListener('click', () => this.toggleApiKeyVisibility());
+                document.getElementById('remove-api-key-btn').addEventListener('click', () => this.removeApiKey());
                 
                 // Make userDashboard available globally for button onclick handlers
                 window.userDashboard = this;
@@ -812,6 +1067,220 @@
                 localStorage.removeItem('user_token');
                 localStorage.removeItem('user_info');
                 window.location.href = '/login';
+            }
+
+            // API Key Management Methods
+            async loadApiKeyStatus() {
+                try {
+                    const response = await fetch('/user/api-key/status', {
+                        headers: {
+                            'Authorization': `Bearer ${this.authToken}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        this.updateApiKeyStatus(data);
+                    } else {
+                        this.updateApiKeyStatus({ has_key: false, message: 'Unable to load API key status' });
+                    }
+                } catch (error) {
+                    console.error('Error loading API key status:', error);
+                    this.updateApiKeyStatus({ has_key: false, message: 'Error loading API key status' });
+                }
+            }
+
+            updateApiKeyStatus(data) {
+                const statusCard = document.querySelector('.status-card');
+                const statusText = document.getElementById('api-key-status-text');
+                const editBtn = document.getElementById('edit-api-key-btn');
+                const removeBtn = document.getElementById('remove-api-key-btn');
+
+                statusCard.className = 'status-card';
+                
+                if (data.has_key) {
+                    statusCard.classList.add('has-key');
+                    statusText.textContent = data.message || 'API key is configured and working properly.';
+                    editBtn.innerHTML = '<i class="fas fa-edit"></i> Update API Key';
+                    if (removeBtn) removeBtn.style.display = 'inline-flex';
+                } else {
+                    statusCard.classList.add('no-key');
+                    statusText.textContent = data.message || 'No API key configured. Using shared service.';
+                    editBtn.innerHTML = '<i class="fas fa-plus"></i> Add API Key';
+                    if (removeBtn) removeBtn.style.display = 'none';
+                }
+            }
+
+            showApiKeyForm() {
+                const form = document.getElementById('api-key-form');
+                const input = document.getElementById('api-key-input');
+                
+                form.style.display = 'block';
+                input.focus();
+                
+                // Scroll to form
+                form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+
+            hideApiKeyForm() {
+                const form = document.getElementById('api-key-form');
+                const input = document.getElementById('api-key-input');
+                
+                form.style.display = 'none';
+                input.value = '';
+                this.showApiKeyMessage('', '');
+            }
+
+            toggleApiKeyVisibility() {
+                const input = document.getElementById('api-key-input');
+                const toggleBtn = document.getElementById('toggle-api-key-visibility');
+                const icon = toggleBtn.querySelector('i');
+                
+                if (input.type === 'password') {
+                    input.type = 'text';
+                    icon.className = 'fas fa-eye-slash';
+                } else {
+                    input.type = 'password';
+                    icon.className = 'fas fa-eye';
+                }
+            }
+
+            async testApiKey() {
+                const input = document.getElementById('api-key-input');
+                const testBtn = document.getElementById('test-api-key');
+                const apiKey = input.value.trim();
+
+                if (!apiKey) {
+                    this.showApiKeyMessage('Please enter an API key first.', 'error');
+                    return;
+                }
+
+                testBtn.disabled = true;
+                testBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
+
+                try {
+                    const response = await fetch('/user/api-key/test', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${this.authToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ api_key: apiKey })
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok && data.status === 'success') {
+                        this.showApiKeyMessage('✅ API key is valid and working!', 'success');
+                    } else {
+                        this.showApiKeyMessage(`❌ ${data.message || 'API key test failed'}`, 'error');
+                    }
+                } catch (error) {
+                    console.error('Error testing API key:', error);
+                    this.showApiKeyMessage('❌ Error testing API key. Please try again.', 'error');
+                } finally {
+                    testBtn.disabled = false;
+                    testBtn.innerHTML = '<i class="fas fa-check"></i> Test Key';
+                }
+            }
+
+            async submitApiKey(e) {
+                e.preventDefault();
+                
+                const submitBtn = e.target.querySelector('button[type="submit"]');
+                const formData = new FormData(e.target);
+                const apiKey = formData.get('api_key').trim();
+
+                if (!apiKey) {
+                    this.showApiKeyMessage('Please enter an API key.', 'error');
+                    return;
+                }
+
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+                try {
+                    const response = await fetch('/user/api-key', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${this.authToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ api_key: apiKey })
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok && data.status === 'success') {
+                        this.showApiKeyMessage('✅ API key saved successfully!', 'success');
+                        this.hideApiKeyForm();
+                        this.loadApiKeyStatus(); // Refresh status
+                    } else {
+                        this.showApiKeyMessage(`❌ ${data.message || 'Failed to save API key'}`, 'error');
+                    }
+                } catch (error) {
+                    console.error('Error saving API key:', error);
+                    this.showApiKeyMessage('❌ Error saving API key. Please try again.', 'error');
+                } finally {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="fas fa-save"></i> Save API Key';
+                }
+            }
+
+            async removeApiKey() {
+                if (!confirm('Are you sure you want to remove your API key? This will switch you back to the shared service.')) {
+                    return;
+                }
+
+                const removeBtn = document.getElementById('remove-api-key-btn');
+                removeBtn.disabled = true;
+                removeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Removing...';
+
+                try {
+                    const response = await fetch('/user/api-key', {
+                        method: 'DELETE',
+                        headers: {
+                            'Authorization': `Bearer ${this.authToken}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok && data.status === 'success') {
+                        this.showApiKeyMessage('✅ API key removed successfully!', 'success');
+                        this.loadApiKeyStatus(); // Refresh status
+                    } else {
+                        this.showApiKeyMessage(`❌ ${data.message || 'Failed to remove API key'}`, 'error');
+                    }
+                } catch (error) {
+                    console.error('Error removing API key:', error);
+                    this.showApiKeyMessage('❌ Error removing API key. Please try again.', 'error');
+                } finally {
+                    removeBtn.disabled = false;
+                    removeBtn.innerHTML = '<i class="fas fa-trash"></i> Remove API Key';
+                }
+            }
+
+            showApiKeyMessage(message, type) {
+                const messageEl = document.getElementById('api-key-message');
+                
+                if (!message) {
+                    messageEl.style.display = 'none';
+                    return;
+                }
+
+                messageEl.className = `message ${type}`;
+                messageEl.textContent = message;
+                messageEl.style.display = 'block';
+
+                // Auto-hide success messages after 5 seconds
+                if (type === 'success') {
+                    setTimeout(() => {
+                        messageEl.style.display = 'none';
+                    }, 5000);
+                }
             }
         }
 

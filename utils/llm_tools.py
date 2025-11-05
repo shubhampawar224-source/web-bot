@@ -79,15 +79,49 @@ def test_connectivity():
         print(f"❌ Connectivity test failed: {e}")
         return False
 
-def call_llm_with_fallback(prompt_text: str, max_retries: int = 3) -> str:
+def call_llm_with_fallback(prompt_text: str, max_retries: int = 3, custom_api_key: str = None) -> str:
     """Call LLM with fallback to direct OpenAI client if LangChain fails"""
+    
+    # Use custom API key if provided
+    active_openai_client = openai_client
+    active_llm = llm
+    
+    if custom_api_key:
+        print("Using custom API key for LLM call")
+        # Create temporary client with custom API key
+        try:
+            custom_openai_client = OpenAI(
+                api_key=custom_api_key,
+                timeout=30.0,
+                max_retries=3
+            )
+            active_openai_client = custom_openai_client
+            
+            # Create custom LangChain client
+            import httpx
+            custom_http_client = httpx.Client(
+                timeout=30.0,
+                limits=httpx.Limits(max_connections=10, max_keepalive_connections=5)
+            )
+            
+            active_llm = ChatOpenAI(
+                model_name="gpt-4o", 
+                temperature=0, 
+                openai_api_key=custom_api_key,
+                http_client=custom_http_client,
+                request_timeout=30
+            )
+        except Exception as e:
+            print(f"Error creating custom LLM client: {e}")
+            # Fall back to direct API call only
+            active_llm = None
     
     # Try LangChain ChatOpenAI first
     for attempt in range(max_retries):
         try:
-            if llm is not None:
+            if active_llm is not None:
                 print(f"Attempting LangChain call (attempt {attempt + 1}/{max_retries})")
-                response_obj = llm.invoke(prompt_text)
+                response_obj = active_llm.invoke(prompt_text)
                 return response_obj.content
         except (httpx.ConnectError, openai.APIConnectionError, Exception) as e:
             print(f"LangChain attempt {attempt + 1} failed: {e}")
@@ -99,9 +133,9 @@ def call_llm_with_fallback(prompt_text: str, max_retries: int = 3) -> str:
     # Fallback to direct OpenAI client
     for attempt in range(max_retries):
         try:
-            if openai_client is not None:
+            if active_openai_client is not None:
                 print(f"Attempting direct OpenAI call (attempt {attempt + 1}/{max_retries})")
-                response = openai_client.chat.completions.create(
+                response = active_openai_client.chat.completions.create(
                     model="gpt-4o",
                     messages=[{"role": "user", "content": prompt_text}],
                     temperature=0,
@@ -179,7 +213,7 @@ def load_firm_and_links(firm_id: int) -> Tuple[str, List[str]]:
 
 
 # ---------------- Main: Get Answer ----------------
-def get_answer_from_db(query: str, firm_id: int = None, session_id: Optional[str] = None, url_context: Optional[str] = None) -> str:
+def get_answer_from_db(query: str, firm_id: int = None, session_id: Optional[str] = None, url_context: Optional[str] = None, custom_api_key: str = None) -> str:
     """Get answer from database - supports both firm_id and URL-specific context"""
     session_id = session_id or str(uuid.uuid4())
 
@@ -247,7 +281,7 @@ def get_answer_from_db(query: str, firm_id: int = None, session_id: Optional[str
 
         # 6️⃣ LLM response with fallback handling
         print("Calling LLM for response...")
-        response_text = call_llm_with_fallback(prompt_text)
+        response_text = call_llm_with_fallback(prompt_text, custom_api_key=custom_api_key)
         
         # Check if we got a connectivity error message
         if "connectivity issues" in response_text:

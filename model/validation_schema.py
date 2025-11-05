@@ -45,7 +45,8 @@ class URLPayload(BaseModel):
 class ChatRequest(BaseModel):
     query: str
     session_id: str
-    firm_id: str    
+    firm_id: str
+    user_id: Optional[str] = None  # Optional user ID for personalized responses    
 
 
 class ContactIn(BaseModel):
