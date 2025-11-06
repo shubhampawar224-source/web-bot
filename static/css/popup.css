@@ -310,7 +310,7 @@
   font-size: 14px;
   white-space: normal;
   word-break: break-word;
-  background: linear-gradient(90deg,#10b981,#059669); /* default success color */
+  background: linear-gradient(90deg,#3b82f6,#2563eb); /* elegant blue gradient */
   border-radius: 8px;
   max-height: 60vh;
   overflow: auto;
@@ -318,7 +318,7 @@
 
 /* variant colors */
 #toast.info  .toast-body { background: linear-gradient(90deg,#0b79ff,#0466d9); }
-#toast.success .toast-body { background: linear-gradient(90deg,#10b981,#059669); }
+#toast.success .toast-body { background: linear-gradient(90deg,#3b82f6,#2563eb); }
 #toast.error   .toast-body { background: linear-gradient(90deg,#ef4444,#b91c1c); }
 
 /* prevent inherited full-width rules from affecting toast */

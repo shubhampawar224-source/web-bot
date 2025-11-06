@@ -456,7 +456,7 @@ body {
   right: 20px;
   min-width: 220px;
   max-width: 400px;
-  background-color: #2ecc71; /* success green */
+  background: linear-gradient(90deg,#3b82f6,#2563eb); /* elegant blue gradient */
   color: white;
   padding: 12px 18px;
   border-radius: 8px;

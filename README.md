@@ -34,12 +34,13 @@ uvicorn mains:app --reload --host 0.0.0.0 --port 8000
 ## for docker deploy 
 # go to the web-bot
 docker-compose build            
-docker-compose up
+DOCKER_BUILDKIT=1 docker build -t web-bot .
 
+for voice bot
 uvicorn my_agent:app --reload --host 0.0.0.0 --port 8000
 # use also this for run and deploy app
 
-Make the script executable:
-chmod +x deploy.sh
+# Make the script executable:
+# chmod +x deploy.sh
 
-./deploy.sh
+# ./deploy.sh

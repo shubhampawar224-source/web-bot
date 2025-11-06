@@ -607,6 +607,11 @@ async def user_dashboard():
     """Serve user dashboard"""
     return FileResponse("static/user_dashboard.html")
 
+@app.get("/new_wg", response_class=HTMLResponse)
+async def simple_chat_widget():
+    """Serve simple chat interface with default parameters at clean URL"""
+    return FileResponse("static/simple_index.html")
+
 
 @app.post("/admin/login", response_model=AdminResponse)
 async def admin_login(payload: AdminLoginRequest):

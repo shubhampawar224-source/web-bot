@@ -88,9 +88,6 @@ class ContactManager:
             "",
             f"Submitted at: {created_at_readable}",
             f"Email sent at: {sent_readable}",
-            "",
-            "Metadata:",
-            str(contact.get("metadata") or {}) if contact.get("metadata") and any(v for v in contact.get("metadata", {}).values() if v is not None) else "None",
         ]
         plain_body = "\n".join(plain_lines)
 
@@ -107,7 +104,6 @@ class ContactManager:
         <tr><td style="font-weight:600;padding:6px 8px;">Phone</td><td style="padding:6px 8px;">{contact.get('phone_number','')}</td></tr>
         <tr><td style="font-weight:600;padding:6px 8px;">Submitted at</td><td style="padding:6px 8px;">{created_at_readable}</td></tr>
       </table>
-      <div style="margin-top:12px;font-family:monospace;white-space:pre-wrap;">{((contact.get('metadata') and any(v for v in contact.get('metadata', {}).values() if v is not None)) and str(contact.get('metadata'))) or ''}</div>
     </div>
   </body>
 </html>

@@ -23,11 +23,11 @@ from voice_config.prompt_manager import voice_rag_prompt
 # ========================================
 load_dotenv(override=True)
 OPENAI_KEY = os.getenv("OPENAI_API_KEY")
-db_uri = os.getenv("DATABASE_URI", "sqlite:///voice_data.db")
+# Use the main application database that contains firms, websites, and pages data
+db_uri = os.getenv("DATABASE_URL", "sqlite:///./kitkool_bot.db")
 
 if not OPENAI_KEY:
     raise RuntimeError("Please set OPENAI_API_KEY in .env")
-
 
 # ========================================
 # DYNAMIC SCHEMA HANDLER
@@ -89,10 +89,10 @@ class MemoryManager:
         for sid in expired:
             del self.memories[sid]
 
-
 # ========================================
 # VOICE ASSISTANT CLASS
 # ========================================
+
 class VoiceAssistant:
     def __init__(self):
         self.client = OpenAI(api_key=OPENAI_KEY)
@@ -113,8 +113,8 @@ class VoiceAssistant:
             allowed_columns=allowed_columns
         )
 
-        # --- Custom prompt with schema summary (not full dump) ---
-        self.prompt = voice_rag_prompt()
+        # --- Custom prompt with actual schema summary ---
+        self.prompt = voice_rag_prompt(schema_summary)
 
         # --- SQL Agent ---
         self.voice_agent = create_sql_agent(
@@ -210,21 +210,49 @@ class VoiceAssistant:
             memory = self.memory_manager.get_memory(session_id)
             memory.chat_memory.add_user_message(user_text)
 
-            result = self.voice_agent.invoke({"input": user_text})
+            # Add context to help the agent understand it's a voice interface
+            enhanced_input = f"Voice query: {user_text}"
+            
+            result = self.voice_agent.invoke({"input": enhanced_input})
             bot_text = result.get("output", "") if isinstance(result, dict) else str(result)
 
-            bot_text = re.sub(r"(User:|Bot:|created on|\d{4}-\d{2}-\d{2})", "", bot_text, flags=re.I).strip()
-            bot_text = bot_text.replace(user_text, "").strip()
-
-            if not bot_text:
-                bot_text = "I’m sorry, I could not find the requested information."
+            # Clean up the response for voice output
+            bot_text = self.clean_response(bot_text, user_text)
+            
+            if not bot_text or len(bot_text.strip()) < 5:
+                bot_text = "I'm sorry, I couldn't find the information you're looking for. Could you try asking in a different way?"
 
             memory.chat_memory.add_ai_message(bot_text)
             return bot_text
 
         except Exception as e:
             print(f"❌ Agent error: {e}")
-            return "I’m sorry, I could not process your request."
+            return "I'm sorry, I encountered an issue while searching for that information. Please try again."
+    
+    def clean_response(self, text: str, user_text: str) -> str:
+        """Clean and optimize response for voice output"""
+        if not text:
+            return ""
+            
+        # Remove common SQL/technical artifacts
+        text = re.sub(r"(User:|Bot:|Assistant:|Human:|created on|\d{4}-\d{2}-\d{2})", "", text, flags=re.I)
+        text = re.sub(r"Voice query:", "", text, flags=re.I)
+        text = re.sub(r"JSON_EXTRACT|scraped_data|sql|query", "", text, flags=re.I)
+        text = text.replace(user_text, "").strip()
+        
+        # Remove excessive whitespace and newlines
+        text = re.sub(r'\s+', ' ', text)
+        text = text.strip()
+        
+        # Remove any remaining technical jargon
+        text = re.sub(r'\$\.\w+\.[\w.]+', '', text)  # Remove JSON path expressions
+        text = re.sub(r'LIKE\s*%\w+%', '', text, flags=re.I)  # Remove SQL LIKE expressions
+        
+        # Ensure response is conversational
+        if text and not text.endswith(('?', '.', '!', ':')):
+            text += "."
+            
+        return text
 
     # -------------------------
     # Text-to-speech + Send
@@ -232,7 +260,7 @@ class VoiceAssistant:
     async def safe_send(self, ws: WebSocket, text: str):
         try:
             tts = self.client.audio.speech.create(
-                model="gpt-4o-mini-tts", voice="alloy", input=text
+                model="tts-1", voice="alloy", input=text
             )
             audio_stream = io.BytesIO(tts.read())
             audio_b64 = base64.b64encode(audio_stream.getvalue()).decode()
@@ -242,4 +270,4 @@ class VoiceAssistant:
         except Exception as e:
             print(f"TTS Error: {e}")
             if ws.client_state.name == "CONNECTED":
-                await ws.send_json({"bot_text": "I couldn’t speak the response.", "audio": ""})
+                await ws.send_json({"bot_text": "I couldn't speak the response.", "audio": ""})
