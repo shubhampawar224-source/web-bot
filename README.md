@@ -33,6 +33,8 @@ uvicorn mains:app --reload --host 0.0.0.0 --port 8000
 
 ## for docker deploy 
 # go to the web-bot
+docker compose build --no-cache docker compose up -d
+or 
 docker-compose build            
 DOCKER_BUILDKIT=1 docker build -t web-bot .
 
@@ -44,3 +46,9 @@ uvicorn my_agent:app --reload --host 0.0.0.0 --port 8000
 # chmod +x deploy.sh
 
 # ./deploy.sh
+
+my server widgets,admin and user 
+http://127.0.0.1:8000/admin
+http://127.0.0.1:8000/widget
+http://localhost:8000/new_wg
+https://mickie-springy-unaccusingly.ngrok-free.dev/dashboard

@@ -166,9 +166,18 @@ class VoiceAssistant:
     async def silence_watchdog(self, ws: WebSocket):
         try:
             await asyncio.sleep(self.SILENCE_TIMEOUT)
+            # Check if WebSocket is still connected before sending timeout message
             if ws.client_state.name == "CONNECTED":
-                await ws.send_json({"bot_text": "No input detected. Ending the session.", "audio": ""})
-                await ws.close()
+                try:
+                    await ws.send_json({"bot_text": "No input detected. Ending the session.", "audio": ""})
+                    await ws.close()
+                except Exception as e:
+                    print(f"Error sending timeout message: {e}")
+                    # Try to close anyway
+                    try:
+                        await ws.close()
+                    except:
+                        pass
         except asyncio.CancelledError:
             pass
 
@@ -176,6 +185,11 @@ class VoiceAssistant:
     # Audio -> Text -> Agent
     # -------------------------
     async def process_audio(self, ws: WebSocket, audio_bytes: bytes, session_id: str):
+        # Check if WebSocket is still connected
+        if ws.client_state.name != "CONNECTED":
+            print("WebSocket disconnected during audio processing")
+            return None
+            
         audio_file = io.BytesIO(audio_bytes)
         audio_file.name = "input.wav"
 
@@ -219,6 +233,10 @@ class VoiceAssistant:
             # Clean up the response for voice output
             bot_text = self.clean_response(bot_text, user_text)
             
+            # Check for agent timeout/iteration limit and ask user to repeat
+            if "agent stopped due to iteration limit" in bot_text.lower() or "agent stopped due to time limit" in bot_text.lower():
+                bot_text = f"I need more time to process that question. Could you please ask the same question again? Your question was: '{user_text}'"
+            
             if not bot_text or len(bot_text.strip()) < 5:
                 bot_text = "I'm sorry, I couldn't find the information you're looking for. Could you try asking in a different way?"
 
@@ -230,25 +248,18 @@ class VoiceAssistant:
             return "I'm sorry, I encountered an issue while searching for that information. Please try again."
     
     def clean_response(self, text: str, user_text: str) -> str:
-        """Clean and optimize response for voice output"""
+        """Basic cleanup for voice output - main filtering done by prompt"""
         if not text:
             return ""
             
-        # Remove common SQL/technical artifacts
-        text = re.sub(r"(User:|Bot:|Assistant:|Human:|created on|\d{4}-\d{2}-\d{2})", "", text, flags=re.I)
-        text = re.sub(r"Voice query:", "", text, flags=re.I)
-        text = re.sub(r"JSON_EXTRACT|scraped_data|sql|query", "", text, flags=re.I)
+        # Remove any remaining user query echo
         text = text.replace(user_text, "").strip()
         
-        # Remove excessive whitespace and newlines
-        text = re.sub(r'\s+', ' ', text)
+        # Basic cleanup only
+        text = re.sub(r'\s+', ' ', text)  # Multiple spaces to single space
         text = text.strip()
         
-        # Remove any remaining technical jargon
-        text = re.sub(r'\$\.\w+\.[\w.]+', '', text)  # Remove JSON path expressions
-        text = re.sub(r'LIKE\s*%\w+%', '', text, flags=re.I)  # Remove SQL LIKE expressions
-        
-        # Ensure response is conversational
+        # Ensure response ends properly
         if text and not text.endswith(('?', '.', '!', ':')):
             text += "."
             
@@ -259,15 +270,28 @@ class VoiceAssistant:
     # -------------------------
     async def safe_send(self, ws: WebSocket, text: str):
         try:
+            # Check if WebSocket is still open
+            if ws.client_state.name != "CONNECTED":
+                print(f"WebSocket not connected, state: {ws.client_state.name}")
+                return
+                
             tts = self.client.audio.speech.create(
                 model="tts-1", voice="alloy", input=text
             )
             audio_stream = io.BytesIO(tts.read())
             audio_b64 = base64.b64encode(audio_stream.getvalue()).decode()
 
+            # Double-check before sending
             if ws.client_state.name == "CONNECTED":
                 await ws.send_json({"bot_text": text, "audio": audio_b64})
+            else:
+                print("WebSocket closed before sending audio response")
+                
         except Exception as e:
-            print(f"TTS Error: {e}")
-            if ws.client_state.name == "CONNECTED":
-                await ws.send_json({"bot_text": "I couldn't speak the response.", "audio": ""})
+            print(f"TTS/Send Error: {e}")
+            # Only try to send error message if WebSocket is still connected
+            try:
+                if ws.client_state.name == "CONNECTED":
+                    await ws.send_json({"bot_text": "I couldn't speak the response.", "audio": ""})
+            except Exception as send_error:
+                print(f"Failed to send error message: {send_error}")
