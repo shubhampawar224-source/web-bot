@@ -95,9 +95,9 @@
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a href="#admin-bot" class="nav-link" data-section="admin-bot" data-tooltip="Admin Bot">
-                                <i class="fas fa-robot"></i>
-                                <span>Admin Bot</span>
+                            <a href="#admin-bot" class="nav-link" data-section="admin-bot" data-tooltip="API Keys">
+                                <i class="fas fa-key"></i>
+                                <span>API Keys</span>
                             </a>
                         </li>
                     </ul>
@@ -416,7 +416,7 @@
             <!-- Admin Bot Section -->
             <section id="admin-bot-section" class="content-section">
                 <div class="section-header">
-                    <h2><i class="fas fa-robot"></i> Admin Bot Configuration</h2>
+                    <h2><i class="fas fa-key"></i> API Key Management</h2>
                     <div class="section-actions">
                         <button id="update-admin-api-key" class="btn btn-primary" style="display: none;">
                             <i class="fas fa-key"></i> <span id="api-button-text">Add API Key</span>
@@ -430,8 +430,8 @@
                         <div class="status-indicator">
                             <i id="api-status-icon" class="fas fa-times-circle" style="color: #dc2626;"></i>
                             <div class="status-text">
-                                <h3>API Key Status</h3>
-                                <p id="api-status-message">No API key configured</p>
+                                <h3>OpenAI API Key Status</h3>
+                                <p id="api-status-message">OpenAI API key required for bot functionality - Please configure your key</p>
                             </div>
                         </div>
                     </div>
@@ -439,7 +439,7 @@
 
                 <!-- API Key Configuration Form -->
                 <div id="api-key-form-container" class="content-card" style="display: none;">
-                    <h3><i class="fas fa-cog"></i> Configure Your Bot</h3>
+                    <h3><i class="fas fa-key"></i> OpenAI API Key Configuration</h3>
                     <form id="admin-api-key-form">
                         <div class="form-group">
                             <label for="admin-api-key">OpenAI API Key</label>
@@ -451,7 +451,7 @@
                                 </button>
                             </div>
                             <small class="form-text text-muted">
-                                Get your API key from <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI Platform</a>
+                                Your API key will be encrypted and stored securely. Get your key from <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI Platform</a>
                             </small>
                         </div>
                         
@@ -464,26 +464,6 @@
                             </button>
                         </div>
                     </form>
-                </div>
-
-                <!-- Bot Test Area -->
-                <div id="bot-test-section" class="content-card" style="display: none;">
-                    <h3><i class="fas fa-comments"></i> Test Your Bot</h3>
-                    <div class="chat-test-container">
-                        <div class="form-group">
-                            <label for="test-message">Send a message to your bot</label>
-                            <textarea id="test-message" class="form-control" rows="3" 
-                                      placeholder="Type your message here...">Hello! Can you help me test the bot?</textarea>
-                        </div>
-                        <button type="button" id="send-test-message" class="btn btn-success">
-                            <i class="fas fa-paper-plane"></i> Send Message
-                        </button>
-                        
-                        <div id="bot-response-container" class="bot-response-container" style="display: none;">
-                            <h5>Bot Response:</h5>
-                            <div id="bot-response-text" class="bot-response-text"></div>
-                        </div>
-                    </div>
                 </div>
             </section>
         </main>
@@ -666,7 +646,7 @@
             }
         }
         
-        // Add click event to hamburger button as backup
+        // Add click event to hamburger button as backup (only if AdminDashboard is not available)
         document.addEventListener('DOMContentLoaded', function() {
             console.log('🔧 Adding backup handlers...');
             const toggleBtn = document.getElementById('sidebar-toggle');
@@ -674,6 +654,14 @@
                 console.log('✅ Found sidebar toggle button');
                 toggleBtn.addEventListener('click', function(e) {
                     console.log('🖱️ Backup handler: Sidebar toggle clicked');
+                    
+                    // Only use backup handler if AdminDashboard is not available
+                    if (window.adminDashboard && window.adminDashboard.toggleSidebar) {
+                        console.log('🎯 AdminDashboard available, letting it handle the click');
+                        return; // Let AdminDashboard handle it
+                    }
+                    
+                    console.log('🚨 AdminDashboard not available, using backup handler');
                     e.preventDefault();
                     e.stopPropagation();
                     simpleSidebarToggle();

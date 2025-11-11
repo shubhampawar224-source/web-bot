@@ -2,6 +2,8 @@ from datetime import datetime, timedelta
 from typing import Optional
 import secrets
 import hashlib
+import base64
+from cryptography.fernet import Fernet
 from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text
 from database.db import Base
 
@@ -23,6 +25,12 @@ class AdminUser(Base):
     profile_picture = Column(String(500), nullable=True)
     auth_provider = Column(String(50), default="local")  # "local" or "google"
     
+    # GPT API Key field (encrypted)
+    gpt_api_key_encrypted = Column(Text, nullable=True)
+    
+    # Encryption key for API keys (generated per app instance)
+    _encryption_key = None
+    
     @staticmethod
     def hash_password(password: str) -> str:
         """Hash password using SHA256"""
@@ -33,6 +41,41 @@ class AdminUser(Base):
         if not self.password_hash:
             return False  # OAuth users don't have password
         return self.password_hash == self.hash_password(password)
+    
+    @classmethod
+    def _get_encryption_key(cls):
+        """Get or create encryption key for API keys"""
+        if cls._encryption_key is None:
+            # Use a fixed key for this application instance
+            # In production, this should be stored securely
+            cls._encryption_key = Fernet.generate_key()
+        return cls._encryption_key
+    
+    def set_gpt_api_key(self, api_key: str) -> None:
+        """Encrypt and store GPT API key"""
+        if api_key:
+            cipher = Fernet(self._get_encryption_key())
+            encrypted_key = cipher.encrypt(api_key.encode())
+            self.gpt_api_key_encrypted = base64.b64encode(encrypted_key).decode()
+        else:
+            self.gpt_api_key_encrypted = None
+    
+    def get_gpt_api_key(self) -> Optional[str]:
+        """Decrypt and return GPT API key"""
+        if not self.gpt_api_key_encrypted:
+            return None
+        
+        try:
+            cipher = Fernet(self._get_encryption_key())
+            encrypted_key = base64.b64decode(self.gpt_api_key_encrypted.encode())
+            return cipher.decrypt(encrypted_key).decode()
+        except Exception as e:
+            print(f"Error decrypting API key: {e}")
+            return None
+    
+    def has_gpt_api_key(self) -> bool:
+        """Check if admin has a GPT API key configured"""
+        return self.gpt_api_key_encrypted is not None
     
     @classmethod
     def create_admin(cls, username: str, email: str, password: str = None, full_name: str = None, 

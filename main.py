@@ -2322,6 +2322,125 @@ async def admin_bulk_delete_urls(payload: dict, request: Request):
     finally:
         db.close()
 
+# Admin Bot Configuration Endpoints
+@app.get("/admin/bot-status")
+async def get_admin_bot_status(request: Request):
+    """Get admin bot configuration status"""
+    admin_info = await verify_admin_auth(request)
+    
+    db: Session = SessionLocal()
+    try:
+        from model.admin_models import AdminUser
+        
+        admin_user = db.query(AdminUser).filter(AdminUser.id == admin_info['id']).first()
+        if not admin_user:
+            raise HTTPException(status_code=404, detail="Admin user not found")
+        
+        return {
+            "status": "success",
+            "hasApiKey": admin_user.has_gpt_api_key()
+        }
+    except Exception as e:
+        print(f"Error getting admin bot status: {e}")
+        return {"status": "error", "message": "Failed to get bot status"}
+    finally:
+        db.close()
+
+@app.post("/admin/save-api-key")
+async def save_admin_api_key(request: Request):
+    """Save admin's GPT API key"""
+    admin_info = await verify_admin_auth(request)
+    
+    try:
+        body = await request.json()
+        api_key = body.get('apiKey', '').strip()
+        
+        if not api_key:
+            return {"status": "error", "message": "API key is required"}
+        
+        if not api_key.startswith('sk-'):
+            return {"status": "error", "message": "Invalid API key format"}
+        
+        db: Session = SessionLocal()
+        try:
+            from model.admin_models import AdminUser
+            
+            admin_user = db.query(AdminUser).filter(AdminUser.id == admin_info['id']).first()
+            if not admin_user:
+                raise HTTPException(status_code=404, detail="Admin user not found")
+            
+            admin_user.set_gpt_api_key(api_key)
+            db.commit()
+            
+            return {
+                "status": "success",
+                "message": "API key saved successfully"
+            }
+        finally:
+            db.close()
+            
+    except Exception as e:
+        print(f"Error saving admin API key: {e}")
+        return {"status": "error", "message": "Failed to save API key"}
+
+@app.post("/admin/test-bot")
+async def test_admin_bot(request: Request):
+    """Test admin bot with their API key"""
+    admin_info = await verify_admin_auth(request)
+    
+    try:
+        body = await request.json()
+        message = body.get('message', '').strip()
+        
+        if not message:
+            return {"status": "error", "message": "Message is required"}
+        
+        db: Session = SessionLocal()
+        try:
+            from model.admin_models import AdminUser
+            import openai
+            
+            admin_user = db.query(AdminUser).filter(AdminUser.id == admin_info['id']).first()
+            if not admin_user:
+                raise HTTPException(status_code=404, detail="Admin user not found")
+            
+            api_key = admin_user.get_gpt_api_key()
+            if not api_key:
+                return {"status": "error", "message": "No API key configured"}
+            
+            # Test the bot with admin's API key
+            client = openai.OpenAI(api_key=api_key)
+            
+            response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant for testing admin bot functionality."},
+                    {"role": "user", "content": message}
+                ],
+                max_tokens=150,
+                temperature=0.7
+            )
+            
+            return {
+                "status": "success",
+                "response": response.choices[0].message.content
+            }
+            
+        except Exception as e:
+            error_msg = str(e)
+            if "invalid_api_key" in error_msg.lower():
+                return {"status": "error", "message": "Invalid API key"}
+            elif "quota" in error_msg.lower():
+                return {"status": "error", "message": "API quota exceeded"}
+            else:
+                return {"status": "error", "message": f"OpenAI API error: {error_msg}"}
+        finally:
+            db.close()
+            
+    except Exception as e:
+        print(f"Error testing admin bot: {e}")
+        return {"status": "error", "message": "Failed to test bot"}
+
 @app.middleware("http")
 async def frame_headers_middleware(request: Request, call_next):
     resp = await call_next(request)

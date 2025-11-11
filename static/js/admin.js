@@ -2,9 +2,15 @@
 class AdminDashboard {
     constructor() {
         console.log('🏗️ AdminDashboard constructor called');
+        
+        // Set global reference immediately
+        window.adminDashboard = this;
+        
         this.authToken = localStorage.getItem('admin_token');
         this.adminInfo = JSON.parse(localStorage.getItem('admin_info') || '{}');
         this.currentSection = 'dashboard';
+        this.eventsbound = false; // Flag to prevent multiple event bindings
+        this.loggingOut = false; // Flag to prevent multiple logout toasts
         
         console.log('📋 Constructor state:', {
             hasToken: !!this.authToken,
@@ -62,6 +68,12 @@ class AdminDashboard {
     }
 
     bindEvents() {
+        // Prevent multiple event listener bindings
+        if (this.eventsbound) {
+            return;
+        }
+        this.eventsbound = true;
+        
         // Login form
         const loginForm = document.getElementById('login-form');
         if (loginForm) {
@@ -186,7 +198,6 @@ class AdminDashboard {
         // Admin Bot functionality
         window.toggleApiKeyVisibility = () => this.toggleApiKeyVisibility();
         window.saveApiKey = () => this.saveApiKey();
-        window.testBot = () => this.testBot();
 
         // Admin Bot event listeners
         const updateApiKeyBtn = document.getElementById('update-admin-api-key');
@@ -210,11 +221,6 @@ class AdminDashboard {
         const toggleAdminKey = document.getElementById('toggle-admin-key');
         if (toggleAdminKey) {
             toggleAdminKey.addEventListener('click', () => this.toggleApiKeyVisibility());
-        }
-
-        const sendTestMessage = document.getElementById('send-test-message');
-        if (sendTestMessage) {
-            sendTestMessage.addEventListener('click', () => this.testBot());
         }
     }
 
@@ -261,7 +267,9 @@ class AdminDashboard {
                     console.error('❌ Error loading dashboard data (non-critical):', error);
                 }
                 
-                this.showToast('Login successful!', 'success');
+                // Show personalized welcome message
+                const adminName = this.adminInfo.full_name || this.adminInfo.username || 'Admin';
+                this.showToast(`Welcome back, ${adminName}!`, 'success');
                 console.log('✅ Admin login process completed successfully');
             } else {
                 console.log('❌ Login failed:', data.message);
@@ -385,7 +393,16 @@ class AdminDashboard {
     }
 
     async handleLogout(e) {
-        e.preventDefault();
+        // Prevent multiple logout operations
+        if (this.loggingOut) {
+            return;
+        }
+        this.loggingOut = true;
+        
+        // Only prevent default if this is a manual logout (has event)
+        if (e) {
+            e.preventDefault();
+        }
         
         try {
             await fetch('/admin/logout', {
@@ -398,12 +415,16 @@ class AdminDashboard {
             console.error('Logout error:', error);
         } finally {
             this.clearSession();
-            this.showToast('Logged out successfully', 'info');
+            
+            // Only show toast for manual logout (when event exists)
+            if (e) {
+                this.showToast('Logged out successfully', 'info');
+            }
             
             // Redirect to login page after a short delay to show the toast
             setTimeout(() => {
                 window.location.href = '/admin';
-            }, 1000);
+            }, e ? 1000 : 0); // Shorter delay for automatic logout
         }
     }
 
@@ -532,7 +553,8 @@ class AdminDashboard {
                 await this.loadFirms();
                 break;
             case 'user-management':
-                await this.loadAdminUsers();
+                await this.loadUsers(); // Load regular users by default (active tab)
+                await this.loadAdminUsers(); // Also prepare admin users data
                 break;
             case 'admin-bot':
                 await this.loadAdminBotSection();
@@ -547,7 +569,12 @@ class AdminDashboard {
 
     async loadAdminBotSection() {
         try {
-            const response = await fetch('/admin/bot-status');
+            const response = await fetch('/admin/bot-status', {
+                headers: {
+                    'Authorization': `Bearer ${this.authToken}`,
+                    'Content-Type': 'application/json',
+                }
+            });
             const data = await response.json();
             this.updateApiKeyStatus(data.hasApiKey || false);
         } catch (error) {
@@ -562,22 +589,19 @@ class AdminDashboard {
         const updateButton = document.getElementById('update-admin-api-key');
         const buttonText = document.getElementById('api-button-text');
         const formContainer = document.getElementById('api-key-form-container');
-        const testSection = document.getElementById('bot-test-section');
 
         if (hasApiKey) {
             statusIcon.className = 'fas fa-check-circle';
             statusIcon.style.color = '#059669';
-            statusMessage.textContent = 'API key is configured and ready to use';
+            statusMessage.textContent = 'OpenAI API key is stored securely and ready for bot operations';
             updateButton.style.display = 'inline-flex';
             buttonText.textContent = 'Update API Key';
-            testSection.style.display = 'block';
         } else {
             statusIcon.className = 'fas fa-times-circle';
             statusIcon.style.color = '#dc2626';
-            statusMessage.textContent = 'No API key configured';
+            statusMessage.textContent = 'OpenAI API key required for bot functionality - Please configure your key';
             updateButton.style.display = 'inline-flex';
             buttonText.textContent = 'Add API Key';
-            testSection.style.display = 'none';
         }
         
         // Hide form by default
@@ -611,6 +635,7 @@ class AdminDashboard {
             const response = await fetch('/admin/save-api-key', {
                 method: 'POST',
                 headers: {
+                    'Authorization': `Bearer ${this.authToken}`,
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({ apiKey }),
@@ -630,55 +655,6 @@ class AdminDashboard {
             console.error('Error saving API key:', error);
             this.showToast('Error saving API key', 'error');
         }
-    }
-
-    async testBot() {
-        const message = document.getElementById('test-message').value.trim();
-        
-        if (!message) {
-            this.showToast('Please enter a test message', 'error');
-            return;
-        }
-
-        try {
-            this.showBotResponse('Testing...', true);
-            
-            const response = await fetch('/admin/test-bot', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ message }),
-            });
-
-            const result = await response.json();
-
-            if (response.ok) {
-                this.showBotResponse(result.response);
-            } else {
-                this.showBotResponse(`Error: ${result.message || 'Failed to test bot'}`, false);
-            }
-        } catch (error) {
-            console.error('Error testing bot:', error);
-            this.showBotResponse('Error: Failed to communicate with bot', false);
-        }
-    }
-
-    showBotResponse(text, isLoading = false) {
-        const container = document.getElementById('bot-response-container');
-        const responseText = document.getElementById('bot-response-text');
-        
-        if (isLoading) {
-            responseText.textContent = text;
-            responseText.style.fontStyle = 'italic';
-            responseText.style.color = '#6b7280';
-        } else {
-            responseText.textContent = text;
-            responseText.style.fontStyle = 'normal';
-            responseText.style.color = '#111827';
-        }
-        
-        container.style.display = 'block';
     }
 
     showApiKeyForm() {
@@ -1876,7 +1852,18 @@ function toggleSidebarManual() {
 
 // Initialize admin dashboard when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    window.adminDashboard = new AdminDashboard();
+    // Prevent multiple instances
+    if (!window.adminDashboard) {
+        console.log('🚀 Initializing AdminDashboard...');
+        try {
+            window.adminDashboard = new AdminDashboard();
+            console.log('✅ AdminDashboard instantiated successfully');
+        } catch (error) {
+            console.error('❌ Error instantiating AdminDashboard:', error);
+        }
+    } else {
+        console.log('⚠️ AdminDashboard already exists, skipping initialization');
+    }
 });
 
 // Global functions for modal close buttons
@@ -1900,24 +1887,18 @@ function hideBulkDeleteConfirmation() {
     }
 }
 
-// Initialize AdminDashboard when DOM is ready
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('🚀 Initializing AdminDashboard...');
-    try {
-        window.adminDashboard = new AdminDashboard();
-        console.log('✅ AdminDashboard instantiated successfully');
-    } catch (error) {
-        console.error('❌ Error instantiating AdminDashboard:', error);
-    }
-});
-
 // Fallback for when DOMContentLoaded has already fired
 if (document.readyState !== 'loading') {
-    console.log('✅ DOM already loaded - Initializing AdminDashboard now');
-    try {
-        window.adminDashboard = new AdminDashboard();
-        console.log('✅ AdminDashboard instantiated successfully (fallback)');
-    } catch (error) {
-        console.error('❌ Error instantiating AdminDashboard (fallback):', error);
+    // Only create if it doesn't already exist
+    if (!window.adminDashboard) {
+        console.log('✅ DOM already loaded - Initializing AdminDashboard now');
+        try {
+            window.adminDashboard = new AdminDashboard();
+            console.log('✅ AdminDashboard instantiated successfully (fallback)');
+        } catch (error) {
+            console.error('❌ Error instantiating AdminDashboard (fallback):', error);
+        }
+    } else {
+        console.log('⚠️ AdminDashboard already exists, skipping fallback initialization');
     }
 }
