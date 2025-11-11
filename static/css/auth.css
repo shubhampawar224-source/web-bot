@@ -9,11 +9,13 @@
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    min-height: 100vh;
+    height: 100vh;
+    overflow: hidden;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 20px;
+    padding: 0;
+    margin: 0;
 }
 
 .auth-container {
@@ -23,7 +25,10 @@ body {
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
     width: 100%;
     max-width: 500px;
+    max-height: 100vh;
+    overflow-y: auto;
     backdrop-filter: blur(10px);
+    margin: 20px;
 }
 
 .auth-header {
@@ -182,14 +187,47 @@ input[type="tel"]:focus {
 }
 
 /* Responsive design */
-@media (max-width: 480px) {
+@media (min-width: 1200px) {
     .auth-container {
-        padding: 30px 20px;
+        max-width: 450px;
+    }
+}
+
+@media (max-width: 768px) {
+    .auth-container {
+        margin: 15px;
+        padding: 30px 25px;
+    }
+}
+
+@media (max-width: 480px) {
+    body {
+        padding: 0;
+    }
+    
+    .auth-container {
+        padding: 20px 15px;
         margin: 10px;
+        max-height: calc(100vh - 20px);
+        border-radius: 10px;
     }
     
     .auth-header h1 {
         font-size: 1.5rem;
+        margin-bottom: 5px;
+    }
+    
+    .auth-header {
+        margin-bottom: 20px;
+    }
+    
+    .form-group {
+        margin-bottom: 15px;
+    }
+    
+    .auth-footer {
+        margin-top: 20px;
+        padding-top: 15px;
     }
 }
 

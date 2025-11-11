@@ -95,17 +95,67 @@
         .password-requirements {
             font-size: 0.8rem;
             color: #666;
-            margin-top: 5px;
-            line-height: 1.4;
+            margin-top: 8px;
+            line-height: 1.5;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            border: 1px solid #e9ecef;
+            display: none; /* Hide by default */
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: all 0.3s ease;
+        }
+
+        .password-requirements.show {
+            display: block;
+            opacity: 1;
+            transform: translateY(0);
         }
 
         .requirement {
             color: #e74c3c;
-            transition: color 0.3s ease;
+            transition: all 0.3s ease;
+            margin: 3px 0;
+            font-weight: 500;
         }
 
         .requirement.valid {
             color: #27ae60;
+        }
+
+        .requirement:before {
+            content: '';
+            margin-right: 5px;
+        }
+
+        #password-strength {
+            margin-top: 5px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .password-match-icon {
+            transition: all 0.3s ease;
+        }
+
+        /* Enhanced focus states */
+        input[type="password"]:focus {
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        /* Success state for inputs */
+        input.valid {
+            border-color: #27ae60 !important;
+            box-shadow: 0 0 0 3px rgba(39, 174, 96, 0.1) !important;
+        }
+
+        /* Error state for inputs */
+        input.invalid {
+            border-color: #e74c3c !important;
+            box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.1) !important;
         }
 
         .submit-btn {
@@ -212,7 +262,6 @@
     <div class="auth-container">
         <div class="auth-header">
             <h1>Create Account</h1>
-            <p>Join KitKool to access our services</p>
         </div>
 
         <div id="error-message" class="error-message hidden"></div>
@@ -314,19 +363,108 @@
                 special: document.getElementById('req-special')
             };
 
-            let isValid = true;
+            const requirementsContainer = document.querySelector('.password-requirements');
+            
+            // Show/hide requirements based on password input
+            if (password.length > 0) {
+                requirementsContainer.classList.add('show');
+            } else {
+                requirementsContainer.classList.remove('show');
+                // Also hide strength indicator when password is empty
+                const strengthIndicator = document.getElementById('password-strength');
+                if (strengthIndicator) {
+                    strengthIndicator.style.display = 'none';
+                }
+                // Reset password field styling
+                const passwordField = document.getElementById('password');
+                passwordField.style.borderColor = '#e1e5e9';
+                passwordField.style.boxShadow = 'none';
+                return true; // Return true for empty password to avoid errors
+            }
 
+            let isValid = true;
+            let validCount = 0;
+
+            // Check each requirement and update visual feedback
             for (const [key, regex] of Object.entries(requirements)) {
                 const element = reqElements[key];
                 if (regex.test(password)) {
                     element.classList.add('valid');
+                    element.style.color = '#27ae60';
+                    element.innerHTML = element.innerHTML.replace('•', '✓');
+                    validCount++;
                 } else {
                     element.classList.remove('valid');
+                    element.style.color = '#e74c3c';
+                    element.innerHTML = element.innerHTML.replace('✓', '•');
                     isValid = false;
                 }
             }
 
+            // Update password field border based on validation
+            const passwordField = document.getElementById('password');
+            if (isValid) {
+                passwordField.style.borderColor = '#27ae60';
+                passwordField.style.boxShadow = '0 0 0 3px rgba(39, 174, 96, 0.1)';
+            } else {
+                passwordField.style.borderColor = '#e74c3c';
+                passwordField.style.boxShadow = '0 0 0 3px rgba(231, 76, 60, 0.1)';
+            }
+
+            // Update password strength indicator
+            updatePasswordStrength(validCount);
+
             return isValid;
+        }
+
+        function updatePasswordStrength(validCount) {
+            let strengthText = '';
+            let strengthColor = '';
+            
+            switch(validCount) {
+                case 0:
+                case 1:
+                    strengthText = 'Very Weak';
+                    strengthColor = '#e74c3c';
+                    break;
+                case 2:
+                    strengthText = 'Weak';
+                    strengthColor = '#f39c12';
+                    break;
+                case 3:
+                    strengthText = 'Fair';
+                    strengthColor = '#f1c40f';
+                    break;
+                case 4:
+                    strengthText = 'Good';
+                    strengthColor = '#3498db';
+                    break;
+                case 5:
+                    strengthText = 'Strong';
+                    strengthColor = '#27ae60';
+                    break;
+            }
+
+            // Update or create strength indicator
+            let strengthIndicator = document.getElementById('password-strength');
+            if (!strengthIndicator) {
+                strengthIndicator = document.createElement('div');
+                strengthIndicator.id = 'password-strength';
+                strengthIndicator.style.marginTop = '5px';
+                strengthIndicator.style.fontSize = '0.8rem';
+                strengthIndicator.style.fontWeight = '500';
+                const passwordGroup = document.getElementById('password').parentNode;
+                const requirements = passwordGroup.querySelector('.password-requirements');
+                passwordGroup.insertBefore(strengthIndicator, requirements);
+            }
+
+            if (document.getElementById('password').value.length > 0) {
+                strengthIndicator.textContent = `Password Strength: ${strengthText}`;
+                strengthIndicator.style.color = strengthColor;
+                strengthIndicator.style.display = 'block';
+            } else {
+                strengthIndicator.style.display = 'none';
+            }
         }
 
         function validateForm() {
@@ -364,22 +502,100 @@
             return true;
         }
 
-        // Real-time password validation
-        passwordInput.addEventListener('input', function() {
-            validatePassword(this.value);
-        });
-
-        // Password confirmation validation
-        confirmPasswordInput.addEventListener('input', function() {
-            const password = passwordInput.value;
-            const confirmPassword = this.value;
-            
-            if (confirmPassword && password !== confirmPassword) {
-                this.style.borderColor = '#e74c3c';
-            } else {
-                this.style.borderColor = '#e1e5e9';
+        // Real-time password validation with multiple event handlers
+        passwordInput.addEventListener('focus', function() {
+            // Show requirements when user focuses on password field
+            if (this.value.length === 0) {
+                document.querySelector('.password-requirements').classList.add('show');
             }
         });
+
+        passwordInput.addEventListener('input', function() {
+            validatePassword(this.value);
+            checkPasswordMatch();
+        });
+
+        passwordInput.addEventListener('keyup', function() {
+            validatePassword(this.value);
+            checkPasswordMatch();
+        });
+
+        passwordInput.addEventListener('change', function() {
+            validatePassword(this.value);
+            checkPasswordMatch();
+        });
+
+        passwordInput.addEventListener('blur', function() {
+            validatePassword(this.value);
+            // Hide requirements if password is empty when losing focus
+            if (this.value.length === 0) {
+                document.querySelector('.password-requirements').classList.remove('show');
+            }
+        });
+
+        // Enhanced password confirmation validation
+        function checkPasswordMatch() {
+            const password = passwordInput.value;
+            const confirmPassword = confirmPasswordInput.value;
+            const confirmField = confirmPasswordInput;
+            
+            if (confirmPassword.length > 0) {
+                if (password === confirmPassword) {
+                    confirmField.style.borderColor = '#27ae60';
+                    confirmField.style.boxShadow = '0 0 0 3px rgba(39, 174, 96, 0.1)';
+                    
+                    // Add checkmark
+                    let checkmark = confirmField.parentNode.querySelector('.password-match-icon');
+                    if (!checkmark) {
+                        checkmark = document.createElement('span');
+                        checkmark.className = 'password-match-icon';
+                        checkmark.style.position = 'absolute';
+                        checkmark.style.right = '15px';
+                        checkmark.style.top = '50%';
+                        checkmark.style.transform = 'translateY(-50%)';
+                        checkmark.style.color = '#27ae60';
+                        checkmark.style.fontSize = '18px';
+                        confirmField.parentNode.style.position = 'relative';
+                        confirmField.parentNode.appendChild(checkmark);
+                    }
+                    checkmark.textContent = '✓';
+                    checkmark.style.color = '#27ae60';
+                } else {
+                    confirmField.style.borderColor = '#e74c3c';
+                    confirmField.style.boxShadow = '0 0 0 3px rgba(231, 76, 60, 0.1)';
+                    
+                    // Add X mark
+                    let checkmark = confirmField.parentNode.querySelector('.password-match-icon');
+                    if (!checkmark) {
+                        checkmark = document.createElement('span');
+                        checkmark.className = 'password-match-icon';
+                        checkmark.style.position = 'absolute';
+                        checkmark.style.right = '15px';
+                        checkmark.style.top = '50%';
+                        checkmark.style.transform = 'translateY(-50%)';
+                        checkmark.style.fontSize = '18px';
+                        confirmField.parentNode.style.position = 'relative';
+                        confirmField.parentNode.appendChild(checkmark);
+                    }
+                    checkmark.textContent = '✗';
+                    checkmark.style.color = '#e74c3c';
+                }
+            } else {
+                confirmField.style.borderColor = '#e1e5e9';
+                confirmField.style.boxShadow = 'none';
+                
+                // Remove icon
+                const checkmark = confirmField.parentNode.querySelector('.password-match-icon');
+                if (checkmark) {
+                    checkmark.remove();
+                }
+            }
+        }
+
+        confirmPasswordInput.addEventListener('input', checkPasswordMatch);
+        confirmPasswordInput.addEventListener('keyup', checkPasswordMatch);
+        confirmPasswordInput.addEventListener('change', checkPasswordMatch);
+        confirmPasswordInput.addEventListener('blur', checkPasswordMatch);
 
         signupForm.addEventListener('submit', async function(e) {
             e.preventDefault();

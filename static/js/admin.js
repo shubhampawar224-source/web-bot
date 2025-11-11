@@ -1,9 +1,16 @@
 // Admin Dashboard JavaScript
 class AdminDashboard {
     constructor() {
+        console.log('🏗️ AdminDashboard constructor called');
         this.authToken = localStorage.getItem('admin_token');
         this.adminInfo = JSON.parse(localStorage.getItem('admin_info') || '{}');
         this.currentSection = 'dashboard';
+        
+        console.log('📋 Constructor state:', {
+            hasToken: !!this.authToken,
+            hasInfo: Object.keys(this.adminInfo).length > 0,
+            currentSection: this.currentSection
+        });
         
         this.init();
     }
@@ -42,7 +49,7 @@ class AdminDashboard {
         } else {
             console.log('🔓 No token found, showing login...');
             // If we're on admin panel without token, redirect to login
-            this.redirectToLogin('Please login to access the admin panel.');
+            this.redirectToLogin();
         }
 
         console.log('🔧 Binding events...');
@@ -75,13 +82,27 @@ class AdminDashboard {
 
         // Navigation
         document.querySelectorAll('.nav-link').forEach(link => {
-            link.addEventListener('click', (e) => this.handleNavigation(e));
+            link.addEventListener('click', (e) => {
+                this.handleNavigation(e);
+                
+                // Close mobile sidebar when navigation item is clicked
+                if (window.innerWidth <= 768) {
+                    const sidebar = document.getElementById('admin-sidebar');
+                    sidebar.classList.remove('mobile-open');
+                }
+            });
         });
 
         // Sidebar toggle
         const sidebarToggle = document.getElementById('sidebar-toggle');
         if (sidebarToggle) {
-            sidebarToggle.addEventListener('click', () => this.toggleSidebar());
+            console.log('✅ Sidebar toggle button found');
+            sidebarToggle.addEventListener('click', () => {
+                console.log('🖱️ Sidebar toggle clicked');
+                this.toggleSidebar();
+            });
+        } else {
+            console.error('❌ Sidebar toggle button not found');
         }
 
         // Refresh buttons
@@ -160,6 +181,40 @@ class AdminDashboard {
         const mergeDuplicateFirms = document.getElementById('merge-duplicate-firms');
         if (mergeDuplicateFirms) {
             mergeDuplicateFirms.addEventListener('click', () => this.handleMergeDuplicateFirms());
+        }
+
+        // Admin Bot functionality
+        window.toggleApiKeyVisibility = () => this.toggleApiKeyVisibility();
+        window.saveApiKey = () => this.saveApiKey();
+        window.testBot = () => this.testBot();
+
+        // Admin Bot event listeners
+        const updateApiKeyBtn = document.getElementById('update-admin-api-key');
+        if (updateApiKeyBtn) {
+            updateApiKeyBtn.addEventListener('click', () => this.showApiKeyForm());
+        }
+
+        const cancelApiForm = document.getElementById('cancel-api-form');
+        if (cancelApiForm) {
+            cancelApiForm.addEventListener('click', () => this.hideApiKeyForm());
+        }
+
+        const adminApiKeyForm = document.getElementById('admin-api-key-form');
+        if (adminApiKeyForm) {
+            adminApiKeyForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.saveApiKey();
+            });
+        }
+
+        const toggleAdminKey = document.getElementById('toggle-admin-key');
+        if (toggleAdminKey) {
+            toggleAdminKey.addEventListener('click', () => this.toggleApiKeyVisibility());
+        }
+
+        const sendTestMessage = document.getElementById('send-test-message');
+        if (sendTestMessage) {
+            sendTestMessage.addEventListener('click', () => this.testBot());
         }
     }
 
@@ -392,7 +447,7 @@ class AdminDashboard {
         localStorage.removeItem('admin_info');
     }
 
-    redirectToLogin(message = 'Please login to continue.') {
+    redirectToLogin(message = '') {
         // Store message in sessionStorage to show on login page
         if (message) {
             sessionStorage.setItem('admin_login_message', message);
@@ -479,12 +534,162 @@ class AdminDashboard {
             case 'user-management':
                 await this.loadAdminUsers();
                 break;
+            case 'admin-bot':
+                await this.loadAdminBotSection();
+                break;
         }
     }
 
     async loadDashboardData() {
         await this.loadDashboardStats();
         await this.loadRecentActivity();
+    }
+
+    async loadAdminBotSection() {
+        try {
+            const response = await fetch('/admin/bot-status');
+            const data = await response.json();
+            this.updateApiKeyStatus(data.hasApiKey || false);
+        } catch (error) {
+            console.error('Error loading admin bot status:', error);
+            this.updateApiKeyStatus(false);
+        }
+    }
+
+    updateApiKeyStatus(hasApiKey) {
+        const statusIcon = document.getElementById('api-status-icon');
+        const statusMessage = document.getElementById('api-status-message');
+        const updateButton = document.getElementById('update-admin-api-key');
+        const buttonText = document.getElementById('api-button-text');
+        const formContainer = document.getElementById('api-key-form-container');
+        const testSection = document.getElementById('bot-test-section');
+
+        if (hasApiKey) {
+            statusIcon.className = 'fas fa-check-circle';
+            statusIcon.style.color = '#059669';
+            statusMessage.textContent = 'API key is configured and ready to use';
+            updateButton.style.display = 'inline-flex';
+            buttonText.textContent = 'Update API Key';
+            testSection.style.display = 'block';
+        } else {
+            statusIcon.className = 'fas fa-times-circle';
+            statusIcon.style.color = '#dc2626';
+            statusMessage.textContent = 'No API key configured';
+            updateButton.style.display = 'inline-flex';
+            buttonText.textContent = 'Add API Key';
+            testSection.style.display = 'none';
+        }
+        
+        // Hide form by default
+        if (formContainer) {
+            formContainer.style.display = 'none';
+        }
+    }
+
+    toggleApiKeyVisibility() {
+        const input = document.getElementById('admin-api-key');
+        const icon = document.querySelector('#toggle-admin-key i');
+        
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.className = 'fas fa-eye-slash';
+        } else {
+            input.type = 'password';
+            icon.className = 'fas fa-eye';
+        }
+    }
+
+    async saveApiKey() {
+        const apiKey = document.getElementById('admin-api-key').value.trim();
+        
+        if (!apiKey) {
+            this.showToast('Please enter an API key', 'error');
+            return;
+        }
+
+        try {
+            const response = await fetch('/admin/save-api-key', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ apiKey }),
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                this.showToast('API key saved successfully!', 'success');
+                this.updateApiKeyStatus(true);
+                this.hideApiKeyForm();
+                document.getElementById('admin-api-key').value = '';
+            } else {
+                this.showToast(result.message || 'Failed to save API key', 'error');
+            }
+        } catch (error) {
+            console.error('Error saving API key:', error);
+            this.showToast('Error saving API key', 'error');
+        }
+    }
+
+    async testBot() {
+        const message = document.getElementById('test-message').value.trim();
+        
+        if (!message) {
+            this.showToast('Please enter a test message', 'error');
+            return;
+        }
+
+        try {
+            this.showBotResponse('Testing...', true);
+            
+            const response = await fetch('/admin/test-bot', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ message }),
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                this.showBotResponse(result.response);
+            } else {
+                this.showBotResponse(`Error: ${result.message || 'Failed to test bot'}`, false);
+            }
+        } catch (error) {
+            console.error('Error testing bot:', error);
+            this.showBotResponse('Error: Failed to communicate with bot', false);
+        }
+    }
+
+    showBotResponse(text, isLoading = false) {
+        const container = document.getElementById('bot-response-container');
+        const responseText = document.getElementById('bot-response-text');
+        
+        if (isLoading) {
+            responseText.textContent = text;
+            responseText.style.fontStyle = 'italic';
+            responseText.style.color = '#6b7280';
+        } else {
+            responseText.textContent = text;
+            responseText.style.fontStyle = 'normal';
+            responseText.style.color = '#111827';
+        }
+        
+        container.style.display = 'block';
+    }
+
+    showApiKeyForm() {
+        const formContainer = document.getElementById('api-key-form-container');
+        formContainer.style.display = 'block';
+    }
+
+    hideApiKeyForm() {
+        const formContainer = document.getElementById('api-key-form-container');
+        formContainer.style.display = 'none';
+        document.getElementById('admin-api-key').value = '';
     }
 
     async loadDashboardStats() {
@@ -972,7 +1177,11 @@ class AdminDashboard {
                 <td>${contact.phone_number || 'N/A'}</td>
                 <td>${this.formatDate(contact.created_at)}</td>
                 <td>
-                    <button class="btn btn-sm btn-danger delete-contact-btn" data-id="${contact.id}">
+                    <button class="btn btn-sm btn-danger delete-contact-btn" 
+                            data-id="${contact.id}"
+                            data-name="${contact.fname} ${contact.lname}"
+                            data-email="${contact.email}"
+                            data-phone="${contact.phone_number || 'N/A'}">
                         <i class="fas fa-trash"></i>
                     </button>
                 </td>
@@ -982,17 +1191,51 @@ class AdminDashboard {
         // Bind delete buttons
         document.querySelectorAll('.delete-contact-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
-                const contactId = e.target.closest('button').dataset.id;
-                this.deleteContact(contactId);
+                const button = e.target.closest('button');
+                const contactId = button.dataset.id;
+                const contactName = button.dataset.name;
+                const contactEmail = button.dataset.email;
+                const contactPhone = button.dataset.phone;
+                this.confirmDeleteContact(contactId, contactName, contactEmail, contactPhone);
             });
         });
     }
 
-    async deleteContact(contactId) {
-        if (!confirm('Are you sure you want to delete this contact?')) {
-            return;
-        }
+    confirmDeleteContact(contactId, contactName, contactEmail, contactPhone) {
+        // Set the data for the modal
+        document.getElementById('delete-contact-name-display').textContent = contactName;
+        document.getElementById('delete-contact-email-display').textContent = contactEmail;
+        document.getElementById('delete-contact-phone-display').textContent = contactPhone;
+        
+        // Set up the confirm button
+        const confirmBtn = document.getElementById('confirm-contact-delete-btn');
+        confirmBtn.onclick = () => {
+            this.hideContactDeleteConfirmation();
+            this.deleteContact(contactId);
+        };
+        
+        // Show the modal
+        const modal = document.getElementById('contact-delete-confirmation-modal');
+        modal.style.display = 'flex';
+        
+        // Add click outside to close
+        modal.onclick = (e) => {
+            if (e.target === modal) {
+                this.hideContactDeleteConfirmation();
+            }
+        };
+        
+        // Add escape key listener
+        this.addEscapeKeyListener(() => this.hideContactDeleteConfirmation());
+    }
 
+    hideContactDeleteConfirmation() {
+        const modal = document.getElementById('contact-delete-confirmation-modal');
+        modal.style.display = 'none';
+        this.removeEscapeKeyListener();
+    }
+
+    async deleteContact(contactId) {
         try {
             const response = await this.makeAuthenticatedRequest(`/admin/contact/${contactId}`, {
                 method: 'DELETE'
@@ -1002,6 +1245,7 @@ class AdminDashboard {
             if (data.status === 'success') {
                 this.showToast('Contact deleted successfully!', 'success');
                 this.loadContacts(); // Refresh the table
+                this.loadDashboardStats(); // Refresh stats if applicable
             } else {
                 this.showToast(data.message, 'error');
             }
@@ -1058,11 +1302,7 @@ class AdminDashboard {
                 <td>${this.adminInfo.is_super_admin ? 'Super Admin' : 'Admin'}</td>
                 <td>Active</td>
                 <td>Active</td>
-                <td>
-                    <button class="btn btn-sm btn-secondary" disabled>
-                        <i class="fas fa-cog"></i> Manage
-                    </button>
-                </td>
+                
             </tr>
         `;
     }
@@ -1125,8 +1365,40 @@ class AdminDashboard {
     }
 
     toggleSidebar() {
+        console.log('🔄 toggleSidebar() called');
+        
+        const dashboard = document.querySelector('.admin-dashboard');
         const sidebar = document.getElementById('admin-sidebar');
-        sidebar.classList.toggle('open');
+        const isMobile = window.innerWidth <= 768;
+        
+        console.log('📋 Elements found:', {
+            dashboard: !!dashboard,
+            sidebar: !!sidebar,
+            isMobile: isMobile,
+            windowWidth: window.innerWidth
+        });
+        
+        if (isMobile) {
+            // Mobile: toggle slide-out sidebar
+            if (sidebar) {
+                sidebar.classList.toggle('mobile-open');
+                console.log('📱 Mobile sidebar toggled, classes:', sidebar.classList.toString());
+            }
+        } else {
+            // Desktop: toggle collapsed sidebar
+            if (dashboard) {
+                const isCollapsed = dashboard.classList.contains('sidebar-collapsed');
+                console.log('📊 Current state - isCollapsed:', isCollapsed);
+                
+                if (isCollapsed) {
+                    dashboard.classList.remove('sidebar-collapsed');
+                    console.log('🔄 Desktop sidebar expanded, classes:', dashboard.classList.toString());
+                } else {
+                    dashboard.classList.add('sidebar-collapsed');
+                    console.log('🔄 Desktop sidebar collapsed, classes:', dashboard.classList.toString());
+                }
+            }
+        }
     }
 
     filterUrls() {
@@ -1577,6 +1849,31 @@ class AdminDashboard {
     }
 }
 
+// Test function for sidebar toggle - can be called from browser console
+function testSidebarToggle() {
+    console.log('🧪 Testing sidebar toggle...');
+    const dashboard = document.querySelector('.admin-dashboard');
+    if (dashboard) {
+        dashboard.classList.toggle('sidebar-collapsed');
+        console.log('✅ Sidebar toggled, classes:', dashboard.classList.toString());
+        return true;
+    } else {
+        console.error('❌ Dashboard element not found');
+        return false;
+    }
+}
+
+// Global function to access AdminDashboard methods
+function toggleSidebarManual() {
+    console.log('🔧 Manual sidebar toggle called');
+    if (window.adminDashboard && window.adminDashboard.toggleSidebar) {
+        window.adminDashboard.toggleSidebar();
+    } else {
+        console.error('❌ AdminDashboard not available, using fallback');
+        testSidebarToggle(); // Fallback
+    }
+}
+
 // Initialize admin dashboard when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     window.adminDashboard = new AdminDashboard();
@@ -1600,5 +1897,27 @@ function hideBulkDeleteConfirmation() {
     // Remove escape key listener if exists
     if (window.adminDashboard && window.adminDashboard.removeEscapeKeyListener) {
         window.adminDashboard.removeEscapeKeyListener();
+    }
+}
+
+// Initialize AdminDashboard when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Initializing AdminDashboard...');
+    try {
+        window.adminDashboard = new AdminDashboard();
+        console.log('✅ AdminDashboard instantiated successfully');
+    } catch (error) {
+        console.error('❌ Error instantiating AdminDashboard:', error);
+    }
+});
+
+// Fallback for when DOMContentLoaded has already fired
+if (document.readyState !== 'loading') {
+    console.log('✅ DOM already loaded - Initializing AdminDashboard now');
+    try {
+        window.adminDashboard = new AdminDashboard();
+        console.log('✅ AdminDashboard instantiated successfully (fallback)');
+    } catch (error) {
+        console.error('❌ Error instantiating AdminDashboard (fallback):', error);
     }
 }

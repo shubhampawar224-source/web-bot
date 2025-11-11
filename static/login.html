@@ -14,11 +14,13 @@
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
+            height: 100vh;
+            overflow: hidden;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 20px;
+            padding: 0;
+            margin: 0;
         }
 
         .auth-container {
@@ -28,7 +30,10 @@
             box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
             width: 100%;
             max-width: 450px;
+            max-height: 100vh;
+            overflow-y: auto;
             backdrop-filter: blur(10px);
+            margin: 20px;
         }
 
         .auth-header {
@@ -175,12 +180,24 @@
         }
 
         @media (max-width: 480px) {
+            body {
+                padding: 0;
+            }
+            
             .auth-container {
-                padding: 30px 20px;
+                padding: 20px 15px;
+                margin: 10px;
+                max-height: calc(100vh - 20px);
+                border-radius: 10px;
             }
 
             .auth-header h1 {
-                font-size: 1.7rem;
+                font-size: 1.5rem;
+                margin-bottom: 5px;
+            }
+            
+            .auth-header {
+                margin-bottom: 20px;
             }
         }
     </style>
@@ -212,9 +229,9 @@
             </button>
         </form>
 
-        <div class="forgot-password">
+        <!-- <div class="forgot-password">
             <a href="#" onclick="showForgotPassword()">Forgot your password?</a>
-        </div>
+        </div> -->
 
         <div class="auth-links">
             <p>Don't have an account? <a href="/signup">Create Account</a></p>

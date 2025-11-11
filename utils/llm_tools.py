@@ -20,7 +20,7 @@ from config import OPENAI_API_KEY
 
 # Debug API key loading
 if OPENAI_API_KEY:
-    print(f"✅ OpenAI API key loaded (starts with: {OPENAI_API_KEY[:10]}...)")
+    print(f"✅ OpenAI API key loaded (starts...)")
 else:
     print("❌ OpenAI API key not found in environment variables")
 
