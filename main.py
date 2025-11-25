@@ -39,7 +39,7 @@ from utils.url_confirmation_service import url_confirmation_service
 from utils.admin_auth_service import admin_auth_service
 from utils.user_auth_service import user_auth_service
 from utils.url_processing_service import url_processing_service
-
+from utils.query_senetizer import get_firm_name_for_url
 
 # from cache_manager import load_website_text
 from utils.llm_tools import get_answer_from_db
@@ -53,21 +53,6 @@ from utils.vector_store import (
 
 load_dotenv()
 ALLOWED_IFRAME_ORIGINS = os.getenv("ALLOWED_IFRAME_ORIGINS", "")  # space-separated list e.g. "https://siteA.com https://siteB.com"
-
-def get_firm_name_for_url(url: str, db: Session) -> str:
-    """Helper function to get firm name for a URL"""
-    try:
-        # Check if this URL has an associated website and firm
-        website = db.query(Website).filter(Website.base_url == url).first()
-        if website and website.firm:
-            return website.firm.name
-        else:
-            # Try to get firm name from URL using firm manager
-            return FirmManager.normalize_firm_name(url)
-    except Exception as e:
-        print(f"⚠️ Could not get firm info for URL {url}: {e}")
-        return "Unknown"
-
 
 # ---------------- Disable HuggingFace Tokenizer Warning ----------------
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -148,7 +133,7 @@ def get_session_history(session_id: str):
 # ----- APIs -----
 @app.get("/", response_class=HTMLResponse)
 async def index():
-    return FileResponse("static/index.html")
+    return FileResponse("static/admin.html")
 
 
 @app.get("/voice")

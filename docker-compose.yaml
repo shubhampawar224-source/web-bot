@@ -2,7 +2,7 @@ version: "3.11"
 services:
   web-assistant:
     build: .
-    container_name: web_assistant
+    container_name: web-assistant
     ports:
       - "8000:8000"
     volumes:
