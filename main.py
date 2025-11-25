@@ -54,19 +54,6 @@ from utils.vector_store import (
 load_dotenv()
 ALLOWED_IFRAME_ORIGINS = os.getenv("ALLOWED_IFRAME_ORIGINS", "")  # space-separated list e.g. "https://siteA.com https://siteB.com"
 
-def get_firm_name_for_url(url: str, db: Session) -> str:
-    """Helper function to get firm name for a URL"""
-    try:
-        # Check if this URL has an associated website and firm
-        website = db.query(Website).filter(Website.base_url == url).first()
-        if website and website.firm:
-            return website.firm.name
-        else:
-            # Try to get firm name from URL using firm manager
-            return FirmManager.normalize_firm_name(url)
-    except Exception as e:
-        print(f"⚠️ Could not get firm info for URL {url}: {e}")
-        return "Unknown"
 
 
 # ---------------- Disable HuggingFace Tokenizer Warning ----------------
@@ -148,7 +135,7 @@ def get_session_history(session_id: str):
 # ----- APIs -----
 @app.get("/", response_class=HTMLResponse)
 async def index():
-    return FileResponse("static/index.html")
+    return FileResponse("static/admin.html")
 
 
 @app.get("/voice")
@@ -1628,7 +1615,9 @@ async def get_all_urls(request: Request):
             all_urls.append({
                 "id": f"req_{req.id}",
                 "request_id": req.request_id,
+                "db_id": req.id,
                 "url": req.url,
+                "user_id": req.user_id,
                 "firm_name": get_firm_name_for_url(req.url, db),
                 "requester_email": req.requester_email,
                 "is_confirmed": req.is_confirmed,
@@ -1652,7 +1641,9 @@ async def get_all_urls(request: Request):
                 all_urls.append({
                     "id": f"web_{website.id}",
                     "request_id": f"direct_{website.id}",
+                    "db_id": website.id,
                     "url": website.base_url,
+                    "user_id": None,
                     "requester_email": "Direct Injection",
                     "is_confirmed": True,
                     "is_processed": True,

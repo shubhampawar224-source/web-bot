@@ -2,28 +2,28 @@
 class AdminDashboard {
     constructor() {
         console.log('🏗️ AdminDashboard constructor called');
-        
+
         // Set global reference immediately
         window.adminDashboard = this;
-        
+
         this.authToken = localStorage.getItem('admin_token');
         this.adminInfo = JSON.parse(localStorage.getItem('admin_info') || '{}');
         this.currentSection = 'dashboard';
         this.eventsbound = false; // Flag to prevent multiple event bindings
         this.loggingOut = false; // Flag to prevent multiple logout toasts
-        
+
         console.log('📋 Constructor state:', {
             hasToken: !!this.authToken,
             hasInfo: Object.keys(this.adminInfo).length > 0,
             currentSection: this.currentSection
         });
-        
+
         this.init();
     }
 
     async init() {
         console.log('🚀 Initializing AdminDashboard...');
-        
+
         // Check for OAuth callback
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.has('token') && urlParams.has('admin')) {
@@ -60,10 +60,10 @@ class AdminDashboard {
 
         console.log('🔧 Binding events...');
         this.bindEvents();
-        
+
         // Check for redirect messages after showing login
         this.checkForRedirectMessages();
-        
+
         console.log('✅ AdminDashboard initialization complete');
     }
 
@@ -73,7 +73,7 @@ class AdminDashboard {
             return;
         }
         this.eventsbound = true;
-        
+
         // Login form
         const loginForm = document.getElementById('login-form');
         if (loginForm) {
@@ -96,7 +96,7 @@ class AdminDashboard {
         document.querySelectorAll('.nav-link').forEach(link => {
             link.addEventListener('click', (e) => {
                 this.handleNavigation(e);
-                
+
                 // Close mobile sidebar when navigation item is clicked
                 if (window.innerWidth <= 768) {
                     const sidebar = document.getElementById('admin-sidebar');
@@ -226,9 +226,9 @@ class AdminDashboard {
 
     async handleLogin(e) {
         e.preventDefault();
-        
+
         console.log('🔐 Admin login attempt started...');
-        
+
         const username = document.getElementById('username').value;
         const password = document.getElementById('password').value;
         const errorDiv = document.getElementById('login-error');
@@ -253,20 +253,20 @@ class AdminDashboard {
                 console.log('✅ Login successful, setting up session...');
                 this.authToken = data.token;
                 this.adminInfo = data.admin;
-                
+
                 localStorage.setItem('admin_token', this.authToken);
                 localStorage.setItem('admin_info', JSON.stringify(this.adminInfo));
-                
+
                 console.log('🔄 Showing dashboard...');
                 this.showDashboard();
-                
+
                 console.log('📊 Loading dashboard data...');
                 try {
                     this.loadDashboardData();
                 } catch (error) {
                     console.error('❌ Error loading dashboard data (non-critical):', error);
                 }
-                
+
                 // Show personalized welcome message
                 const adminName = this.adminInfo.full_name || this.adminInfo.username || 'Admin';
                 this.showToast(`Welcome back, ${adminName}!`, 'success');
@@ -285,7 +285,7 @@ class AdminDashboard {
 
     async handleSignup(e) {
         e.preventDefault();
-        
+
         const username = document.getElementById('signup-username').value;
         const email = document.getElementById('signup-email').value;
         const fullName = document.getElementById('signup-full-name').value;
@@ -348,7 +348,7 @@ class AdminDashboard {
         try {
             const response = await fetch('/admin/oauth/google');
             const data = await response.json();
-            
+
             if (data.status === 'success') {
                 // Redirect to Google OAuth
                 window.location.href = data.authorization_url;
@@ -365,21 +365,21 @@ class AdminDashboard {
         try {
             const token = urlParams.get('token');
             const adminInfo = JSON.parse(decodeURIComponent(urlParams.get('admin')));
-            
+
             if (token && adminInfo) {
                 this.authToken = token;
                 this.adminInfo = adminInfo;
-                
+
                 localStorage.setItem('admin_token', this.authToken);
                 localStorage.setItem('admin_info', JSON.stringify(this.adminInfo));
-                
+
                 // Clean URL
                 window.history.replaceState({}, document.title, window.location.pathname);
-                
+
                 this.showDashboard();
                 this.loadDashboardData();
                 this.bindEvents();
-                
+
                 this.showToast(`Welcome ${adminInfo.full_name}!`, 'success');
             } else {
                 throw new Error('Invalid OAuth response');
@@ -398,12 +398,12 @@ class AdminDashboard {
             return;
         }
         this.loggingOut = true;
-        
+
         // Only prevent default if this is a manual logout (has event)
         if (e) {
             e.preventDefault();
         }
-        
+
         try {
             await fetch('/admin/logout', {
                 method: 'POST',
@@ -415,12 +415,12 @@ class AdminDashboard {
             console.error('Logout error:', error);
         } finally {
             this.clearSession();
-            
+
             // Only show toast for manual logout (when event exists)
             if (e) {
                 this.showToast('Logged out successfully', 'info');
             }
-            
+
             // Redirect to login page after a short delay to show the toast
             setTimeout(() => {
                 window.location.href = '/admin';
@@ -443,7 +443,7 @@ class AdminDashboard {
             });
 
             const data = await response.json();
-            
+
             if (data.status === 'success') {
                 // Update admin info if provided
                 if (data.admin) {
@@ -473,7 +473,7 @@ class AdminDashboard {
         if (message) {
             sessionStorage.setItem('admin_login_message', message);
         }
-        
+
         // Only redirect if we're not already on the admin login page
         if (!window.location.pathname.includes('/admin')) {
             console.log('🔄 Redirecting to admin login page...');
@@ -496,10 +496,10 @@ class AdminDashboard {
                 errorDiv.style.color = '#856404';
                 errorDiv.style.borderColor = '#ffeaa7';
             }
-            
+
             // Clear the message
             sessionStorage.removeItem('admin_login_message');
-            
+
             // Hide the message after 5 seconds
             setTimeout(() => {
                 if (errorDiv) {
@@ -511,7 +511,7 @@ class AdminDashboard {
 
     handleNavigation(e) {
         e.preventDefault();
-        
+
         const section = e.target.closest('.nav-link').dataset.section;
         this.showSection(section);
     }
@@ -521,16 +521,16 @@ class AdminDashboard {
         document.querySelectorAll('.nav-link').forEach(link => {
             link.classList.remove('active');
         });
-        
+
         document.querySelector(`[data-section="${sectionName}"]`).classList.add('active');
 
         // Update content
         document.querySelectorAll('.content-section').forEach(section => {
             section.classList.remove('active');
         });
-        
+
         document.getElementById(`${sectionName}-section`).classList.add('active');
-        
+
         this.currentSection = sectionName;
 
         // Load section-specific data
@@ -603,7 +603,7 @@ class AdminDashboard {
             updateButton.style.display = 'inline-flex';
             buttonText.textContent = 'Add API Key';
         }
-        
+
         // Hide form by default
         if (formContainer) {
             formContainer.style.display = 'none';
@@ -613,7 +613,7 @@ class AdminDashboard {
     toggleApiKeyVisibility() {
         const input = document.getElementById('admin-api-key');
         const icon = document.querySelector('#toggle-admin-key i');
-        
+
         if (input.type === 'password') {
             input.type = 'text';
             icon.className = 'fas fa-eye-slash';
@@ -625,7 +625,7 @@ class AdminDashboard {
 
     async saveApiKey() {
         const apiKey = document.getElementById('admin-api-key').value.trim();
-        
+
         if (!apiKey) {
             this.showToast('Please enter an API key', 'error');
             return;
@@ -675,7 +675,7 @@ class AdminDashboard {
 
             if (data.status === 'success') {
                 const stats = data.stats;
-                
+
                 document.getElementById('total-urls').textContent = stats.total_urls;
                 document.getElementById('pending-urls').textContent = stats.pending_urls;
                 document.getElementById('total-contacts').textContent = stats.total_contacts;
@@ -710,7 +710,7 @@ class AdminDashboard {
 
     renderRecentUrls(urls) {
         const container = document.getElementById('recent-urls');
-        
+
         if (urls.length === 0) {
             container.innerHTML = '<p class="no-data">No recent URL requests</p>';
             return;
@@ -730,7 +730,7 @@ class AdminDashboard {
 
     renderRecentContacts(contacts) {
         const container = document.getElementById('recent-contacts');
-        
+
         if (contacts.length === 0) {
             container.innerHTML = '<p class="no-data">No recent contacts</p>';
             return;
@@ -757,7 +757,7 @@ class AdminDashboard {
             if (data.status === 'success') {
                 // Filter the results based on the status filter
                 let filteredRequests = data.requests;
-                
+
                 if (statusFilter !== 'all') {
                     filteredRequests = data.requests.filter(request => {
                         switch (statusFilter) {
@@ -776,7 +776,7 @@ class AdminDashboard {
                         }
                     });
                 }
-                
+
                 this.renderUrlRequestsTable(filteredRequests);
             }
         } catch (error) {
@@ -787,9 +787,9 @@ class AdminDashboard {
 
     renderUrlRequestsTable(requests) {
         const tbody = document.getElementById('urls-tbody');
-        
+
         console.log('🔍 Rendering URL requests table with data:', requests.slice(0, 2)); // Log first 2 items for debugging
-        
+
         if (requests.length === 0) {
             tbody.innerHTML = '<tr><td colspan="7" class="text-center">No URL requests found</td></tr>';
             return;
@@ -815,10 +815,10 @@ class AdminDashboard {
                 </td>
                 <td>
                     <div class="source-cell">
-                        ${request.source === 'direct_injection' ? 
-                            '<i class="fas fa-user-shield" style="color: #28a745;"></i> Admin Direct' : 
-                            `<i class="fas fa-envelope" style="color: #007bff;"></i> ${request.requester_email}`
-                        }
+                        ${request.source === 'direct_injection' ?
+                '<i class="fas fa-user-shield" style="color: #28a745;"></i> Admin Direct' :
+                `<i class="fas fa-envelope" style="color: #007bff;"></i> ${request.requester_email}`
+            }
                     </div>
                 </td>
                 <td>
@@ -861,7 +861,7 @@ class AdminDashboard {
                 const urlId = button.getAttribute('data-url-id');
                 const url = button.getAttribute('data-url');
                 const requester = button.getAttribute('data-requester');
-                
+
                 console.log('🔍 Delete button clicked, extracted data:', { urlId, url, requester });
                 this.confirmDeleteUrl(urlId, url, requester);
             });
@@ -869,6 +869,54 @@ class AdminDashboard {
 
         // Update bulk delete button visibility
         this.updateBulkDeleteButton();
+
+        // Launch bot popup buttons
+        document.querySelectorAll('.launch-bot-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const button = e.target.closest('.launch-bot-btn');
+                const dbId = button.getAttribute('data-db-id');
+                const requestId = button.getAttribute('data-request-id');
+                const site = button.getAttribute('data-url') || '';
+                const userId = button.getAttribute('data-user-id') || '';
+
+                const params = new URLSearchParams();
+                // prefer numeric db_id if available
+                if (dbId) params.set('urls', dbId);
+                else if (requestId) params.set('urls', requestId);
+                if (site) params.set('site', site);
+                if (userId) params.set('user_id', userId);
+
+                const widgetUrl = `/widget?${params.toString()}`;
+
+                // Popup size
+                const width = 480;
+                const height = 720;
+                const left = window.screenX + Math.max(0, (window.outerWidth - width) / 2);
+                const top = window.screenY + Math.max(0, (window.outerHeight - height) / 2);
+
+                window.open(widgetUrl, '_blank', `toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes,width=${width},height=${height},left=${left},top=${top}`);
+            });
+        });
+
+        // Test widget new-tab buttons
+        document.querySelectorAll('.test-widget-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const button = e.target.closest('.test-widget-btn');
+                const dbId = button.getAttribute('data-db-id');
+                const requestId = button.getAttribute('data-request-id');
+                const site = button.getAttribute('data-url') || '';
+                const userId = button.getAttribute('data-user-id') || '';
+
+                const params = new URLSearchParams();
+                if (dbId) params.set('urls', dbId);
+                else if (requestId) params.set('urls', requestId);
+                if (site) params.set('site', site);
+                if (userId) params.set('user_id', userId);
+
+                const url = `/widget?${params.toString()}`;
+                window.open(url, '_blank');
+            });
+        });
     }
 
     async processUrl(requestId) {
@@ -938,7 +986,7 @@ class AdminDashboard {
     updateBulkDeleteButton() {
         const bulkDeleteBtn = document.getElementById('bulk-delete-urls');
         const selectedCheckboxes = document.querySelectorAll('.url-checkbox:checked');
-        
+
         if (bulkDeleteBtn) {
             if (selectedCheckboxes.length > 0) {
                 bulkDeleteBtn.style.display = 'inline-block';
@@ -951,13 +999,13 @@ class AdminDashboard {
 
     confirmDeleteUrl(urlId, url, requester) {
         console.log('🔍 Delete URL called with:', { urlId, url, requester });
-        
+
         if (!urlId || urlId === 'undefined') {
             console.error('❌ Invalid URL ID:', urlId);
             this.showToast('Error: Invalid URL ID', 'error');
             return;
         }
-        
+
         // Show custom confirmation modal
         this.showDeleteConfirmation(urlId, url, requester);
     }
@@ -965,14 +1013,14 @@ class AdminDashboard {
     confirmBulkDeleteUrls() {
         const selectedCheckboxes = document.querySelectorAll('.url-checkbox:checked');
         const selectedCount = selectedCheckboxes.length;
-        
+
         if (selectedCount === 0) {
             this.showToast('Please select URLs to delete', 'warning');
             return;
         }
 
         const urlIds = Array.from(selectedCheckboxes).map(cb => cb.value);
-        
+
         // Show custom bulk confirmation modal
         this.showBulkDeleteConfirmation(urlIds, selectedCount);
     }
@@ -981,25 +1029,25 @@ class AdminDashboard {
         // Set the data for the modal
         document.getElementById('delete-url-display').textContent = url;
         document.getElementById('delete-requester-display').textContent = requester;
-        
+
         // Set up the confirm button
         const confirmBtn = document.getElementById('confirm-delete-btn');
         confirmBtn.onclick = () => {
             this.hideDeleteConfirmation();
             this.deleteUrl(urlId);
         };
-        
+
         // Show the modal
         const modal = document.getElementById('delete-confirmation-modal');
         modal.style.display = 'flex';
-        
+
         // Add click outside to close
         modal.onclick = (e) => {
             if (e.target === modal) {
                 this.hideDeleteConfirmation();
             }
         };
-        
+
         // Add escape key listener
         this.addEscapeKeyListener(() => this.hideDeleteConfirmation());
     }
@@ -1013,27 +1061,27 @@ class AdminDashboard {
     showBulkDeleteConfirmation(urlIds, count) {
         // Set the data for the modal
         document.getElementById('bulk-delete-count-display').textContent = `${count} URLs`;
-        document.getElementById('bulk-delete-confirmation-message').textContent = 
+        document.getElementById('bulk-delete-confirmation-message').textContent =
             `Are you sure you want to delete ${count} selected URL(s)?`;
-        
+
         // Set up the confirm button
         const confirmBtn = document.getElementById('confirm-bulk-delete-btn');
         confirmBtn.onclick = () => {
             this.hideBulkDeleteConfirmation();
             this.bulkDeleteUrls(urlIds);
         };
-        
+
         // Show the modal
         const modal = document.getElementById('bulk-delete-confirmation-modal');
         modal.style.display = 'flex';
-        
+
         // Add click outside to close
         modal.onclick = (e) => {
             if (e.target === modal) {
                 this.hideBulkDeleteConfirmation();
             }
         };
-        
+
         // Add escape key listener
         this.addEscapeKeyListener(() => this.hideBulkDeleteConfirmation());
     }
@@ -1063,11 +1111,11 @@ class AdminDashboard {
     async deleteUrl(urlId) {
         try {
             console.log('🗑️ Deleting URL with ID:', urlId);
-            
+
             if (!urlId || urlId === 'undefined') {
                 throw new Error('Invalid URL ID provided');
             }
-            
+
             const response = await this.makeAuthenticatedRequest(`/admin/delete-url/${urlId}`, {
                 method: 'DELETE'
             });
@@ -1092,7 +1140,7 @@ class AdminDashboard {
     async bulkDeleteUrls(urlIds) {
         try {
             console.log('🗑️ Bulk deleting URLs:', urlIds);
-            
+
             const response = await this.makeAuthenticatedRequest('/admin/bulk-delete-urls', {
                 method: 'POST',
                 headers: {
@@ -1107,11 +1155,11 @@ class AdminDashboard {
             if (data.status === 'success') {
                 const message = `Successfully deleted ${data.data.deleted_count} URL(s)`;
                 this.showToast(message, 'success');
-                
+
                 if (data.data.failed_count > 0) {
                     this.showToast(`${data.data.failed_count} URL(s) failed to delete`, 'warning');
                 }
-                
+
                 this.loadUrlRequests(); // Refresh the table
                 this.loadDashboardStats(); // Refresh stats
                 this.updateBulkDeleteButton(); // Hide bulk delete button
@@ -1140,7 +1188,7 @@ class AdminDashboard {
 
     renderContactsTable(contacts) {
         const tbody = document.getElementById('contacts-tbody');
-        
+
         if (contacts.length === 0) {
             tbody.innerHTML = '<tr><td colspan="5" class="text-center">No contacts found</td></tr>';
             return;
@@ -1182,25 +1230,25 @@ class AdminDashboard {
         document.getElementById('delete-contact-name-display').textContent = contactName;
         document.getElementById('delete-contact-email-display').textContent = contactEmail;
         document.getElementById('delete-contact-phone-display').textContent = contactPhone;
-        
+
         // Set up the confirm button
         const confirmBtn = document.getElementById('confirm-contact-delete-btn');
         confirmBtn.onclick = () => {
             this.hideContactDeleteConfirmation();
             this.deleteContact(contactId);
         };
-        
+
         // Show the modal
         const modal = document.getElementById('contact-delete-confirmation-modal');
         modal.style.display = 'flex';
-        
+
         // Add click outside to close
         modal.onclick = (e) => {
             if (e.target === modal) {
                 this.hideContactDeleteConfirmation();
             }
         };
-        
+
         // Add escape key listener
         this.addEscapeKeyListener(() => this.hideContactDeleteConfirmation());
     }
@@ -1247,7 +1295,7 @@ class AdminDashboard {
 
     renderFirmsTable(firms) {
         const tbody = document.getElementById('firms-tbody');
-        
+
         if (firms.length === 0) {
             tbody.innerHTML = '<tr><td colspan="4" class="text-center">No firms found</td></tr>';
             return;
@@ -1294,7 +1342,7 @@ class AdminDashboard {
         };
 
         const response = await fetch(url, { ...defaultOptions, ...options });
-        
+
         if (response.status === 401) {
             this.handleLogout();
             throw new Error('Authentication failed');
@@ -1307,28 +1355,28 @@ class AdminDashboard {
         document.getElementById('loading-overlay').style.display = 'none';
         document.getElementById('admin-login').style.display = 'flex';
         document.getElementById('admin-dashboard').style.display = 'none';
-        
+
         // Check for redirect messages when showing login
         setTimeout(() => this.checkForRedirectMessages(), 100);
     }
 
     showDashboard() {
         console.log('🏠 showDashboard() called');
-        
+
         const loadingOverlay = document.getElementById('loading-overlay');
         const adminLogin = document.getElementById('admin-login');
         const adminDashboard = document.getElementById('admin-dashboard');
-        
+
         console.log('📋 Dashboard elements:', {
             loadingOverlay: !!loadingOverlay,
             adminLogin: !!adminLogin,
             adminDashboard: !!adminDashboard
         });
-        
+
         if (loadingOverlay) loadingOverlay.style.display = 'none';
         if (adminLogin) adminLogin.style.display = 'none';
         if (adminDashboard) adminDashboard.style.display = 'block';
-        
+
         // Update admin name
         const adminNameEl = document.getElementById('admin-name');
         if (adminNameEl && this.adminInfo) {
@@ -1336,24 +1384,24 @@ class AdminDashboard {
             adminNameEl.textContent = displayName;
             console.log('👤 Admin name updated to:', displayName);
         }
-        
+
         console.log('✅ Dashboard should now be visible');
     }
 
     toggleSidebar() {
         console.log('🔄 toggleSidebar() called');
-        
+
         const dashboard = document.querySelector('.admin-dashboard');
         const sidebar = document.getElementById('admin-sidebar');
         const isMobile = window.innerWidth <= 768;
-        
+
         console.log('📋 Elements found:', {
             dashboard: !!dashboard,
             sidebar: !!sidebar,
             isMobile: isMobile,
             windowWidth: window.innerWidth
         });
-        
+
         if (isMobile) {
             // Mobile: toggle slide-out sidebar
             if (sidebar) {
@@ -1365,7 +1413,7 @@ class AdminDashboard {
             if (dashboard) {
                 const isCollapsed = dashboard.classList.contains('sidebar-collapsed');
                 console.log('📊 Current state - isCollapsed:', isCollapsed);
-                
+
                 if (isCollapsed) {
                     dashboard.classList.remove('sidebar-collapsed');
                     console.log('🔄 Desktop sidebar expanded, classes:', dashboard.classList.toString());
@@ -1414,6 +1462,20 @@ class AdminDashboard {
             </button>
         `;
 
+        // Launch Bot button (opens widget in a popup window)
+        buttons += `
+            <button class="btn btn-sm btn-success launch-bot-btn" data-url="${request.url}" data-request-id="${request.request_id || ''}" data-db-id="${request.db_id || ''}" data-user-id="${request.user_id || ''}" data-firm="${(request.firm_name || '').replace(/"/g, '')}">
+                <i class="fas fa-rocket"></i>
+            </button>
+        `;
+
+        // Quick open in new tab (test) - keeps existing behavior if needed
+        buttons += `
+            <button class="btn btn-sm btn-info test-widget-btn" data-url="${request.url}" data-request-id="${request.request_id || ''}" data-db-id="${request.db_id || ''}" data-user-id="${request.user_id || ''}" data-firm="${(request.firm_name || '').replace(/"/g, '')}">
+                <i class="fas fa-robot"></i>
+            </button>
+        `;
+
         if (request.is_confirmed && !request.is_processed && !request.is_expired) {
             buttons += `
                 <button class="btn btn-sm btn-success process-url-btn" data-request-id="${request.request_id}">
@@ -1449,7 +1511,7 @@ class AdminDashboard {
         const toastContainer = document.getElementById('toast-container');
         const toast = document.createElement('div');
         toast.className = `toast ${type}`;
-        
+
         toast.innerHTML = `
             <i class="fas fa-${this.getToastIcon(type)}"></i>
             <span>${message}</span>
@@ -1516,9 +1578,9 @@ class AdminDashboard {
 
     async handleUrlInjection(e) {
         e.preventDefault();
-        
+
         const url = document.getElementById('injection-url').value.trim();
-        
+
         if (!url) {
             this.showToast('Please enter a valid URL', 'error');
             return;
@@ -1546,10 +1608,10 @@ class AdminDashboard {
                 const taskId = data.task_id;
                 this.showInjectionStatus('✅ URL processing started in background...', 'processing');
                 this.showToast('URL processing started! Monitoring progress...', 'info');
-                
+
                 // Monitor task progress
                 this.monitorTaskProgress(taskId, url);
-                
+
             } else {
                 this.showInjectionStatus(`❌ ${data.message}`, 'error');
                 this.showToast(data.message, 'error');
@@ -1565,33 +1627,33 @@ class AdminDashboard {
     async monitorTaskProgress(taskId, url) {
         const maxChecks = 60; // Maximum 5 minutes (60 * 5 seconds)
         let checks = 0;
-        
+
         const checkProgress = async () => {
             try {
                 const response = await fetch(`/task-status/${taskId}`);
                 const data = await response.json();
-                
+
                 if (data.status === 'success' && data.task) {
                     const task = data.task;
                     const progress = task.progress || 0;
                     const status = task.status;
                     const message = task.message || '';
-                    
+
                     // Update status display with progress
                     this.showInjectionStatus(`📊 ${message} (${progress}%)`, 'processing');
-                    
+
                     if (status === 'completed') {
                         const result = task.result || {};
                         this.showInjectionStatus(`✅ Successfully processed ${result.indexed_chunks || 0} content chunks!`, 'success');
                         this.showToast('URL successfully injected and processed!', 'success');
-                        
+
                         // Clear form and refresh data
                         setTimeout(() => {
                             this.hideUrlInjectionForm();
                             this.loadUrlRequests();
                             this.loadDashboardStats();
                         }, 2000);
-                        
+
                         return; // Stop monitoring
                     } else if (status === 'failed') {
                         const error = task.error || 'Unknown error';
@@ -1599,7 +1661,7 @@ class AdminDashboard {
                         this.showToast(`Processing failed: ${message}`, 'error');
                         return; // Stop monitoring
                     }
-                    
+
                     // Continue monitoring if still processing
                     checks++;
                     if (checks < maxChecks) {
@@ -1623,7 +1685,7 @@ class AdminDashboard {
                 }
             }
         };
-        
+
         // Start monitoring after a short delay
         setTimeout(checkProgress, 2000);
     }
@@ -1692,7 +1754,7 @@ class AdminDashboard {
 
     renderUsersTable(users) {
         const tbody = document.getElementById('users-tbody');
-        
+
         if (users.length === 0) {
             tbody.innerHTML = '<tr><td colspan="7" class="text-center">No users found</td></tr>';
             return;
@@ -1759,8 +1821,8 @@ class AdminDashboard {
                 <button class="modal-close" onclick="adminDashboard.closeModal()">&times;</button>
             </div>
             <div class="modal-body">
-                ${userUrls.length === 0 ? '<p>No URL requests found.</p>' : 
-                    userUrls.map(url => `
+                ${userUrls.length === 0 ? '<p>No URL requests found.</p>' :
+                userUrls.map(url => `
                         <div class="url-request-item">
                             <div class="url-info">
                                 <h4>${url.url}</h4>
@@ -1776,7 +1838,7 @@ class AdminDashboard {
                             </div>
                         </div>
                     `).join('')
-                }
+            }
             </div>
         `;
 
@@ -1805,10 +1867,10 @@ class AdminDashboard {
 
             if (data.status === 'success') {
                 this.showToast(`Successfully merged ${data.merged_count} duplicate firms!`, 'success');
-                
+
                 // Refresh firms data and dashboard stats
                 this.loadDashboardStats();
-                
+
                 // If we're currently viewing firms section, refresh it
                 const firmsSection = document.getElementById('firms-section');
                 if (firmsSection && firmsSection.classList.contains('active')) {
@@ -1870,7 +1932,7 @@ document.addEventListener('DOMContentLoaded', () => {
 function hideDeleteConfirmation() {
     const modal = document.getElementById('delete-confirmation-modal');
     modal.style.display = 'none';
-    
+
     // Remove escape key listener if exists
     if (window.adminDashboard && window.adminDashboard.removeEscapeKeyListener) {
         window.adminDashboard.removeEscapeKeyListener();
@@ -1880,7 +1942,7 @@ function hideDeleteConfirmation() {
 function hideBulkDeleteConfirmation() {
     const modal = document.getElementById('bulk-delete-confirmation-modal');
     modal.style.display = 'none';
-    
+
     // Remove escape key listener if exists
     if (window.adminDashboard && window.adminDashboard.removeEscapeKeyListener) {
         window.adminDashboard.removeEscapeKeyListener();

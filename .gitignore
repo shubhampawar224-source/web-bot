@@ -9,7 +9,8 @@ venv/
 env/
 .idea/
 .vscode/
-
+/rag_db_faiss/
+.rag_db_faiss
 # macOS
 .DS_Store
 
