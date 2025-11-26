@@ -14,7 +14,7 @@
 #     libsndfile1 \
 #     ca-certificates \
 #     && rm -rf /var/lib/apt/lists/*
-    
+
 # ENV HF_HOME=/root/.cache/huggingface
 
 
@@ -57,10 +57,10 @@ ENV HF_HOME=/root/.cache/huggingface
 # Copy only requirements to leverage cache
 COPY requirements.txt .
 
-# Enable pip caching (recommended modern method)
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --upgrade pip && \
-    pip install -r requirements.txt
+# Install Python dependencies (BuildKit-independent)
+# Using `--no-cache-dir` prevents pip from leaving cache in image layers.
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Copy rest of the project
 COPY . .
@@ -69,4 +69,4 @@ COPY . .
 EXPOSE 8000
 
 # Start FastAPI
-CMD ["uvicorn", "mains:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
