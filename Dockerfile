@@ -14,7 +14,7 @@
 #     libsndfile1 \
 #     ca-certificates \
 #     && rm -rf /var/lib/apt/lists/*
-    
+
 # ENV HF_HOME=/root/.cache/huggingface
 
 
@@ -57,8 +57,8 @@ ENV HF_HOME=/root/.cache/huggingface
 # Copy only requirements to leverage cache
 COPY requirements.txt .
 
-# Install Python dependencies without BuildKit-specific cache mount
-# Use `--no-cache-dir` to avoid leaving pip cache in image layers
+# Install Python dependencies (BuildKit-independent)
+# Using `--no-cache-dir` prevents pip from leaving cache in image layers.
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 

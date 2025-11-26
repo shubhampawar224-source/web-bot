@@ -1,6 +1,8 @@
 # utils/sanitize.py
 import re
 from sqlalchemy.orm import Session
+from model.models import Website
+from utils.firm_manager import FirmManager
 
 BLOCKED_PATTERNS = [
     r"\b(drop|delete|truncate|update|insert|alter|shutdown|exec|system)\b",
@@ -13,7 +15,6 @@ def is_safe_query(query: str) -> bool:
         if re.search(pattern, q):
             return False
     return True
-
 
 def get_firm_name_for_url(url: str, db: Session) -> str:
     """Helper function to get firm name for a URL"""
@@ -28,4 +29,3 @@ def get_firm_name_for_url(url: str, db: Session) -> str:
     except Exception as e:
         print(f"⚠️ Could not get firm info for URL {url}: {e}")
         return "Unknown"
-

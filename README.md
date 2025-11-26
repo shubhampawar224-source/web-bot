@@ -28,7 +28,7 @@ Install dependencies:
 ```bash
 pip install fastapi uvicorn sentence-transformers chromadb
 pip install -r reuirements.txt
-uvicorn mains:app --reload --host 0.0.0.0 --port 8000
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 
 ## for docker deploy 
@@ -36,13 +36,13 @@ uvicorn mains:app --reload --host 0.0.0.0 --port 8000
 docker compose build --no-cache docker compose up -d
 or 
 # Simple deployment
-docker-compose up -d --build
+sudo docker-compose up -d --build
 
 # View logs
-docker-compose logs -f
+sudo docker-compose logs -f
 
 # Stop
-docker-compose down
+sudo docker-compose down
 
 
 for voice bot
