@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 from flask import render_template_string, Flask, request
 import loges
 from utils.voice_bot_helper import refine_text_with_gpt, retrieve_faiss_response
-from utils.query_senetizer import is_safe_query
+from utils.query_senetizer import get_firm_name_for_url, is_safe_query
 from database.db import init_db
 from utils.scraper import build_about
 from utils.background_tasks import task_manager
@@ -23,9 +23,11 @@ from pydantic import BaseModel, HttpUrl
 from fastapi import FastAPI, WebSocket
 from typing import Optional, List
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from database.db import SessionLocal
 from model.models import Contact, Website, Firm
 from model.user_models import User
+from model.admin_models import AdminUser
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
@@ -178,8 +180,8 @@ async def chat_endpoint(data: ChatRequest):
 
         # Get firm-specific answer from vector DB
         answer = get_answer_from_db(
-            query=query, 
-            session_id=session_id, 
+            query=query,
+            session_id=session_id,
             firm_id=firm.id,
             custom_api_key=custom_api_key
         )
@@ -214,7 +216,22 @@ async def chat_url_specific(data: dict):
     db: Session = SessionLocal()
     try:
         request_ids = []
-        
+
+        # Normalize user_id and detect admin callers
+        user_id_int = None
+        is_admin_user = False
+        admin_username = None
+        if user_id is not None:
+            try:
+                user_id_int = int(user_id)
+                admin_rec = db.query(AdminUser).filter(AdminUser.id == user_id_int).first()
+                if admin_rec:
+                    is_admin_user = True
+                    admin_username = admin_rec.username
+                    print(f"🔐 Detected admin caller: {admin_username} (id={user_id_int})")
+            except Exception:
+                user_id_int = None
+
         # If firm_id is provided directly, use it
         if firm_id:
             print(f"🏢 Using provided firm_id: {firm_id}")
@@ -223,32 +240,69 @@ async def chat_url_specific(data: dict):
                 print(f"✅ Found firm: {firm.name}")
             else:
                 print(f"❌ Firm with ID {firm_id} not found")
-                
+
         # If URL IDs provided, get request_ids and firm from URLs (if firm_id not already set)
         elif url_ids:
             from model.url_injection_models import URLInjectionRequest
             url_id_list = [int(id.strip()) for id in url_ids.split(',') if id.strip().isdigit()]
             print(f"📝 Parsed URL IDs: {url_id_list}")
-            
+
             if url_id_list:
-                url_requests = db.query(URLInjectionRequest).filter(
-                    URLInjectionRequest.id.in_(url_id_list),
-                    URLInjectionRequest.status == "completed"
-                ).all()
-                
+                # Build base filters
+                base_filters = [URLInjectionRequest.id.in_(url_id_list), URLInjectionRequest.status == "completed"]
+
+                if is_admin_user:
+                    # For admins prefer admin-created rows (and optionally by username)
+                    filters = list(base_filters) + [URLInjectionRequest.admin_created == True]
+                    if admin_username:
+                        filters.append(URLInjectionRequest.admin_username == admin_username)
+                else:
+                    # For normal users, restrict to their user_id when provided
+                    filters = list(base_filters)
+                    if user_id is not None:
+                        try:
+                            filters.append(URLInjectionRequest.user_id == int(user_id))
+                        except Exception:
+                            pass
+
+                url_requests = db.query(URLInjectionRequest).filter(*filters).all()
+
                 print(f"🔎 Found {len(url_requests)} completed URL requests")
-                
+
+                # Fallback only for admins: if none found under admin restriction, try without it
+                if not url_requests and is_admin_user:
+                    print("ℹ️ No admin-specific URL requests found — falling back to any matching records")
+                    url_requests = db.query(URLInjectionRequest).filter(
+                        URLInjectionRequest.id.in_(url_id_list),
+                        URLInjectionRequest.status == "completed"
+                    ).all()
+                    print(f"🔎 Fallback found {len(url_requests)} completed URL requests")
+
                 if url_requests:
                     # Get request IDs for vector search
                     request_ids = [url_req.request_id for url_req in url_requests]
                     print(f"🔗 Request IDs for vector search: {request_ids}")
-                    
+
                     # Get firm from first URL
                     first_url = url_requests[0]
                     if first_url.firm_id:
                         firm_id = first_url.firm_id
                         firm = db.query(Firm).filter(Firm.id == firm_id).first()
                         print(f"🏢 Using firm: {firm.name if firm else 'Unknown'} (ID: {firm_id})")
+
+                # If no url_requests found, try Website table as fallback (direct injections)
+                if not url_requests:
+                    try:
+                        website = db.query(Website).filter(Website.id.in_(url_id_list)).all()
+                        if website:
+                            # pick first matching website
+                            first_site = website[0]
+                            if first_site.firm_id:
+                                firm_id = first_site.firm_id
+                                firm = db.query(Firm).filter(Firm.id == firm_id).first()
+                                print(f"🏢 Using firm from Website: {firm.name if firm else 'Unknown'} (website id: {first_site.id})")
+                    except Exception:
+                        pass
 
         # Get user's custom API key if user_id is provided
         custom_api_key = None
@@ -451,9 +505,20 @@ async def get_widget(urls: Optional[str] = None, user_id: Optional[int] = None, 
     return FileResponse("static/widgets.html")
 
 @app.get("/widget/firm-info")
-async def get_widget_firm_info(urls: Optional[str] = None, user_id: Optional[int] = None):
-    """Get firm information for widget based on URL IDs"""
+async def get_widget_firm_info(urls: Optional[str] = None, user_id: Optional[str] = None):
+    """Get firm information for widget based on URL IDs
+
+    Accept `user_id` as string to allow empty values from query params (avoid FastAPI 422).
+    This handler supports both regular users and admins: if the provided `user_id` maps to an
+    `AdminUser`, the lookup will prefer admin-created URL entries and will allow a fallback to
+    any matching URL record so admins can launch firm bots. Regular users remain restricted to
+    their own `user_id` entries.
+    """
     try:
+        # Normalize empty string to None
+        if user_id is not None and user_id == "":
+            user_id = None
+
         print(f"🔍 Widget firm-info request: urls={urls}, user_id={user_id}")
         
         db: Session = SessionLocal()
@@ -462,19 +527,73 @@ async def get_widget_firm_info(urls: Optional[str] = None, user_id: Optional[int
                 # Parse comma-separated URL IDs
                 url_id_list = [int(id.strip()) for id in urls.split(',') if id.strip().isdigit()]
                 print(f"📝 Parsed URL IDs: {url_id_list}")
-                
+
                 if url_id_list:
                     from model.url_injection_models import URLInjectionRequest
-                    
-                    # Get the first URL's firm (assuming all URLs from same user would have same firm context)
-                    url_request = db.query(URLInjectionRequest).filter(
-                        URLInjectionRequest.id.in_(url_id_list),
-                        URLInjectionRequest.status == "completed"
-                    ).first()
-                    
+
+                    # Determine if caller is an admin user
+                    is_admin_user = False
+                    admin_username = None
+                    if user_id is not None:
+                        try:
+                            uid_int = int(user_id)
+                            admin_rec = db.query(AdminUser).filter(AdminUser.id == uid_int).first()
+                            if admin_rec:
+                                is_admin_user = True
+                                admin_username = admin_rec.username
+                                print(f"🔐 Detected admin user: {admin_username} (id={uid_int})")
+                        except Exception:
+                            is_admin_user = False
+
+                    # Build base filters: accept any request that appears processed/completed
+                    processed_filter = or_(
+                        URLInjectionRequest.is_processed == True,
+                        URLInjectionRequest.processing_status == 'completed',
+                        URLInjectionRequest.status.in_(['processed', 'completed', 'approved'])
+                    )
+                    base_filters = [URLInjectionRequest.id.in_(url_id_list), processed_filter]
+
+                    # For admins, prefer admin-created records; for regular users, restrict to their user_id
+                    filters = list(base_filters)
+                    if is_admin_user:
+                        filters.append(URLInjectionRequest.admin_created == True)
+                        if admin_username:
+                            filters.append(URLInjectionRequest.admin_username == admin_username)
+                    else:
+                        if user_id is not None:
+                            try:
+                                filters.append(URLInjectionRequest.user_id == int(user_id))
+                            except Exception:
+                                pass
+
+                    url_request = db.query(URLInjectionRequest).filter(*filters).first()
                     print(f"🔎 Found URL request: {url_request.url if url_request else 'None'}")
                     print(f"🏢 Firm ID: {url_request.firm_id if url_request else 'None'}")
-                    
+
+                    # Fallback: allow admins to fall back to any matching record if admin-restricted search returned nothing
+                    if not url_request and is_admin_user:
+                        print("ℹ️ Admin fallback: searching without admin restrictions")
+                        url_request = db.query(URLInjectionRequest).filter(
+                            URLInjectionRequest.id.in_(url_id_list), processed_filter
+                        ).first()
+                        print(f"🔎 Fallback found URL request: {url_request.url if url_request else 'None'}")
+
+                    # Additional fallback: if still not found, try Website table (direct injections/websites)
+                    if not url_request:
+                        try:
+                            website = db.query(Website).filter(Website.id.in_(url_id_list)).first()
+                            if website and website.firm_id:
+                                firm = db.query(Firm).filter(Firm.id == website.firm_id).first()
+                                if firm:
+                                    print(f"🏢 Found firm via Website record: {firm.name} (website id: {website.id})")
+                                    return {
+                                        "status": "success",
+                                        "firm_id": firm.id,
+                                        "firm_name": firm.name
+                                    }
+                        except Exception:
+                            pass
+
                     if url_request and url_request.firm_id:
                         firm = db.query(Firm).filter(Firm.id == url_request.firm_id).first()
                         if firm:
@@ -488,17 +607,17 @@ async def get_widget_firm_info(urls: Optional[str] = None, user_id: Optional[int
                             print(f"❌ Firm with ID {url_request.firm_id} not found")
                     else:
                         print(f"⚠️ URL request has no firm_id or not found")
-                        
+
                         # If no firm_id, try to assign one based on URL domain
                         if url_request:
                             from utils.url_processing_service import URLProcessingService
                             url_service = URLProcessingService()
                             firm_id = url_service.get_firm_from_url(url_request.url, db)
-                            
+
                             if firm_id:
                                 url_request.firm_id = firm_id
                                 db.commit()
-                                
+
                                 firm = db.query(Firm).filter(Firm.id == firm_id).first()
                                 print(f"� Auto-assigned firm: {firm.name if firm else 'Unknown'}")
                                 return {
@@ -506,7 +625,7 @@ async def get_widget_firm_info(urls: Optional[str] = None, user_id: Optional[int
                                     "firm_id": firm.id,
                                     "firm_name": firm.name
                                 }
-            
+
             print(f"�📤 Returning no firm info")
             return {
                 "status": "success",
