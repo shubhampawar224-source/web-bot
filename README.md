@@ -33,12 +33,10 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 ## for docker deploy 
 # go to the web-bot
-# Rebuild image and recreate container for the service
-docker-compose build --no-cache web-assistant
-# docker-compose up -d --force-recreate --no-deps web-assistant
+docker compose-build --no-cache docker compose up -d
 or 
-# Simple deployment
-sudo docker-compose up --build -d web-assistant
+# Simple deployment and reacreate
+sudo docker-compose up -d --build
 
 # View logs
 sudo docker-compose logs -f
@@ -54,5 +52,7 @@ uvicorn my_agent:app --reload --host 0.0.0.0 --port 8000
 my server widgets,admin and user 
 http://127.0.0.1:8000/admin
 http://127.0.0.1:8000/widget
-http://localhost:8000/new_wg
+http://localhost:8000/djf-bot
+http://localhost:8000/emm-bot
+
 https://mickie-springy-unaccusingly.ngrok-free.dev/dashboard

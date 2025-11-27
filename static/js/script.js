@@ -6,7 +6,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const widgetFirm = urlParams.get('widget_firm');
     const widgetFirmId = urlParams.get('widget_firm_id');
     const isWidgetMode = !!(widgetUrls || widgetUserId);
-    
+
     console.log('Widget context:', { widgetUrls, widgetUserId, widgetFirm, widgetFirmId, isWidgetMode });
 
     // ---------- DOM Elements ----------
@@ -27,7 +27,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // ---------- Widget Mode Setup ----------
     if (isWidgetMode) {
         console.log('Initializing widget mode...');
-        
+
         // Hide sidebar in widget mode
         if (sidebar) {
             sidebar.style.display = 'none';
@@ -35,7 +35,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (toggleBtn) {
             toggleBtn.style.display = 'none';
         }
-        
+
         // Auto-open chat and set greeting
         setTimeout(() => {
             chatContainer.style.display = "flex";
@@ -47,7 +47,7 @@ document.addEventListener("DOMContentLoaded", () => {
             chatContainer.style.width = "auto";
             chatContainer.style.height = "auto";
             chatContainer.style.zIndex = "1000";
-            
+
             // Widget-specific greeting
             if (widgetFirm) {
                 addMessage(`Hello! I'm here to help you with questions about ${widgetFirm}. How can I assist you today? 😊`, "bot-msg");
@@ -62,7 +62,7 @@ document.addEventListener("DOMContentLoaded", () => {
     chatIcon.onclick = () => {
         const isVisible = chatContainer.style.display === "flex";
         chatContainer.style.display = isVisible ? "none" : "flex";
-        
+
         if (!isVisible) {
             // Force positioning with inline styles to override any CSS conflicts
             chatContainer.style.position = "absolute";
@@ -75,10 +75,10 @@ document.addEventListener("DOMContentLoaded", () => {
             chatContainer.style.maxWidth = "calc(100vw - 40px)";
             chatContainer.style.maxHeight = "calc(100vh - 110px)";
             chatContainer.style.zIndex = "2100";
-            
+
             // Ensure chat container stays within bounds when opening
             setTimeout(() => adjustChatPosition(), 100);
-            
+
             if (!greeted) {
                 addMessage("Assistant is here, how may I help you? 😊", "bot-msg");
                 greeted = true;
@@ -90,34 +90,34 @@ document.addEventListener("DOMContentLoaded", () => {
     function adjustChatPosition() {
         const container = chatContainer;
         if (!container) return;
-        
+
         // Force absolute positioning
         container.style.position = "absolute";
-        
+
         // Get viewport dimensions
         const viewportWidth = window.innerWidth;
         const viewportHeight = window.innerHeight;
         const navbarHeight = 60; // Navbar height
         const margin = 20; // Base margin
-        
+
         // Get container dimensions
         const containerWidth = 450; // Fixed width
         const availableHeight = viewportHeight - navbarHeight - (margin * 2); // Height minus navbar and margins
-        
+
         // Calculate safe positions
         const maxRight = Math.max(10, viewportWidth - containerWidth - 10);
         const topPosition = navbarHeight + 10; // Below navbar + margin
-        
+
         // Set safe position below navbar
         container.style.top = topPosition + "px";
         container.style.right = Math.min(margin, maxRight) + "px";
         container.style.bottom = margin + "px";
         container.style.left = "auto";
-        
+
         // Ensure dimensions don't exceed viewport
         container.style.width = Math.min(450, viewportWidth - 40) + "px";
         container.style.height = Math.min(availableHeight, availableHeight) + "px";
-        
+
         console.log("Chat positioned below navbar at:", {
             top: container.style.top,
             right: container.style.right,
@@ -145,10 +145,10 @@ document.addEventListener("DOMContentLoaded", () => {
     // ---------- Toast ----------
     function showToast(message, isError = false, duration = 3000) {
         if (!toast) return;
-        
+
         toast.textContent = message;
         toast.className = `toast show ${isError ? 'error' : 'success'}`;
-        
+
         setTimeout(() => {
             toast.className = 'toast';
         }, duration);
@@ -190,7 +190,7 @@ document.addEventListener("DOMContentLoaded", () => {
         text = text.replace(/\r?\n/g, "<br>");
 
         // Wrap paragraphs if we used paragraph splitting
-        if (text.includes("</p><p>") || !text.startsWith("<") ) {
+        if (text.includes("</p><p>") || !text.startsWith("<")) {
             if (!text.startsWith("<p") && !text.startsWith("<ol") && !text.startsWith("<ul")) {
                 text = `<p>${text}</p>`;
             }
@@ -313,6 +313,40 @@ document.addEventListener("DOMContentLoaded", () => {
         return firmSelect.value || null;
     }
 
+    // Cross-browser UUID generator: prefer `crypto.randomUUID()` when available,
+    // otherwise fall back to secure `crypto.getRandomValues` or a Math.random-based
+    // RFC4122 v4 implementation.
+    function getUUID() {
+        try {
+            if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+                return crypto.randomUUID();
+            }
+        } catch (e) {
+            // ignore and fallback
+        }
+
+        try {
+            if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+                const arr = new Uint8Array(16);
+                crypto.getRandomValues(arr);
+                // Per RFC4122 v4
+                arr[6] = (arr[6] & 0x0f) | 0x40;
+                arr[8] = (arr[8] & 0x3f) | 0x80;
+                const hex = Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+                return `${hex.substr(0, 8)}-${hex.substr(8, 4)}-${hex.substr(12, 4)}-${hex.substr(16, 4)}-${hex.substr(20, 12)}`;
+            }
+        } catch (e) {
+            // ignore and fallback
+        }
+
+        // Fallback (less secure) - will still produce a v4-looking UUID
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+            const r = Math.random() * 16 | 0;
+            const v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    }
+
     // ---------- Send Message ----------
     async function sendMessage() {
         console.log('🚀 sendMessage called');
@@ -320,15 +354,15 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!query) return;
 
         const selectedFirm = getSelectedFirm();
-        
-        console.log('📋 Message context:', { 
-            query, 
-            isWidgetMode, 
-            widgetUrls, 
-            widgetFirmId, 
-            selectedFirm 
+
+        console.log('📋 Message context:', {
+            query,
+            isWidgetMode,
+            widgetUrls,
+            widgetFirmId,
+            selectedFirm
         });
-        
+
         // In widget mode with firm ID or URLs, firm selection is not required
         if (!isWidgetMode && !selectedFirm) {
             showToast("Please select a firm.", true);
@@ -341,36 +375,36 @@ document.addEventListener("DOMContentLoaded", () => {
 
         try {
             let resp;
-            
+
             if (isWidgetMode && (widgetUrls || widgetFirmId)) {
                 // Use URL-specific chat endpoint for widget mode
                 console.log('🎯 Using URL-specific chat endpoint');
                 console.log('Widget URLs:', widgetUrls);
                 console.log('Widget User ID:', widgetUserId);
                 console.log('Widget Firm ID:', widgetFirmId);
-                
-                const payload = { 
-                    query, 
-                    session_id: crypto.randomUUID()
+
+                const payload = {
+                    query,
+                    session_id: getUUID()
                 };
-                
+
                 // Add URL IDs if available
                 if (widgetUrls) {
                     payload.url_ids = widgetUrls;
                 }
-                
+
                 // Add user ID if available
                 if (widgetUserId) {
                     payload.user_id = widgetUserId;
                 }
-                
+
                 // Add firm ID if available
                 if (widgetFirmId) {
                     payload.firm_id = parseInt(widgetFirmId);
                 }
-                
+
                 console.log('📤 Chat payload:', payload);
-                
+
                 resp = await fetch("/chat/url-specific", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -380,20 +414,42 @@ document.addEventListener("DOMContentLoaded", () => {
                 // Use regular firm-based chat endpoint
                 console.log('🏢 Using firm-based chat endpoint');
                 console.log('Selected firm:', selectedFirm);
-                
+
                 resp = await fetch("/chat", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ query, session_id: crypto.randomUUID(), firm_id: selectedFirm })
+                    body: JSON.stringify({ query, session_id: getUUID(), firm_id: selectedFirm })
                 });
             }
 
-            const data = await resp.json();
+            // Try to read response safely: handle non-JSON error pages (500 HTML) and
+            // provide a clearer error message instead of falling into the generic catch.
+            let data = null;
             removeTypingIndicator(typingDiv);
 
             if (!resp.ok) {
-                const errMsg = data.detail || "⚠️ Something went wrong.";
-                addMessage(errMsg, "bot-msg");
+                // Try to parse JSON error, otherwise fall back to plain text
+                try {
+                    const errJson = await resp.json();
+                    const errMsg = errJson.detail || errJson.message || JSON.stringify(errJson);
+                    addMessage(errMsg, "bot-msg");
+                } catch (e) {
+                    const txt = await resp.text();
+                    addMessage(`⚠️ Backend error: ${resp.status} ${resp.statusText} - ${txt.slice(0, 200)}`, "bot-msg");
+                }
+                return;
+            }
+
+            try {
+                data = await resp.json();
+            } catch (e) {
+                // If parsing fails but status was OK, show the raw text for debugging
+                try {
+                    const txt = await resp.text();
+                    addMessage(`⚠️ Unexpected backend response (not JSON): ${txt.slice(0, 200)}`, "bot-msg");
+                } catch (ee) {
+                    addMessage("⚠️ Unexpected backend response and failed to read body.", "bot-msg");
+                }
                 return;
             }
 
@@ -415,7 +471,7 @@ document.addEventListener("DOMContentLoaded", () => {
                                     metadata: { conversationId: parsed.conversation_id || null },
                                     delayMs: 2000,
                                     animation: "slide-left"
-                                }); 
+                                });
                             } else {
                                 // fallback: show modal after delay
                                 setTimeout(() => {
