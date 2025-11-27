@@ -93,25 +93,66 @@ async def startup_event():
         traceback.print_exc()
 
 # After CORS setup
+# Configure CORS based on allowed iframe origins (if provided). Use a dynamic
+# origins list so the server can run on EC2 with a specific frontend origin.
+allowed_origins = ALLOWED_IFRAME_ORIGINS.split() if ALLOWED_IFRAME_ORIGINS else ["*"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"]
 )
 
 @app.middleware("http")
 async def allow_iframe(request, call_next):
+    """Ensure iframe + CORS headers are set in responses.
+    - Respond to preflight `OPTIONS` requests early with appropriate CORS headers.
+    - For normal requests, set CSP/frame-ancestors and permissive CORS headers
+      but prefer echoing the `Origin` when it's allowed.
+    """
+    origin = request.headers.get("origin")
+
+    # Build base CORS headers to use for OPTIONS and normal responses
+    def build_cors_headers():
+        headers = {}
+        # Determine Access-Control-Allow-Origin value
+        if origin and (not ALLOWED_IFRAME_ORIGINS or origin in allowed_origins):
+            headers["Access-Control-Allow-Origin"] = origin
+        else:
+            # If no explicit allowed origins configured, allow any origin
+            headers["Access-Control-Allow-Origin"] = "*" if not ALLOWED_IFRAME_ORIGINS else allowed_origins[0]
+
+        headers["Access-Control-Allow-Credentials"] = "true"
+        headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS, PUT, DELETE"
+        headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, Accept, Origin"
+        return headers
+
+    # Handle preflight quickly
+    if request.method == "OPTIONS":
+        headers = build_cors_headers()
+        # Also include a permissive frame-ancestors value for iframe hosts
+        if ALLOWED_IFRAME_ORIGINS:
+            headers["Content-Security-Policy"] = f"frame-ancestors 'self' {ALLOWED_IFRAME_ORIGINS};"
+        else:
+            headers["Content-Security-Policy"] = "frame-ancestors *;"
+        headers["X-Frame-Options"] = "ALLOWALL"
+        return Response(status_code=200, headers=headers)
+
     response = await call_next(request)
 
-    # Allow embedding anywhere
-    response.headers["Content-Security-Policy"] = "frame-ancestors *;"
-    
-    # Old browser fallback
+    # Set Content-Security-Policy for embedding
+    if ALLOWED_IFRAME_ORIGINS:
+        response.headers["Content-Security-Policy"] = f"frame-ancestors 'self' {ALLOWED_IFRAME_ORIGINS};"
+    else:
+        response.headers["Content-Security-Policy"] = "frame-ancestors *;"
+
     response.headers["X-Frame-Options"] = "ALLOWALL"
-    
-    # Allow widget JS to fetch API
-    response.headers["Access-Control-Allow-Origin"] = "*"
+
+    # Merge CORS headers (do not overwrite existing headers if present)
+    for k, v in build_cors_headers().items():
+        if k not in response.headers:
+            response.headers[k] = v
 
     return response
 
@@ -119,9 +160,13 @@ async def allow_iframe(request, call_next):
 # Add CSP + Security middleware
 app.add_middleware(SecurityHeadersMiddleware)
 app.mount("/static", StaticFiles(directory="static"), name="static")
+# Serve CSS/JS from the static folder so root-path asset requests work
+app.mount("/css", StaticFiles(directory="static/css"), name="css")
+app.mount("/js", StaticFiles(directory="static/js"), name="js")
+# app.mount("/images", StaticFiles(directory="static/images"), name="images")
 
 
-voice_assistant = VoiceAssistant()
+# voice_assistant = VoiceAssistant()
 # ---------------- Helper ----------------
 def get_session_history(session_id: str):
     results = collection.get(
@@ -641,39 +686,7 @@ async def get_widget_firm_info(urls: Optional[str] = None, user_id: Optional[str
             "message": str(e)
         }
 
-
-@app.get("/debug/vector-search")
-async def debug_vector_search(request_id: str):
-    """Debug endpoint to test vector search"""
-    try:
-        from utils.vector_store import collection
-        from sentence_transformers import SentenceTransformer
-        
-        embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
-        query_embedding = embedding_model.encode("test query").tolist()
-        
-        # Search for specific request_id
-        results = collection.query(
-            query_embeddings=[query_embedding],
-            n_results=5,
-            where={"request_id": request_id}
-        )
-        
-        return {
-            "status": "success",
-            "found_documents": len(results["documents"][0]) if results["documents"] else 0,
-            "metadata": results["metadatas"][0] if results["metadatas"] else [],
-            "request_id_searched": request_id
-        }
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-  
 # ----------------- WebSocket voice assistant ----------------
-
-@app.get("/chat_widget", response_class=HTMLResponse)
-def chat_ui():
-    with open("static/index.html") as f:
-        return f.read()
 
 @app.get("/config")
 def get_config():
