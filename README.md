@@ -33,10 +33,12 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 ## for docker deploy 
 # go to the web-bot
-docker compose build --no-cache docker compose up -d
+# Rebuild image and recreate container for the service
+docker-compose build --no-cache web-assistant
+# docker-compose up -d --force-recreate --no-deps web-assistant
 or 
 # Simple deployment
-sudo docker-compose up -d --build
+sudo docker-compose up --build -d web-assistant
 
 # View logs
 sudo docker-compose logs -f

@@ -10,6 +10,8 @@ services:
     restart: always
     volumes:
       - .:/app
+    env_file:
+      - .env
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - HF_HUB_DISABLE_SYMLINKS_WARNING=1
