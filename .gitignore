@@ -13,7 +13,9 @@ env/
 .rag_db_faiss
 # macOS
 .DS_Store
-
+.faiss_index.bin
+.documents.json
+.metadata.json
 # Env / secrets
 .env
 .env.* 

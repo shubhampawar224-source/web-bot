@@ -269,7 +269,13 @@
       z-index: 10000 !important;
     }
 
+    html,
+    body {
+      background: transparent;
+    }
+
     /* Embedded iframe support: make page background transparent when embedded */
+    html.embedded-iframe,
     body.embedded-iframe {
       background-color: transparent !important;
     }
@@ -362,7 +368,10 @@
           const params = new URLSearchParams(window.location.search || '');
           const embedParam = params.get('embed') || params.get('iframe') || params.get('widget');
           const inIframe = (window.self !== window.top) || !!embedParam;
-          if (inIframe) document.body.classList.add('embedded-iframe');
+          if (inIframe) {
+            document.body.classList.add('embedded-iframe');
+            try { document.documentElement.classList.add('embedded-iframe'); } catch (e) { }
+          }
         } catch (e) {
           // ignore
         }
