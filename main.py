@@ -230,11 +230,23 @@ async def chat_endpoint(data: ChatRequest):
             firm_id=firm.id,
             custom_api_key=custom_api_key
         )
+        
+        # Handle special signals from LLM
         if answer == "CONVERSATION_ENDED":
             answer = {
                 "action": "SHOW_CONTACT_FORM",
                 "message": "Before we finish, we would like to collect your contact details so our team can assist further."
             }
+        elif "REQUEST_CONTACT_INFO" in str(answer):
+            # Extract the dynamic message before the signal
+            answer_text = str(answer).split("REQUEST_CONTACT_INFO")[0].strip()
+            if not answer_text:
+                answer_text = "I'd be happy to help! Please share your contact information so we can assist you."
+            answer = {
+                "action": "SHOW_CONTACT_FORM",
+                "message": answer_text
+            }
+        
         return {"answer": answer, "session_id": session_id}
 
     finally:
