@@ -1,9 +1,11 @@
 /* Improved styling & centering for contact modal */
 
 #contactModal {
-  display: none; /* JS will add .open to show */
+  display: none;
+  /* JS will add .open to show */
   position: absolute !important;
-  inset: 0; /* top:0; right:0; bottom:0; left:0; */
+  inset: 0;
+  /* top:0; right:0; bottom:0; left:0; */
   background: rgba(0, 0, 0, 0.45);
   z-index: 9999;
   align-items: center;
@@ -21,9 +23,11 @@
 /* show modal */
 #contactModal.open {
   display: flex !important;
-  align-items: flex-start; /* push modal to top */
+  align-items: flex-start;
+  /* push modal to top */
   justify-content: center;
-  padding-top: 56px; /* distance from top; adjust as needed */
+  padding-top: 56px;
+  /* distance from top; adjust as needed */
 }
 
 /* inner card */
@@ -35,12 +39,13 @@
   background: #ffffff;
   border-radius: 12px;
   padding: 18px;
-  box-shadow: 0 14px 30px rgba(2,6,23,0.2), 0 6px 12px rgba(2,6,23,0.08);
+  box-shadow: 0 14px 30px rgba(2, 6, 23, 0.2), 0 6px 12px rgba(2, 6, 23, 0.08);
   transform: translateY(12px);
   opacity: 0;
   transition: transform 220ms ease, opacity 220ms ease;
   position: relative;
-  overflow: auto; /* allow inner scroll if form is tall */
+  overflow: auto;
+  /* allow inner scroll if form is tall */
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -60,6 +65,7 @@
   gap: 12px;
   margin-bottom: 8px;
 }
+
 #contactModal .modal-header h3 {
   margin: 0;
   font-size: 18px;
@@ -77,23 +83,30 @@
   padding: 6px;
   border-radius: 6px;
 }
-#contactModal .modal-close:hover { color:#0b1320; background: rgba(11,121,255,0.06); }
+
+#contactModal .modal-close:hover {
+  color: #0b1320;
+  background: rgba(11, 121, 255, 0.06);
+}
 
 /* form layout */
 #contactModal .modal-form {
   display: grid;
   gap: 10px;
 }
+
 #contactModal .grid-2 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
+
 @media (max-width: 520px) {
   #contactModal .grid-2 {
     grid-template-columns: 1fr;
   }
 }
+
 #contactModal input[type="text"],
 #contactModal input[type="email"],
 #contactModal input[type="tel"],
@@ -111,10 +124,11 @@
   background: #fff;
   outline: none;
 }
+
 #contactModal input:focus,
 #contactModal textarea:focus {
   border-color: #0b79ff;
-  box-shadow: 0 4px 14px rgba(11,121,255,0.08);
+  box-shadow: 0 4px 14px rgba(11, 121, 255, 0.08);
 }
 
 /* actions */
@@ -125,6 +139,7 @@
   flex-wrap: wrap;
   margin-top: 6px;
 }
+
 #contactModal .btn {
   padding: 8px 12px;
   border-radius: 8px;
@@ -132,21 +147,29 @@
   cursor: pointer;
   font-weight: 600;
 }
+
 #contactModal .btn.secondary {
   background: transparent;
   border: 1px solid #e6e9ee;
   color: #334155;
 }
+
 #contactModal .btn.primary {
   background: #0b79ff;
   color: #fff;
-  box-shadow: 0 8px 20px rgba(11,121,255,0.14);
+  box-shadow: 0 8px 20px rgba(11, 121, 255, 0.14);
 }
 
 /* small screens tweak */
 @media (max-width:420px) {
-  #contactModal .grid-2 { grid-template-columns: 1fr; }
-  #contactModal .modal-content { padding: 14px; border-radius: 10px; }
+  #contactModal .grid-2 {
+    grid-template-columns: 1fr;
+  }
+
+  #contactModal .modal-content {
+    padding: 14px;
+    border-radius: 10px;
+  }
 }
 
 /* Fix input overflow and ensure responsive layout inside modal */
@@ -202,7 +225,7 @@
 #contactModal .modal-actions .btn.primary {
   background: linear-gradient(180deg, #0b79ff 0%, #0466d9 100%);
   color: #ffffff;
-  box-shadow: 0 6px 18px rgba(11,121,255,0.14);
+  box-shadow: 0 6px 18px rgba(11, 121, 255, 0.14);
 }
 
 /* secondary button (outline) */
@@ -214,7 +237,10 @@
 
 /* Slightly smaller padding on very small screens */
 @media (max-width: 420px) {
-  #contactModal .modal-actions .btn { padding: 6px 10px; font-size: 13px; }
+  #contactModal .modal-actions .btn {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
 }
 
 /* Responsive: on small screens stack and make inputs full width */
@@ -223,12 +249,14 @@
     flex-direction: column;
     align-items: stretch;
   }
+
   #contactModal .input-row input[type="text"],
   #contactModal .input-row input[type="email"],
   #contactModal .input-row input[type="tel"] {
     width: 100%;
     max-width: 100%;
   }
+
   #contactModal .modal-actions {
     justify-content: center;
   }
@@ -268,7 +296,8 @@
 /* keep responsiveness */
 @media (max-width:720px) {
   #contactModal.slide-left .modal-content {
-    transform: translateX(-10%); /* less offset on small screens */
+    transform: translateX(-10%);
+    /* less offset on small screens */
   }
 }
 
@@ -278,19 +307,24 @@
   right: 20px !important;
   top: 24px !important;
   bottom: auto !important;
-  display: none !important;           /* hidden by default */
+  display: none !important;
+  /* hidden by default */
   z-index: 14000 !important;
   box-sizing: border-box !important;
-  max-width: 420px !important;        /* cap width */
-  width: auto !important;             /* size to content */
+  max-width: 420px !important;
+  /* cap width */
+  width: auto !important;
+  /* size to content */
   min-width: 160px !important;
-  padding: 0 !important;              /* inner padding on .toast-body */
+  padding: 0 !important;
+  /* inner padding on .toast-body */
   border-radius: 10px !important;
   overflow: hidden !important;
   transform: translateY(8px);
   opacity: 0;
   transition: opacity 220ms ease, transform 220ms ease;
-  pointer-events: none;               /* avoid intercepting clicks when hidden */
+  pointer-events: none;
+  /* avoid intercepting clicks when hidden */
 }
 
 /* visible state */
@@ -310,17 +344,33 @@
   font-size: 14px;
   white-space: normal;
   word-break: break-word;
-  background: linear-gradient(90deg,#3b82f6,#2563eb); /* elegant blue gradient */
+  background: linear-gradient(90deg, #3b82f6, #2563eb);
+  /* elegant blue gradient */
   border-radius: 8px;
   max-height: 60vh;
   overflow: auto;
 }
 
 /* variant colors */
-#toast.info  .toast-body { background: linear-gradient(90deg,#0b79ff,#0466d9); }
-#toast.success .toast-body { background: linear-gradient(90deg,#3b82f6,#2563eb); }
-#toast.error   .toast-body { background: linear-gradient(90deg,#ef4444,#b91c1c); }
+#toast.info .toast-body {
+  background: linear-gradient(90deg, #0b79ff, #0466d9);
+}
+
+#toast.success .toast-body {
+  background: linear-gradient(90deg, #3b82f6, #2563eb);
+}
+
+#toast.error .toast-body {
+  background: linear-gradient(90deg, #ef4444, #b91c1c);
+}
 
 /* prevent inherited full-width rules from affecting toast */
-#toast, #toast * { max-width: 100% !important; }
-#toast { left: auto !important; top: auto !important; }
+#toast,
+#toast * {
+  max-width: 100% !important;
+}
+
+#toast {
+  left: auto !important;
+  top: auto !important;
+}
