@@ -410,17 +410,14 @@
       if (!currentSessionId) {
         currentSessionId = getUUID();
         localStorage.setItem('chat_session_id', currentSessionId);
-        console.log('New session created:', currentSessionId);
       } else {
         isRestoredSession = true;
-        console.log('Session restored:', currentSessionId);
       }
 
       // Function to reset session if needed
       function resetChatSession() {
         currentSessionId = getUUID();
         localStorage.setItem('chat_session_id', currentSessionId);
-        console.log('New chat session started:', currentSessionId);
       }
 
       // Global function for new chat button
@@ -436,7 +433,6 @@
 
       // Global function to test contact form
       window.testContactForm = function () {
-        console.log('Testing contact form...');
         showContactModal();
       }
 
@@ -495,9 +491,6 @@
             session_id: currentSessionId,
             query: message
           };
-
-          console.log('Sending payload:', payload);
-
           const response = await fetch("/chat", {
             method: "POST",
             headers: {
@@ -511,8 +504,6 @@
           }
 
           const data = await response.json();
-          console.log('Received response:', data);
-
           // Hide typing indicator
           hideTyping();
 
@@ -527,7 +518,6 @@
           }
 
         } catch (error) {
-          console.error("Error sending message:", error);
           hideTyping();
           addMessage("⚠️ Network error or backend issue occurred.", "bot");
         }
@@ -734,17 +724,11 @@
       contactSubmitBtn.addEventListener("click", async (event) => {
         event.preventDefault(); // Prevent any default form submission
         event.stopPropagation(); // Stop event bubbling
-
-        console.log('Submit button clicked!');
-
         // Get form values with debugging
         const fname = document.getElementById("fname").value.trim();
         const lname = document.getElementById("lname").value.trim();
         const email = document.getElementById("email").value.trim();
         const phone = document.getElementById("phone").value.trim();
-
-        console.log('Form values:', { fname, lname, email, phone });
-
         const formData = {
           fname: fname,
           lname: lname,
@@ -758,13 +742,9 @@
             timestamp: new Date().toISOString()
           }
         };
-
-        console.log('Sending contact data:', formData);
-
         // Validate required fields
         if (!formData.fname || !formData.email) {
           showToast("Please fill in required fields (Name and Email)", "error");
-          console.log('Validation failed: missing fname or email');
           return;
         }
 
@@ -772,7 +752,6 @@
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(formData.email)) {
           showToast("Please enter a valid email address", "error");
-          console.log('Validation failed: invalid email format');
           return;
         }
 
@@ -781,8 +760,6 @@
         contactSubmitBtn.textContent = "Submitting...";
 
         try {
-          console.log('Sending request to /save-contact...');
-
           const response = await fetch("/save-contact", {
             method: "POST",
             headers: {
@@ -790,11 +767,7 @@
             },
             body: JSON.stringify(formData)
           });
-
-          console.log('Response status:', response.status);
-
           const result = await response.json();
-          console.log('Contact save response:', result);
 
           if (response.ok && result.status === "ok") {
             showToast("Contact information saved successfully!", "success");
@@ -806,13 +779,10 @@
             document.getElementById("email").value = "";
             document.getElementById("phone").value = "";
 
-            console.log('Contact saved successfully with ID:', result.id);
           } else {
             showToast(`Failed to save contact: ${result.detail || result.message || 'Unknown error'}`, "error");
-            console.error('Save failed:', result);
           }
         } catch (error) {
-          console.error("Error saving contact:", error);
           showToast("Error saving contact information", "error");
         } finally {
           // Re-enable submit button
@@ -827,11 +797,6 @@
           hideContactModal();
         }
       });
-
-      console.log("Simple chat interface initialized with default parameters:", DEFAULT_PARAMS);
-      console.log("Current session ID:", currentSessionId);
-      console.log("Session stored in localStorage for continuity");
-
       // Initialize session status on load
       updateSessionStatus();
     });

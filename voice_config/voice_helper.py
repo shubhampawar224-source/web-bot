@@ -99,8 +99,17 @@ class VoiceAssistant:
         self.memory_manager = MemoryManager()
 
         # --- Database setup ---
-        self.db = SQLDatabase.from_uri(db_uri)
-        self.llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+        self.db = SQLDatabase.from_uri(
+            db_uri,
+            sample_rows_in_table_info=3,  # Show more examples including JSON data
+            max_string_length=2000  # Allow longer strings to show full JSON structures
+        )
+        self.llm = ChatOpenAI(
+            model="gpt-4o-mini", 
+            temperature=0,
+            request_timeout=15,  # 15 second timeout for LLM calls
+            max_retries=1  # Reduce retries for faster failure
+        )
 
         # --- Dynamic schema mapping ---
         allowed_columns = get_allowed_columns(self.db)
@@ -116,14 +125,17 @@ class VoiceAssistant:
         # --- Custom prompt with actual schema summary ---
         self.prompt = voice_rag_prompt(schema_summary)
 
-        # --- SQL Agent ---
+        # --- SQL Agent with optimization ---
         self.voice_agent = create_sql_agent(
             llm=self.llm,
             toolkit=self.toolkit,
-            verbose=False,
+            verbose=True,  # Enable verbose to see what agent is doing
             handle_parsing_errors=True,
             agent_type=AgentType.OPENAI_FUNCTIONS,
             prompt=self.prompt,
+            max_iterations=8,  # Increase for deeper search
+            max_execution_time=20,  # Increase timeout for thorough search
+            early_stopping_method="generate"  # Stop early if answer found
         )
 
     # -------------------------
@@ -225,9 +237,17 @@ class VoiceAssistant:
             memory.chat_memory.add_user_message(user_text)
 
             # Add context to help the agent understand it's a voice interface
-            enhanced_input = f"Voice query: {user_text}"
+            enhanced_input = f"Voice query (provide detailed answer): {user_text}"
             
-            result = self.voice_agent.invoke({"input": enhanced_input})
+            # Run agent with timeout
+            start_time = time.time()
+            result = await asyncio.wait_for(
+                asyncio.to_thread(self.voice_agent.invoke, {"input": enhanced_input}),
+                timeout=30.0  # 30 second total timeout for thorough search
+            )
+            elapsed = time.time() - start_time
+            print(f"⏱️ Agent response time: {elapsed:.2f}s")
+            
             bot_text = result.get("output", "") if isinstance(result, dict) else str(result)
 
             # Clean up the response for voice output
@@ -235,17 +255,20 @@ class VoiceAssistant:
             
             # Check for agent timeout/iteration limit and ask user to repeat
             if "agent stopped due to iteration limit" in bot_text.lower() or "agent stopped due to time limit" in bot_text.lower():
-                bot_text = f"I need more time to process that question. Could you please ask the same question again? Your question was: '{user_text}'"
+                bot_text = "That's a great question, but I need a bit more time to search thoroughly. Would you mind asking that again? I promise to find you the best answer I can."
             
             if not bot_text or len(bot_text.strip()) < 5:
-                bot_text = "I'm sorry, I couldn't find the information you're looking for. Could you try asking in a different way?"
+                bot_text = "I wasn't able to find specific information about that. Could you try asking your question in a different way, or perhaps ask about something else I can help you with?"
 
             memory.chat_memory.add_ai_message(bot_text)
             return bot_text
 
+        except asyncio.TimeoutError:
+            print(f"⏰ Agent timeout after 20 seconds")
+            return "I apologize, but I'm taking a bit longer than usual to find that information. Could you please try asking your question again, maybe in a slightly different way? I'll do my best to help you."
         except Exception as e:
             print(f"❌ Agent error: {e}")
-            return "I'm sorry, I encountered an issue while searching for that information. Please try again."
+            return "I apologize, but I'm having a little trouble finding that information right now. Would you mind rephrasing your question or asking something else? I'm here to help."
     
     def clean_response(self, text: str, user_text: str) -> str:
         """Basic cleanup for voice output - main filtering done by prompt"""

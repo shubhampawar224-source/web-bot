@@ -59,14 +59,66 @@ async def scrape_page(client, url, domain):
 
     soup = clean_html(html)
 
-    # Extract main text
-    texts = [e.get_text(" ", strip=True) for e in soup.find_all(["h1", "h2", "h3", "p", "li"])]
-    page_text = " ".join([t for t in texts if t])
+    # PRIORITY 1: Extract FOOTER content (usually contains hours, contact, address)
+    footer_texts = []
+    footer_elements = soup.find_all(['footer', 'div'], class_=lambda c: c and any(x in str(c).lower() for x in ['footer', 'contact', 'hours', 'info']))
+    footer_elements += soup.find_all(['footer', 'div'], id=lambda i: i and any(x in str(i).lower() for x in ['footer', 'contact', 'hours', 'info']))
+    
+    for footer in footer_elements:
+        footer_text = footer.get_text(" ", strip=True)
+        if footer_text and len(footer_text) > 10:
+            footer_texts.append(f"[FOOTER INFO] {footer_text}")
+    
+    # PRIORITY 2: Extract specific contact/hours elements
+    contact_selectors = [
+        ('time', {}),
+        ('address', {}),
+        ('[itemprop="openingHours"]', {}),
+        ('[itemprop="telephone"]', {}),
+        ('[itemprop="address"]', {}),
+        ('div', {'class': lambda c: c and any(x in str(c).lower() for x in ['hours', 'schedule', 'open'])}),
+        ('span', {'class': lambda c: c and any(x in str(c).lower() for x in ['phone', 'tel', 'hours'])}),
+    ]
+    
+    contact_texts = []
+    for selector, attrs in contact_selectors:
+        elements = soup.find_all(selector, attrs) if attrs else soup.select(selector)
+        for elem in elements:
+            text = elem.get_text(" ", strip=True)
+            if text and len(text) > 2:
+                contact_texts.append(f"[CONTACT] {text}")
+    
+    # PRIORITY 3: Extract text from ALL relevant elements
+    text_elements = soup.find_all(["h1", "h2", "h3", "h4", "h5", "h6", "p", "li", "div", "span", "article", "section", "td", "th", "time", "address", "label"])
+    texts = []
+    for e in text_elements:
+        text = e.get_text(" ", strip=True)
+        # Keep meaningful text and contact/time keywords
+        if text and (len(text) > 3 or any(keyword in text.lower() for keyword in ['am', 'pm', 'hours', 'phone', 'email', '@'])):
+            texts.append(text)
+    
+    # Combine: Footer first (highest priority), then contact info, then general content
+    all_text = footer_texts + contact_texts + texts
+    page_text = " ".join(all_text)
 
-    # Extract meta
+    # Extract meta and contact information
     title = soup.title.string.strip() if soup.title and soup.title.string else ""
     meta_tag = soup.find("meta", attrs={"name": "description"}) or soup.find("meta", attrs={"property": "og:description"})
     meta_desc = meta_tag["content"].strip() if meta_tag and meta_tag.get("content") else ""
+    
+    # Extract phone from meta
+    phone_meta = soup.find("meta", attrs={"property": "og:phone_number"}) or soup.find("meta", attrs={"name": "phone"})
+    phone_info = phone_meta["content"].strip() if phone_meta and phone_meta.get("content") else ""
+    
+    # Extract schema.org JSON-LD
+    schema_text = ""
+    for script in soup.find_all("script", type="application/ld+json"):
+        try:
+            import json
+            data = json.loads(script.string)
+            schema_text += " " + str(data)
+        except:
+            pass
 
     # Extract internal links
     links = []
@@ -77,7 +129,13 @@ async def scrape_page(client, url, domain):
             title_txt = a.get_text(strip=True) or "link"
             links.append({"title": title_txt, "url": href})
 
-    meta_info = {"title": title, "meta_description": meta_desc}
+    # Append schema and phone data to page text for better search
+    if phone_info:
+        page_text += f" Phone: {phone_info}"
+    if schema_text:
+        page_text += " " + schema_text
+    
+    meta_info = {"title": title, "meta_description": meta_desc, "phone": phone_info}
     return page_text, links, meta_info
 
 

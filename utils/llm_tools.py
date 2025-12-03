@@ -18,6 +18,15 @@ from utils.vector_store import collection, embedding_model, query_similar_texts
 from utils.prompt_engine import my_prompt_function, session_memory
 from config import OPENAI_API_KEY
 
+# Agentic Search - Intelligent multi-query bypass
+try:
+    from utils.agentic_search import AgenticSearchAgent
+    AGENTIC_SEARCH_ENABLED = True
+    print("✅ Agentic Search enabled - will auto-activate for fuzzy queries")
+except ImportError:
+    AGENTIC_SEARCH_ENABLED = False
+    print("⚠️ Agentic Search not available")
+
 # Debug API key loading
 if OPENAI_API_KEY:
     print(f"✅ OpenAI API key loaded (starts...)")
@@ -42,7 +51,7 @@ def create_llm_client():
         )
         
         llm = ChatOpenAI(
-            model_name="gpt-4o", 
+            model_name="gpt-4.1-preview", 
             temperature=0, 
             openai_api_key=OPENAI_API_KEY,
             http_client=custom_http_client,
@@ -97,8 +106,7 @@ def call_llm_with_fallback(prompt_text: str, max_retries: int = 3, custom_api_ke
             )
             active_openai_client = custom_openai_client
             
-            # Create custom LangChain client
-            import httpx
+            # Create custom LangChain client (httpx already imported at top)
             custom_http_client = httpx.Client(
                 timeout=30.0,
                 limits=httpx.Limits(max_connections=10, max_keepalive_connections=5)
@@ -260,6 +268,43 @@ def get_answer_from_db(query: str, firm_id: int = None, session_id: Optional[str
                 where={"$and": [{"type": "website"}, {"firm_id": str(firm_id)}]},
             )
             docs = results["documents"][0] if results["documents"] else []
+            
+            # 🤖 AGENTIC BYPASS: If traditional search returns poor results, use intelligent multi-query search
+            if AGENTIC_SEARCH_ENABLED and len(docs) < 3:
+                print(f"🔄 Activating Agentic Search (traditional found {len(docs)} docs)")
+                try:
+                    # Create mock vector store wrapper for agentic agent
+                    class VectorStoreWrapper:
+                        def search(self, query_text, n_results=5, where=None):
+                            emb = embedding_model.encode(query_text).tolist()
+                            res = collection.query(
+                                query_embeddings=[emb],
+                                n_results=n_results,
+                                where=where
+                            )
+                            return res
+                    
+                    agent = AgenticSearchAgent(VectorStoreWrapper())
+                    import asyncio
+                    
+                    # Run agentic search
+                    search_result = asyncio.run(agent.search(
+                        query=query,
+                        firm_id=str(firm_id),
+                        n_results=5
+                    ))
+                    
+                    # Extract documents from agentic results
+                    agentic_docs = [r.get("content", "") for r in search_result["final_results"]]
+                    
+                    if agentic_docs and len(agentic_docs) > len(docs):
+                        print(f"✅ Agentic found {len(agentic_docs)} docs (vs {len(docs)} traditional)")
+                        print(f"   Queries tried: {search_result['total_queries_tried']}")
+                        print(f"   Confidence: {search_result['confidence']:.1%}")
+                        docs = agentic_docs
+                    
+                except Exception as e:
+                    print(f"⚠️ Agentic search failed, using traditional results: {e}")
 
             # 3️⃣ Load firm context & links
             firm_name, links_list = load_firm_and_links(firm_id)

@@ -1,6 +1,7 @@
 import io
 import base64
 import os
+import uuid
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -27,11 +28,16 @@ async def get_index():
 async def ws_voice(ws: WebSocket):
     await ws.accept()
     session_id = str(ws.client.host)  # or uuid.uuid4() for uniqueness
+    session_id = str(uuid.uuid4())
     print(f"🎧 Voice session started: {session_id}")
 
     try:
         # Send greeting
         greeting = "Hello! I’m your AI voice assistant. How can I help you today?"
+        # The VoiceAssistant's safe_send needs to be adapted to send JSON
+        # For now, we assume it can handle it or we would modify it.
+        # A simple implementation would be:
+        # await ws.send_json({"type": "text", "data": greeting})
         await voice_assistant.safe_send(ws, greeting)
 
         # Listen loop
