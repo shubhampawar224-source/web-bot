@@ -54,9 +54,47 @@ async def scrape_page(client, url, domain):
     # clean_html is expected to return a BeautifulSoup object (already sanitized)
     soup = clean_html(html)
 
-    # Extract text
-    texts = [e.get_text(" ", strip=True) for e in soup.find_all(["h1", "h2", "h3", "p", "li"])]
-    page_text = " ".join([t for t in texts if t])
+    # PRIORITY 1: Extract FOOTER content (hours, contact, address)
+    footer_texts = []
+    footer_elements = soup.find_all(['footer', 'div'], class_=lambda c: c and any(x in str(c).lower() for x in ['footer', 'contact', 'hours', 'info']))
+    footer_elements += soup.find_all(['footer', 'div'], id=lambda i: i and any(x in str(i).lower() for x in ['footer', 'contact', 'hours', 'info']))
+    
+    for footer in footer_elements:
+        footer_text = footer.get_text(" ", strip=True)
+        if footer_text and len(footer_text) > 10:
+            footer_texts.append(f"[FOOTER INFO] {footer_text}")
+    
+    # PRIORITY 2: Extract specific contact/hours elements
+    contact_selectors = [
+        ('time', {}),
+        ('address', {}),
+        ('[itemprop="openingHours"]', {}),
+        ('[itemprop="telephone"]', {}),
+        ('[itemprop="address"]', {}),
+        ('div', {'class': lambda c: c and any(x in str(c).lower() for x in ['hours', 'schedule', 'open'])}),
+        ('span', {'class': lambda c: c and any(x in str(c).lower() for x in ['phone', 'tel', 'hours'])}),
+    ]
+    
+    contact_texts = []
+    for selector, attrs in contact_selectors:
+        elements = soup.find_all(selector, attrs) if attrs else soup.select(selector)
+        for elem in elements:
+            text = elem.get_text(" ", strip=True)
+            if text and len(text) > 2:
+                contact_texts.append(f"[CONTACT] {text}")
+    
+    # PRIORITY 3: Extract text from ALL relevant elements
+    text_elements = soup.find_all(["h1", "h2", "h3", "h4", "h5", "h6", "p", "li", "div", "span", "article", "section", "td", "th", "time", "address", "label"])
+    texts = []
+    for e in text_elements:
+        text = e.get_text(" ", strip=True)
+        # Skip empty or very short fragments, but keep them if they contain time/contact keywords
+        if text and (len(text) > 3 or any(keyword in text.lower() for keyword in ['am', 'pm', 'hours', 'phone', 'email', '@'])):
+            texts.append(text)
+    
+    # Combine: Footer first (highest priority), then contact info, then general content
+    all_text = footer_texts + contact_texts + texts
+    page_text = " ".join(all_text)
 
     # Extract internal links
     links = []
@@ -179,18 +217,49 @@ async def build_about(url: str, base_dir="scraped_data"):
         soup = BeautifulSoup(all_texts[0] if all_texts else "", "html.parser")
 
     title = soup.title.string.strip() if soup.title and soup.title.string else domain
+    
+    # Extract ALL meta information
     meta_tag = soup.find("meta", attrs={"name": "description"}) or soup.find("meta", attrs={"property": "og:description"})
     meta_desc = meta_tag["content"].strip() if meta_tag and meta_tag.get("content") else ""
+    
+    # Extract contact info from meta tags
+    phone_meta = soup.find("meta", attrs={"property": "og:phone_number"}) or soup.find("meta", attrs={"name": "phone"})
+    phone_info = phone_meta["content"].strip() if phone_meta and phone_meta.get("content") else ""
+    
+    # Extract schema.org structured data (JSON-LD)
+    schema_data = []
+    for script in soup.find_all("script", type="application/ld+json"):
+        try:
+            import json
+            data = json.loads(script.string)
+            schema_data.append(str(data))
+        except:
+            pass
+    
     tagline = next((t.get_text(" ", strip=True) for t in soup.find_all(["h1", "h2"]) if len(t.get_text(strip=True)) > 5), "")
     first_p = next((p.get_text(" ", strip=True) for p in soup.find_all("p") if len(p.get_text(strip=True)) > 30), "")
+    
+    # Append schema data and phone to full text for better searchability
+    additional_info = []
+    if phone_info:
+        additional_info.append(f"Phone: {phone_info}")
+    if schema_data:
+        additional_info.append(" ".join(schema_data))
 
+    # Combine all text with additional metadata for comprehensive search
+    full_text_parts = all_texts.copy()
+    if 'additional_info' in locals() and additional_info:
+        full_text_parts.extend(additional_info)
+    
     about_data = {
         "source_url": url,
         "firm_name": FirmManager.normalize_firm_name(url),  # Use consistent firm naming
         "tagline": tagline,
         "meta_description": meta_desc,
         "short_description": first_p,
-        "full_text": " ".join(all_texts)
+        "full_text": " ".join(full_text_parts),
+        "phone": phone_info if 'phone_info' in locals() else "",
+        "has_schema_data": len(schema_data) > 0 if 'schema_data' in locals() else False
     }
 
     # Save to DB safely using centralized firm manager

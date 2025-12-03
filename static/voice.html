@@ -1,28 +1,1029 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>🎤 Voice Assistant</title>
-<link rel="stylesheet" href="/static/css/voice.css">
-</head>
-<body>
-  <div class="controls">
-    <button id="micBtn" title="Start/Stop Recording"><span>🎙️</span></button>
-    <!-- <button id="pauseBtn" class="ctrl-btn pause" title="Pause"><span>⏸️</span></button> -->
-    <!-- <button id="resumeBtn" class="ctrl-btn resume" style="display:none;" title="Resume"><span>▶️</span></button> -->
-    <button id="stopBtn" class="ctrl-btn stop" title="Stop"><span>⏹️</span></button>
-  </div>
-  <div id="status">Click mic to start</div>
-  <div id="silenceProgress" style="display: none;">
-    <div class="progress-bar">
-      <div id="progressFill"></div>
-    </div>
-    <div id="progressText">Waiting for silence...</div>
-  </div>
-  <div id="waveform"></div>
-  <div id="botSpeaking"></div>
-  <audio id="botAudio" autoplay></audio>
 
-  <script src="/static/js/voice.js"></script>
+<head>
+    <meta charset="UTF-8">
+    <title>🎤 Voice Assistant</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: #f6f7fa;
+            margin: 0;
+            min-height: 100vh;
+        }
+
+        .container {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding: 20px 10px;
+        }
+
+        .chat-window {
+            width: 100%;
+            max-width: 480px;
+            height: 500px;
+            background: #fff;
+            border-radius: 22px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border: 1.5px solid #e0e6ed;
+        }
+
+        .chat-header {
+            background: #4a90e2;
+            color: #fff;
+            padding: 22px 0 18px 0;
+            text-align: center;
+            font-size: 1.5rem;
+            font-weight: bold;
+            border-radius: 22px 22px 0 0;
+            letter-spacing: 0.5px;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            background: #fcfdff;
+        }
+
+        .message {
+            padding: 18px 20px;
+            border-radius: 16px;
+            max-width: 85%;
+            line-height: 1.6;
+            font-size: 16px;
+            word-break: break-word;
+            background: #fff;
+            border: 2px solid #4a90e2;
+            color: #222;
+        }
+
+        .message.user {
+            background: #f5faff;
+            color: #222;
+            align-self: flex-end;
+            border: 2px solid #4a90e2;
+        }
+
+        .message.assistant {
+            background: #fff;
+            color: #222;
+            align-self: flex-start;
+            border: 2px solid #4a90e2;
+        }
+
+        .status-bar {
+            background: #fff7f0;
+            color: #666;
+            font-size: 14px;
+            text-align: center;
+            padding: 8px 12px;
+            border-top: 1px solid #f0f0f0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .bottom-bar {
+            background: #fff;
+            padding: 12px 16px 16px 16px;
+            border-radius: 0 0 22px 22px;
+        }
+
+        .input-bar {
+            width: 100%;
+            background: #f8f9fb;
+            border: 1.5px solid #e0e6ed;
+            border-radius: 24px;
+            display: flex;
+            align-items: center;
+            padding: 0 14px 0 0px;
+            gap: 8px;
+            transition: border-color 0.2s;
+        }
+
+        .input-bar:focus-within {
+            border-color: #4a90e2;
+        }
+
+        .input-box {
+            flex: 1;
+            border: none;
+            background: transparent;
+            font-size: 17px;
+            padding: 16px 0;
+            outline: none;
+        }
+
+        .mic-btn,
+        .stop-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: #4a90e2;
+            color: #fff;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            padding: 0;
+            cursor: pointer;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+
+        .mic-btn:hover {
+            background: #3a7bc8;
+            transform: scale(1.05);
+        }
+
+        .mic-btn.recording {
+            background: #f43f5e;
+            animation: pulse 1.5s infinite;
+        }
+
+        .stop-btn {
+            background: #ef4444;
+        }
+
+        .stop-btn:hover {
+            background: #dc2626;
+            transform: scale(1.05);
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.7;
+            }
+        }
+
+        .mic-btn.interrupt-ready {
+            background: #f59e0b !important;
+            animation: pulse-interrupt 1.5s infinite !important;
+        }
+
+        @keyframes pulse-interrupt {
+
+            0%,
+            100% {
+                opacity: 1;
+                box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7);
+            }
+
+            50% {
+                opacity: 0.9;
+                box-shadow: 0 0 0 10px rgba(245, 158, 11, 0);
+            }
+        }
+
+        @media (max-width: 600px) {
+            .chat-window {
+                max-width: 100vw;
+                height: calc(100vh - 40px);
+                border-radius: 16px;
+            }
+
+            .chat-header {
+                border-radius: 16px 16px 0 0;
+            }
+
+            .bottom-bar {
+                border-radius: 0 0 16px 16px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="chat-window">
+            <div class="chat-header">Voice Assistant</div>
+            <div class="chat-messages" id="chat-messages"></div>
+            <audio id="botAudio" autoplay></audio>
+            <div class="status-bar" id="status">Click mic to start</div>
+            <div class="bottom-bar">
+                <div class="input-bar">
+                    <input id="textInput" class="input-box" type="text" placeholder="Ask anything..."
+                        autocomplete="off" />
+                    <button id="micBtn" class="mic-btn" title="Start Recording">🎙️</button>
+                    <button id="stopBtn" class="stop-btn" title="Stop Recording" style="display:none;">⏹️</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const statusDiv = document.getElementById('status');
+        const chatMessages = document.getElementById('chat-messages');
+        const micBtn = document.getElementById('micBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const botAudio = document.getElementById('botAudio');
+
+        let ws = null;
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let sessionId = null;
+        let currentStream = null;
+        let currentAudioContext = null;
+        let isProcessingQuery = false;
+        let isBotSpeaking = false;
+        let silenceInterval = null;
+        let isManualStop = false;
+        let voiceInterruptionStream = null;
+        let voiceInterruptionContext = null;
+        let voiceInterruptionAnalyser = null;
+        let voiceInterruptionInterval = null;
+
+        function addMessage(text, sender) {
+            const messageElem = document.createElement('div');
+            messageElem.classList.add('message', sender);
+            messageElem.textContent = text;
+            chatMessages.appendChild(messageElem);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function speakText(text) {
+            if (!text || text.trim() === '') return;
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 1.0;
+            utterance.pitch = 1.0;
+            utterance.volume = 1.0;
+            window.speechSynthesis.speak(utterance);
+        }
+
+        async function startVoiceInterruptionDetection() {
+            if (voiceInterruptionStream) {
+                console.log("Voice interruption detection already running");
+                return;
+            }
+
+            try {
+                console.log("Starting background voice detection for interruption...");
+
+                voiceInterruptionStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        channelCount: 1,
+                        sampleRate: 44100
+                    }
+                });
+
+                voiceInterruptionContext = new AudioContext();
+                const source = voiceInterruptionContext.createMediaStreamSource(voiceInterruptionStream);
+
+                voiceInterruptionAnalyser = voiceInterruptionContext.createAnalyser();
+                voiceInterruptionAnalyser.fftSize = 2048;
+                voiceInterruptionAnalyser.smoothingTimeConstant = 0.8;
+                source.connect(voiceInterruptionAnalyser);
+
+                const bufferLength = voiceInterruptionAnalyser.frequencyBinCount;
+                const dataArray = new Float32Array(bufferLength);
+                const frequencyData = new Uint8Array(bufferLength);
+
+                let consecutiveVoiceDetections = 0;
+
+                function detectVoiceInterruption() {
+                    if (!isBotSpeaking || !voiceInterruptionAnalyser || isManualStop) {
+                        return;
+                    }
+
+                    voiceInterruptionAnalyser.getFloatTimeDomainData(dataArray);
+                    voiceInterruptionAnalyser.getByteFrequencyData(frequencyData);
+
+                    const rms = Math.sqrt(dataArray.reduce((sum, v) => sum + v * v, 0) / bufferLength);
+                    const db = 20 * Math.log10(rms + 1e-8);
+
+                    const sampleRate = voiceInterruptionContext.sampleRate;
+                    const voiceFreqStart = Math.floor(300 * bufferLength / (sampleRate / 2));
+                    const voiceFreqEnd = Math.floor(3400 * bufferLength / (sampleRate / 2));
+                    const midFreqStart = Math.floor(800 * bufferLength / (sampleRate / 2));
+                    const midFreqEnd = Math.floor(2000 * bufferLength / (sampleRate / 2));
+
+                    let voiceEnergy = 0;
+                    let totalEnergy = 0;
+                    let midFreqEnergy = 0;
+
+                    for (let i = 0; i < bufferLength; i++) {
+                        const energy = frequencyData[i];
+                        totalEnergy += energy;
+
+                        if (i >= voiceFreqStart && i <= voiceFreqEnd) {
+                            voiceEnergy += energy;
+                        }
+                        if (i >= midFreqStart && i <= midFreqEnd) {
+                            midFreqEnergy += energy;
+                        }
+                    }
+
+                    const voiceRatio = totalEnergy > 0 ? voiceEnergy / totalEnergy : 0;
+                    const midFreqRatio = totalEnergy > 0 ? midFreqEnergy / totalEnergy : 0;
+
+                    const isVoiceDetected =
+                        db > -30 &&
+                        voiceRatio > 0.15 &&
+                        midFreqRatio > 0.1 &&
+                        totalEnergy > 30;
+
+                    if (isVoiceDetected) {
+                        consecutiveVoiceDetections++;
+                        console.log(`Voice interruption: dB=${db.toFixed(1)}, voiceRatio=${voiceRatio.toFixed(2)}, count=${consecutiveVoiceDetections}`);
+
+                        if (consecutiveVoiceDetections >= 2) {
+                            console.log("Voice interruption triggered!");
+                            handleVoiceInterruption();
+                        }
+                    } else {
+                        if (consecutiveVoiceDetections > 0) {
+                            consecutiveVoiceDetections = Math.max(0, consecutiveVoiceDetections - 0.5);
+                        }
+                    }
+                }
+
+                voiceInterruptionInterval = setInterval(detectVoiceInterruption, 200);
+                console.log("Background voice interruption detection started");
+
+            } catch (error) {
+                console.error("Failed to start voice interruption detection:", error);
+            }
+        }
+
+        function stopVoiceInterruptionDetection() {
+            console.log("Stopping background voice interruption detection...");
+
+            if (voiceInterruptionInterval) {
+                clearInterval(voiceInterruptionInterval);
+                voiceInterruptionInterval = null;
+            }
+
+            if (voiceInterruptionStream) {
+                voiceInterruptionStream.getTracks().forEach(track => {
+                    track.stop();
+                    console.log("Stopped interruption track:", track.kind);
+                });
+                voiceInterruptionStream = null;
+            }
+
+            if (voiceInterruptionContext && voiceInterruptionContext.state !== 'closed') {
+                voiceInterruptionContext.close();
+                voiceInterruptionContext = null;
+            }
+
+            voiceInterruptionAnalyser = null;
+            console.log("Background voice interruption detection stopped");
+        }
+
+        function handleVoiceInterruption() {
+            console.log("========== VOICE INTERRUPTION DETECTED ==========");
+
+            // IMMEDIATELY clear processing flag to prevent blocking
+            isProcessingQuery = false;
+            isBotSpeaking = false;
+            console.log("✅ Cleared isProcessingQuery and isBotSpeaking flags");
+
+            // Stop background voice interruption detection first
+            stopVoiceInterruptionDetection();
+
+            // Stop bot audio immediately
+            if (botAudio && !botAudio.paused) {
+                botAudio.pause();
+                botAudio.currentTime = 0;
+                console.log("Bot audio stopped");
+            }
+
+            // Stop speech synthesis if active
+            window.speechSynthesis.cancel();
+
+            // Remove visual indicators
+            micBtn.classList.remove("interrupt-ready");
+            micBtn.classList.remove("recording");
+
+            // Fade last bot message
+            const existingMessages = chatMessages.querySelectorAll('.message.assistant');
+            if (existingMessages.length > 0) {
+                const lastMessage = existingMessages[existingMessages.length - 1];
+                lastMessage.style.opacity = '0.6';
+            }
+
+            // Cleanup any existing recording session completely
+            console.log("Cleaning up existing recording session before interruption restart...");
+            cleanupRecordingSession(false);
+
+            if (!isManualStop) {
+                statusDiv.textContent = "🎙️ Interrupted! Starting fresh recording...";
+                statusDiv.className = "";
+
+                // Longer delay to ensure complete cleanup
+                setTimeout(() => {
+                    if (ws && ws.readyState === WebSocket.OPEN && !isManualStop) {
+                        console.log("Starting completely new recording after interruption");
+                        startRecording();
+                    } else {
+                        console.log("Cannot restart - WebSocket not ready or manual stop active");
+                    }
+                }, 800); // Increased delay for better cleanup
+            }
+        }
+
+        function cleanupRecordingSession(skipStopRecorder = false) {
+            console.log("Cleaning up recording session...", "skipStopRecorder:", skipStopRecorder);
+
+            // Stop voice interruption detection
+            stopVoiceInterruptionDetection();
+
+            // Stop interval first to prevent any more detectSilence calls
+            if (silenceInterval) {
+                clearInterval(silenceInterval);
+                silenceInterval = null;
+            }            // Stop mediaRecorder unless we're doing a manual stop (to avoid triggering onstop)
+            if (!skipStopRecorder && mediaRecorder && mediaRecorder.state !== "inactive") {
+                try {
+                    mediaRecorder.stop();
+                } catch (e) {
+                    console.log("Error stopping mediaRecorder:", e);
+                }
+            }
+
+            // Stop all stream tracks
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => {
+                    track.stop();
+                    console.log("Stopped track:", track.kind);
+                });
+                currentStream = null;
+            }
+
+            // Close audio context
+            if (currentAudioContext && currentAudioContext.state !== 'closed') {
+                currentAudioContext.close();
+                currentAudioContext = null;
+            }
+
+            audioChunks = [];
+            mediaRecorder = null;
+        }
+
+        async function startRecording() {
+            console.log("startRecording called - isProcessingQuery:", isProcessingQuery, "isManualStop:", isManualStop);
+
+            if (isManualStop) {
+                console.log("Manual stop active, not starting recording");
+                return;
+            }
+
+            cleanupRecordingSession(false);
+
+            if (isBotSpeaking && botAudio) {
+                console.log("Bot is speaking, handling interruption in startRecording...");
+
+                // Stop voice interruption detection
+                stopVoiceInterruptionDetection();
+
+                // Stop bot audio
+                botAudio.pause();
+                botAudio.currentTime = 0;
+
+                // Stop speech synthesis
+                window.speechSynthesis.cancel();
+
+                // Clear flags
+                isBotSpeaking = false;
+                isProcessingQuery = false;
+
+                // Remove visual indicators
+                micBtn.classList.remove("interrupt-ready");
+
+                // Fade last message
+                const existingMessages = chatMessages.querySelectorAll('.message.assistant');
+                if (existingMessages.length > 0) {
+                    const lastMessage = existingMessages[existingMessages.length - 1];
+                    lastMessage.style.opacity = '0.6';
+                }
+
+                statusDiv.textContent = "🎙️ Interrupted. Starting fresh recording...";
+                statusDiv.className = "";
+                console.log("Bot speech interrupted, ready for fresh recording");
+            }
+
+            try {
+                console.log("Getting new audio stream...");
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        channelCount: 1,
+                        sampleRate: 44100
+                    }
+                });
+
+                currentStream = stream;
+                const audioContext = new AudioContext();
+                currentAudioContext = audioContext;
+                const source = audioContext.createMediaStreamSource(stream);
+
+                const analyser = audioContext.createAnalyser();
+                analyser.fftSize = 4096;
+                analyser.smoothingTimeConstant = 0.8;
+                const bufferLength = analyser.frequencyBinCount;
+                const dataArray = new Float32Array(bufferLength);
+                const frequencyData = new Uint8Array(bufferLength);
+                source.connect(analyser);
+
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+                let hasSound = false;
+                let silenceCount = 0;
+                let isRecording = true;
+                let silenceThreshold = 10; // 2 seconds (10 × 200ms)
+                let lastSoundTime = Date.now();
+                let voiceConfidenceCount = 0;
+
+                function detectSilence() {
+                    if (!isRecording || isManualStop) return;
+
+                    analyser.getFloatTimeDomainData(dataArray);
+                    analyser.getByteFrequencyData(frequencyData);
+
+                    const rms = Math.sqrt(dataArray.reduce((sum, v) => sum + v * v, 0) / bufferLength);
+                    const db = 20 * Math.log10(rms + 1e-8);
+
+                    const voiceFreqStart = Math.floor(300 * bufferLength / (audioContext.sampleRate / 2));
+                    const voiceFreqEnd = Math.floor(3400 * bufferLength / (audioContext.sampleRate / 2));
+                    const midFreqStart = Math.floor(800 * bufferLength / (audioContext.sampleRate / 2));
+                    const midFreqEnd = Math.floor(2000 * bufferLength / (audioContext.sampleRate / 2));
+
+                    let voiceEnergy = 0;
+                    let totalEnergy = 0;
+                    let midFreqEnergy = 0;
+
+                    for (let i = 0; i < bufferLength; i++) {
+                        const energy = frequencyData[i];
+                        totalEnergy += energy;
+                        if (i >= voiceFreqStart && i <= voiceFreqEnd) {
+                            voiceEnergy += energy;
+                        }
+                        if (i >= midFreqStart && i <= midFreqEnd) {
+                            midFreqEnergy += energy;
+                        }
+                    }
+
+                    const voiceRatio = totalEnergy > 0 ? voiceEnergy / totalEnergy : 0;
+                    const midFreqRatio = totalEnergy > 0 ? midFreqEnergy / totalEnergy : 0;
+
+                    const isLikelyVoice =
+                        db > -35 &&
+                        voiceRatio > 0.15 &&
+                        midFreqRatio > 0.08 &&
+                        totalEnergy > 20;
+
+                    if (isLikelyVoice) {
+                        voiceConfidenceCount++;
+                        if (voiceConfidenceCount === 1) {
+                            console.log(`✅ Voice detected: dB=${db.toFixed(1)}, voiceRatio=${voiceRatio.toFixed(2)}`);
+                        }
+
+                        if (voiceConfidenceCount >= 1) {
+                            hasSound = true;
+                            silenceCount = 0;
+                            lastSoundTime = Date.now();
+                            if (!isManualStop) {
+                                statusDiv.textContent = "🎙️ Listening...";
+                            }
+                        }
+                    } else {
+                        if (voiceConfidenceCount > 0) {
+                            voiceConfidenceCount = Math.max(0, voiceConfidenceCount - 0.5);
+                        }
+                        if (voiceConfidenceCount < 0.5) {
+                            silenceCount++;
+                        }
+
+                        if (hasSound && silenceCount >= silenceThreshold) {
+                            if (isManualStop) {
+                                console.log("Manual stop active, not processing");
+                                return;
+                            }
+                            console.log("🔇 2 seconds of silence detected - preparing to send audio");
+                            isProcessingQuery = true;
+                            isRecording = false;
+                            if (!isManualStop) {
+                                statusDiv.textContent = "⏳ Processing your question...";
+                            }
+                            if (silenceInterval) {
+                                clearInterval(silenceInterval);
+                                silenceInterval = null;
+                            }
+                            console.log("⏹️ Stopping media recorder...");
+                            mediaRecorder.stop();
+                        }
+                    }
+
+                    if (Date.now() - lastSoundTime > 30000) {
+                        if (isManualStop) return;
+                        console.log("Maximum recording time reached");
+                        isRecording = false;
+                        if (silenceInterval) {
+                            clearInterval(silenceInterval);
+                            silenceInterval = null;
+                        }
+                        mediaRecorder.stop();
+                    }
+                }
+
+                silenceInterval = setInterval(detectSilence, 200);
+
+                mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+
+                mediaRecorder.onstop = async () => {
+                    console.log("MediaRecorder.onstop triggered");
+                    if (silenceInterval) {
+                        clearInterval(silenceInterval);
+                        silenceInterval = null;
+                    }
+                    isRecording = false;
+
+                    if (isManualStop) {
+                        console.log("Manual stop - not processing audio");
+                        cleanupRecordingSession();
+                        return;
+                    }
+
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                    console.log("Audio blob size:", audioBlob.size, "hasSound:", hasSound);
+
+                    if (!hasSound || audioBlob.size < 200) {
+                        console.log("No meaningful audio detected");
+                        statusDiv.textContent = "No speech detected. Try again...";
+                        isProcessingQuery = false;
+                        cleanupRecordingSession();
+                        if (!isManualStop) {
+                            setTimeout(() => {
+                                statusDiv.textContent = "🎙️ Listening...";
+                                startRecording();
+                            }, 2000);
+                        }
+                    } else {
+                        const arrayBuffer = await audioBlob.arrayBuffer();
+                        const base64Audio = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+
+                        if (ws && ws.readyState === WebSocket.OPEN) {
+                            console.log("📤 Sending audio to server - size:", base64Audio.length, "session:", sessionId);
+                            ws.send(JSON.stringify({ audio: base64Audio, session_id: sessionId }));
+                            console.log("✅ Audio sent successfully");
+                            statusDiv.textContent = "🤖 Thinking...";
+
+                            // Safety timeout: if no response in 15s, reset and allow new input
+                            setTimeout(() => {
+                                if (isProcessingQuery && !isBotSpeaking) {
+                                    console.warn("⚠️ Processing timeout (15s) - resetting state");
+                                    isProcessingQuery = false;
+                                    isBotSpeaking = false;
+                                    cleanupRecordingSession();
+                                    statusDiv.textContent = "⚠️ Timeout - Click mic to try again";
+                                    micBtn.style.display = 'inline-flex';
+                                    stopBtn.style.display = 'none';
+                                }
+                            }, 15000);
+                        } else {
+                            console.log("WebSocket not connected");
+                            cleanupRecordingSession();
+                            statusDiv.textContent = "🔌 Connection lost!";
+                            isProcessingQuery = false;
+                        }
+                    }
+                };
+
+                if (isManualStop) {
+                    console.log("Manual stop detected, aborting start");
+                    cleanupRecordingSession(true);
+                    return;
+                }
+
+                mediaRecorder.start();
+                micBtn.style.display = 'none';
+                stopBtn.style.display = 'inline-flex';
+                if (!isManualStop) {
+                    statusDiv.textContent = "🎙️ Listening... (Start speaking)";
+                }
+
+            } catch (err) {
+                console.error("Microphone error:", err);
+                statusDiv.textContent = "Microphone access denied!";
+            }
+        }
+
+        micBtn.onclick = async () => {
+            isManualStop = false;
+
+            if (isBotSpeaking) {
+                console.log("========== USER MANUALLY INTERRUPTED BOT ==========");
+
+                // IMMEDIATELY clear all blocking flags
+                isBotSpeaking = false;
+                isProcessingQuery = false;
+                console.log("✅ Cleared all flags for manual interruption");
+
+                // Stop voice interruption detection
+                stopVoiceInterruptionDetection();
+
+                // Stop bot audio and speech
+                if (botAudio && !botAudio.paused) {
+                    botAudio.pause();
+                    botAudio.currentTime = 0;
+                }
+                window.speechSynthesis.cancel();
+
+                // Remove visual indicators
+                micBtn.classList.remove("interrupt-ready");
+
+                // Fade last message
+                const existingMessages = chatMessages.querySelectorAll('.message.assistant');
+                if (existingMessages.length > 0) {
+                    const lastMessage = existingMessages[existingMessages.length - 1];
+                    lastMessage.style.opacity = '0.6';
+                }
+
+                // Cleanup any existing recording
+                cleanupRecordingSession(false);
+
+                statusDiv.textContent = "🎙️ Interrupted - Starting fresh recording...";
+                statusDiv.className = "";
+
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    setTimeout(() => {
+                        console.log("Starting fresh recording after manual interruption");
+                        startRecording();
+                    }, 600);
+                    return;
+                }
+            } if (ws && ws.readyState === WebSocket.OPEN) {
+                console.warn("WebSocket already open");
+                return;
+            }
+
+            if (ws && ws.readyState === WebSocket.CONNECTING) {
+                console.log("WebSocket already connecting");
+                return;
+            }
+
+            micBtn.disabled = true;
+            micBtn.classList.add("recording");
+            statusDiv.textContent = "🔄 Connecting...";
+
+            try {
+                ws = new WebSocket(`ws://${window.location.host}/ws/voice`);
+
+                ws.onopen = () => {
+                    console.log("WS Connected");
+                    statusDiv.textContent = "⏳ Waiting for session...";
+                };
+
+                ws.onmessage = async (event) => {
+                    const data = JSON.parse(event.data);
+
+                    if (data.session_id) {
+                        sessionId = data.session_id;
+                        console.log("Session started:", sessionId);
+                        statusDiv.textContent = "🎙️ Ready! Start speaking...";
+                        micBtn.disabled = false;
+                        micBtn.classList.remove("recording");
+                        startRecording();
+                        return;
+                    }
+
+                    if (data.audio && data.bot_text) {
+                        console.log("Received bot response");
+                        // IMMEDIATELY clear processing flag to unblock
+                        isProcessingQuery = false;
+                        console.log("✅ Cleared isProcessingQuery - received bot response");
+
+                        if (!isManualStop) {
+                            statusDiv.textContent = "🤖 Speaking... (Start talking to interrupt)";
+                        }
+
+                        addMessage(data.bot_text, 'assistant');
+
+                        const audioBlob = new Blob(
+                            [Uint8Array.from(atob(data.audio), c => c.charCodeAt(0))],
+                            { type: "audio/wav" }
+                        );
+                        botAudio.src = URL.createObjectURL(audioBlob);
+                        isBotSpeaking = true;
+
+                        // Start background voice detection for automatic interruption
+                        if (!isManualStop) {
+                            startVoiceInterruptionDetection();
+                        }
+
+                        // Visual indicator that interruption is available
+                        micBtn.classList.add("interrupt-ready");
+                        console.log("Bot started speaking, interruption enabled");
+
+                        // Play audio with error handling
+                        botAudio.play().catch(err => {
+                            console.error("Bot audio play error:", err);
+                            isProcessingQuery = false;
+                            isBotSpeaking = false;
+                            stopVoiceInterruptionDetection();
+                            micBtn.classList.remove("interrupt-ready");
+                            if (!isManualStop) {
+                                statusDiv.textContent = "⚠️ Audio error. Click mic to continue";
+                            }
+                        });
+
+                        botAudio.onended = () => {
+                            console.log("Bot audio ended");
+                            isBotSpeaking = false;
+                            isProcessingQuery = false;
+
+                            // Stop background voice interruption detection
+                            stopVoiceInterruptionDetection();
+
+                            // Remove interrupt visual indicator
+                            micBtn.classList.remove("interrupt-ready");
+
+                            if (!isManualStop) {
+                                statusDiv.textContent = "🎙️ Listening...";
+                                setTimeout(() => {
+                                    startRecording();
+                                }, 1000);
+                            } else {
+                                statusDiv.textContent = "Connection closed. Click mic to start.";
+                            }
+                        };
+
+                        botAudio.onerror = () => {
+                            console.log("Bot audio error");
+                            isBotSpeaking = false;
+                            isProcessingQuery = false;
+
+                            // Stop background voice interruption detection
+                            stopVoiceInterruptionDetection();
+
+                            // Remove interrupt visual indicator
+                            micBtn.classList.remove("interrupt-ready");
+
+                            if (!isManualStop) {
+                                statusDiv.textContent = "🎙️ Audio error. Listening again...";
+                                setTimeout(() => {
+                                    startRecording();
+                                }, 1000);
+                            } else {
+                                statusDiv.textContent = "Connection closed. Click mic to start.";
+                            }
+                        };
+                    }
+
+                    if (data.bot_text && !data.audio) {
+                        console.log("Received text-only response");
+                        isProcessingQuery = false;
+                        isBotSpeaking = false;
+                        console.log("✅ Cleared flags for text-only response");
+                        addMessage(data.bot_text, 'assistant');
+                        speakText(data.bot_text);
+                        if (!isManualStop) {
+                            setTimeout(() => {
+                                statusDiv.textContent = "🎙️ Listening...";
+                                startRecording();
+                            }, 3000);
+                        } else {
+                            statusDiv.textContent = "Connection closed. Click mic to start.";
+                        }
+                    }
+                };
+
+                ws.onerror = (err) => {
+                    console.error("WS Error:", err);
+                    cleanupRecordingSession();
+                    statusDiv.textContent = "❌ Connection error!";
+                    micBtn.disabled = false;
+                    isProcessingQuery = false;
+                    isBotSpeaking = false;
+                };
+
+                ws.onclose = () => {
+                    console.log("WS Closed");
+                    cleanupRecordingSession();
+                    statusDiv.textContent = "🔌 Connection lost! Click to reconnect.";
+                    micBtn.disabled = false;
+                    isProcessingQuery = false;
+                    isBotSpeaking = false;
+                };
+
+            } catch (error) {
+                console.error("Failed to create WebSocket:", error);
+                statusDiv.textContent = "❌ Failed to connect!";
+                micBtn.disabled = false;
+                micBtn.classList.remove("recording");
+            }
+        };
+
+        stopBtn.onclick = () => {
+            console.log("========== STOP BUTTON CLICKED ==========");
+
+            // Set flags FIRST before any cleanup - ATOMIC OPERATION
+            isManualStop = true;
+            isProcessingQuery = false;
+            isBotSpeaking = false;
+
+            // Update UI immediately so user sees instant feedback
+            statusDiv.textContent = "Stopping...";
+
+            // Clear interval immediately to stop detectSilence - CRITICAL
+            if (silenceInterval) {
+                clearInterval(silenceInterval);
+                silenceInterval = null;
+                console.log("Silence interval cleared");
+            }
+
+            // Stop mediaRecorder directly without triggering cleanup chain
+            if (mediaRecorder) {
+                // Remove the onstop handler to prevent it from executing
+                mediaRecorder.onstop = null;
+                if (mediaRecorder.state !== "inactive") {
+                    try {
+                        mediaRecorder.stop();
+                    } catch (e) {
+                        console.log("Error stopping mediaRecorder:", e);
+                    }
+                }
+                mediaRecorder = null;
+            }
+
+            // Stop all audio stream tracks
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => {
+                    track.stop();
+                    console.log("Stopped track:", track.kind);
+                });
+                currentStream = null;
+            }
+
+            // Close audio context
+            if (currentAudioContext && currentAudioContext.state !== 'closed') {
+                currentAudioContext.close();
+                currentAudioContext = null;
+            }
+
+            // Stop bot audio if playing
+            if (botAudio && !botAudio.paused) {
+                botAudio.pause();
+                botAudio.currentTime = 0;
+            }
+
+            // Stop speech synthesis
+            window.speechSynthesis.cancel();
+
+            // Close WebSocket
+            if (ws) {
+                if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+                    try {
+                        ws.send(JSON.stringify({ stop: true, session_id: sessionId }));
+                    } catch (e) {
+                        console.log("Error sending stop message:", e);
+                    }
+                    ws.close();
+                }
+                ws = null;
+            }
+
+            // Clear audio chunks
+            audioChunks = [];
+            sessionId = null;
+
+            // Update UI
+            micBtn.disabled = false;
+            micBtn.classList.remove('recording');
+            micBtn.style.display = 'inline-flex';
+            stopBtn.style.display = 'none';
+
+            // Final status update - use setTimeout to ensure it's the last thing
+            setTimeout(() => {
+                if (isManualStop) {
+                    statusDiv.textContent = "Connection closed. Click mic to start.";
+                }
+            }, 100);
+
+            console.log("========== ALL CLEANUP COMPLETED ==========");
+        };
+    </script>
+
 </body>
+
 </html>
