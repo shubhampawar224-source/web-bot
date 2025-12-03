@@ -97,61 +97,157 @@ class AgenticSearchAgent:
         firm_id: Optional[str]
     ) -> List[str]:
         """
-        Use LLM to generate multiple search query variations
-        Expands fuzzy questions into specific searchable terms
+        Dynamic query generation using LLM - handles any domain/topic automatically
+        No need for static patterns, scales to any business type
         """
         
-        prompt = f"""You are a search query optimizer. Given a user question, generate 3-5 different search queries that could help find the answer.
+        # Enhanced prompt for better query expansion
+        prompt = f"""You are an intelligent search query expander. Your job is to generate multiple search variations that will help find relevant information for the user's question.
 
 User Question: "{query}"
 
-Generate queries that:
-1. Extract key entities and concepts
-2. Expand abbreviations and fuzzy terms
-3. Include related keywords
-4. Use different phrasings
+Analyze the question and generate 5-7 search queries that:
+1. Use different terminology and synonyms
+2. Break down complex concepts into simpler terms  
+3. Include related business/service terms
+4. Cover formal and informal language
+5. Account for how information might actually be stored on websites
 
-Return ONLY the queries, one per line, no numbering or explanation.
+IMPORTANT: Think about WHERE this information would typically appear:
+- Contact pages, footer sections, about pages
+- Service descriptions, FAQ sections
+- Business information, hours pages
 
 Examples:
-User: "hours and operations"
+
+User: "hours of operation"
 - business hours
-- opening hours and closing time
-- operating hours and schedule
-- office hours contact information
+- opening closing times
+- office hours schedule
 - when are you open
+- store hours
+- operating schedule
+- contact hours
+- business schedule
 
-User: "how to contact"
-- contact information
-- phone number email address
-- reach out to us
-- customer service contact
-- get in touch
+User: "how much does it cost"
+- pricing information
+- fees and costs
+- service rates
+- consultation fees
+- price list
+- cost of services
+- billing rates
+- fee structure
 
-Now generate for: "{query}"
-"""
+User: "what services do you offer"
+- services provided
+- what we do
+- our offerings
+- practice areas
+- service list
+- business services
+- specialties
+- areas of expertise
+
+User: "location and address"
+- office location
+- where are you located
+- business address
+- directions to office
+- contact address
+- office address
+- find us
+
+Generate for: "{query}"
+
+Return ONLY the search queries, one per line, no explanations or numbering."""
         
         try:
             response = client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.7,
-                max_tokens=200
+                max_tokens=300
             )
             
             queries_text = response.choices[0].message.content.strip()
-            queries = [q.strip() for q in queries_text.split('\n') if q.strip()]
+            queries = [q.strip() for q in queries_text.split('\n') if q.strip() and not q.startswith('-')]
+            
+            # Clean queries (remove any numbering or bullet points)
+            clean_queries = []
+            for q in queries:
+                cleaned = q.strip()
+                # Remove numbering like "1.", "2)", etc.
+                cleaned = re.sub(r'^\d+[\.\)]\s*', '', cleaned)
+                # Remove bullet points
+                cleaned = re.sub(r'^[-•*]\s*', '', cleaned)
+                if cleaned and len(cleaned) > 3:
+                    clean_queries.append(cleaned)
             
             # Always include original query as first
-            if query not in queries:
-                queries.insert(0, query)
+            if query not in clean_queries:
+                clean_queries.insert(0, query)
             
-            return queries[:5]  # Max 5 queries
+            # Return max 7 queries for comprehensive coverage
+            return clean_queries[:7]
             
         except Exception as e:
             print(f"Query generation failed: {e}")
-            # Fallback: return original query
-            return [query]
+            # Smart fallback based on query analysis
+            return self._generate_fallback_queries(query)
+    
+    def _generate_fallback_queries(self, query: str) -> List[str]:
+        """
+        Smart fallback when LLM query generation fails
+        Uses linguistic patterns to generate alternatives
+        """
+        import re
+        
+        base_queries = [query]
+        query_lower = query.lower()
+        
+        # Common question patterns and their expansions
+        patterns = {
+            # Hours/timing related
+            r'hour|time|open|close|schedule': [
+                'business hours', 'contact hours', 'office schedule', 'operating times'
+            ],
+            # Cost/pricing related  
+            r'cost|price|fee|charge|rate': [
+                'pricing information', 'service fees', 'consultation cost', 'rates'
+            ],
+            # Services related
+            r'service|offer|do|provide|help': [
+                'services offered', 'what we do', 'our services', 'how we help'
+            ],
+            # Contact related
+            r'contact|reach|call|phone|email': [
+                'contact information', 'get in touch', 'reach us', 'contact details'
+            ],
+            # Location related
+            r'where|location|address|find': [
+                'office location', 'business address', 'where to find us', 'directions'
+            ],
+            # Process/procedure related
+            r'how|process|procedure|steps': [
+                'how it works', 'process steps', 'procedure', 'what to expect'
+            ]
+        }
+        
+        # Apply pattern matching
+        for pattern, expansions in patterns.items():
+            if re.search(pattern, query_lower):
+                base_queries.extend(expansions[:3])  # Add top 3 expansions
+                break
+        
+        # Add keyword-based variations
+        keywords = [word for word in query.split() if len(word) > 3]
+        if keywords:
+            base_queries.append(' '.join(keywords))  # Just keywords
+            base_queries.append(f"{keywords[0]} information")  # Main keyword + info
+        
+        return list(dict.fromkeys(base_queries))[:5]  # Remove duplicates, max 5
     
     async def _execute_search(
         self, 
@@ -161,26 +257,74 @@ Now generate for: "{query}"
     ) -> List[Dict[str, Any]]:
         """
         Execute vector search using existing vector store
+        Enhanced with multiple search strategies for deeper results
         """
         try:
             where_filter = {"firm_id": str(firm_id)} if firm_id else None
             
+            # Strategy 1: Standard search
             results = self.vector_store.search(
                 query_text=query,
                 n_results=n_results,
                 where=where_filter
             )
             
-            # Convert to standardized format
             formatted_results = []
             if results and "documents" in results:
                 for idx, doc in enumerate(results["documents"]):
+                    score = results.get("distances", [0])[idx] if results.get("distances") else 0
                     formatted_results.append({
                         "content": doc,
                         "metadata": results.get("metadatas", [{}])[idx],
-                        "score": results.get("distances", [0])[idx],
-                        "query_used": query
+                        "score": score,
+                        "query_used": query,
+                        "search_strategy": "standard"
                     })
+            
+            # Strategy 2: If few results, try broader search with individual keywords
+            if len(formatted_results) < 3:
+                keywords = query.split()
+                for keyword in keywords:
+                    if len(keyword) > 2:  # Skip very short words
+                        keyword_results = self.vector_store.search(
+                            query_text=keyword,
+                            n_results=3,
+                            where=where_filter
+                        )
+                        
+                        if keyword_results and "documents" in keyword_results:
+                            for idx, doc in enumerate(keyword_results["documents"]):
+                                score = keyword_results.get("distances", [0.9])[idx]
+                                # Add penalty for keyword-only search
+                                score = score + 0.2  
+                                formatted_results.append({
+                                    "content": doc,
+                                    "metadata": keyword_results.get("metadatas", [{}])[idx],
+                                    "score": score,
+                                    "query_used": keyword,
+                                    "search_strategy": "keyword_expansion"
+                                })
+            
+            # Strategy 3: For hours queries, try footer-specific search
+            hours_keywords = ['hours', 'open', 'close', 'operation', 'schedule']
+            if any(kw in query.lower() for kw in hours_keywords):
+                footer_query = "footer contact hours phone address"
+                footer_results = self.vector_store.search(
+                    query_text=footer_query,
+                    n_results=5,
+                    where=where_filter
+                )
+                
+                if footer_results and "documents" in footer_results:
+                    for idx, doc in enumerate(footer_results["documents"]):
+                        score = footer_results.get("distances", [0.8])[idx]
+                        formatted_results.append({
+                            "content": doc,
+                            "metadata": footer_results.get("metadatas", [{}])[idx],
+                            "score": score,
+                            "query_used": footer_query,
+                            "search_strategy": "footer_targeted"
+                        })
             
             return formatted_results
             
@@ -194,25 +338,80 @@ Now generate for: "{query}"
         results: List[Dict[str, Any]]
     ) -> tuple[bool, float]:
         """
-        LLM evaluates if search results are sufficient to answer the query
+        Enhanced evaluation with content-aware scoring
         Returns (is_sufficient, confidence_score)
         """
         
         if not results:
             return False, 0.0
         
-        # Quick heuristic: if we have results with good scores
-        top_score = results[0].get("score", 1.0)
+        # Content-based evaluation
+        query_lower = original_query.lower()
+        hours_keywords = ['hours', 'open', 'close', 'operation', 'schedule', 'timing']
+        contact_keywords = ['contact', 'phone', 'email', 'address', 'call']
         
-        # Lower distance = better match in vector search
-        if top_score < 0.5:  # Good match
-            return True, 0.9
-        elif top_score < 0.8:  # Decent match
-            return True, 0.7
-        elif len(results) >= 3:  # Multiple results found
-            return True, 0.6
+        is_hours_query = any(kw in query_lower for kw in hours_keywords)
+        is_contact_query = any(kw in query_lower for kw in contact_keywords)
+        
+        # Check content quality
+        content_scores = []
+        for result in results[:5]:  # Check top 5 results
+            content = result.get("content", "").lower()
+            score = result.get("score", 1.0)
+            
+            content_quality = 0.0
+            
+            if is_hours_query:
+                # Look for time patterns and schedule indicators
+                time_patterns = ['am', 'pm', 'monday', 'tuesday', 'wednesday', 
+                               'thursday', 'friday', 'saturday', 'sunday',
+                               ':', '9', '10', '11', '12', 'open', 'close']
+                matches = sum(1 for pattern in time_patterns if pattern in content)
+                content_quality = min(matches / 10.0, 1.0)  # Normalize
+                
+                # Bonus for footer content
+                if '[footer info]' in content or '[contact]' in content:
+                    content_quality += 0.3
+                    
+            elif is_contact_query:
+                # Look for contact information patterns
+                contact_patterns = ['phone', 'email', '@', 'contact', 'call',
+                                  'address', 'location', 'reach', 'get in touch']
+                matches = sum(1 for pattern in contact_patterns if pattern in content)
+                content_quality = min(matches / 8.0, 1.0)  # Normalize
+                
+            else:
+                # General content evaluation
+                query_words = query_lower.split()
+                matches = sum(1 for word in query_words if word in content and len(word) > 2)
+                content_quality = min(matches / len(query_words), 1.0) if query_words else 0.0
+            
+            # Combined score: vector similarity + content quality
+            vector_score = max(0, 1.0 - score)  # Convert distance to similarity
+            combined_score = (vector_score * 0.6) + (content_quality * 0.4)
+            content_scores.append(combined_score)
+        
+        # Overall evaluation
+        if not content_scores:
+            return False, 0.0
+            
+        avg_score = sum(content_scores) / len(content_scores)
+        max_score = max(content_scores)
+        
+        # Dynamic thresholds based on query type
+        if is_hours_query or is_contact_query:
+            sufficient_threshold = 0.4  # Lower threshold for specific queries
+            confidence_threshold = 0.3
         else:
-            return False, 0.3
+            sufficient_threshold = 0.6
+            confidence_threshold = 0.5
+        
+        is_sufficient = (max_score >= sufficient_threshold and 
+                        len([s for s in content_scores if s > confidence_threshold]) >= 2)
+        
+        confidence = min(avg_score + (max_score * 0.3), 1.0)
+        
+        return is_sufficient, confidence
     
     def _deduplicate_results(
         self, 
