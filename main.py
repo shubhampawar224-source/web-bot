@@ -7,6 +7,7 @@ import secrets
 import time
 import uuid
 from datetime import datetime
+from zoneinfo import ZoneInfo
 import requests
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
@@ -1860,6 +1861,20 @@ async def get_admin_contacts(request: Request):
     try:
         contacts = db.query(Contact).order_by(Contact.created_at.desc()).all()
         
+        # Helper function to format as CST time
+        def format_cst_time(dt):
+            if dt is None:
+                return ""
+            # If datetime is naive (old records), treat as UTC and convert to CST
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=ZoneInfo("UTC"))
+                dt = dt.astimezone(ZoneInfo("America/Chicago"))
+            # If already has timezone (new records), convert to CST
+            elif dt.tzinfo != ZoneInfo("America/Chicago"):
+                dt = dt.astimezone(ZoneInfo("America/Chicago"))
+            # Format as MM/DD/YYYY HH:MM:SS AM/PM
+            return dt.strftime("%m/%d/%Y %I:%M:%S %p")
+        
         return {
             "status": "success",
             "contacts": [
@@ -1869,7 +1884,7 @@ async def get_admin_contacts(request: Request):
                     "lname": contact.lname,
                     "email": contact.email,
                     "phone_number": contact.phone_number,
-                    "created_at": contact.created_at.isoformat()
+                    "created_at": format_cst_time(contact.created_at)
                 }
                 for contact in contacts
             ]

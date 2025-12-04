@@ -20,7 +20,7 @@ class AgenticSearchAgent:
     4. Synthesizes final answer from multiple search results
     """
     
-    def __init__(self, vector_store, model: str = "gpt-4.1-preview"):
+    def __init__(self, vector_store, model: str = "gpt-4o"):
         self.vector_store = vector_store
         self.model = model
         self.max_iterations = 3
@@ -479,7 +479,7 @@ Please provide a helpful answer based on the context above."""
         
         try:
             response = client.chat.completions.create(
-                model="gpt-4.1-preview",
+                model="gpt-4o",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_message}

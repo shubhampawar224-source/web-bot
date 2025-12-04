@@ -51,7 +51,7 @@ def create_llm_client():
         )
         
         llm = ChatOpenAI(
-            model_name="gpt-4.1-preview", 
+            model_name="gpt-4o", 
             temperature=0, 
             openai_api_key=OPENAI_API_KEY,
             http_client=custom_http_client,

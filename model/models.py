@@ -1,7 +1,12 @@
 from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from database.db import Base
+
+# Helper function to get current CST time
+def get_cst_now():
+    return datetime.now(ZoneInfo("America/Chicago"))
 
 
 class Firm(Base):
@@ -71,4 +76,4 @@ class Contact(Base):
     lname = Column(String(100))
     email = Column(String(150))
     phone_number = Column(String(20))
-    created_at = Column(DateTime, default=datetime.now)
+    created_at = Column(DateTime, default=get_cst_now)

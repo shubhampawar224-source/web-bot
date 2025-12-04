@@ -8,6 +8,7 @@ from database.db import SessionLocal
 from model.models import Contact
 from sqlalchemy.exc import SQLAlchemyError
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 import re
 
 load_dotenv(override=False)
@@ -58,10 +59,11 @@ class ContactManager:
                 dt = datetime.fromtimestamp(ts, tz=timezone.utc)
             except Exception:
                 return str(value)
+        # Convert to CST timezone
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
-        dt_utc = dt.astimezone(timezone.utc)
-        return dt_utc.strftime("%a, %d %b %Y %I:%M %p")
+        dt_cst = dt.astimezone(ZoneInfo("America/Chicago"))
+        return dt_cst.strftime("%a, %d %b %Y %I:%M %p CST")
 
     def _valid_email(self, email: Optional[str]) -> bool:
         return bool(email and isinstance(email, str) and self._email_re.match(email))
@@ -73,11 +75,12 @@ class ContactManager:
         return ""
 
     def _build_team_email(self, contact: Dict, notify_to: Optional[str] = None) -> EmailMessage:
-        sent_dt = datetime.now(timezone.utc)
-        sent_readable = sent_dt.strftime("%a, %d %b %Y %I:%M %p %Z")
+        sent_dt = datetime.now(ZoneInfo("America/Chicago"))
+        sent_readable = sent_dt.strftime("%a, %d %b %Y %I:%M %p CST")
         recipient = self._get_recipient(contact, notify_to)
 
-        created_at_readable = self._format_human_datetime(contact.get("created_at"))
+        # Use same timestamp for both received and submitted
+        created_at_readable = sent_readable
 
         plain_lines = [
             "New contact submission",
@@ -123,9 +126,10 @@ class ContactManager:
         if not self._valid_email(user_email):
             return None
 
-        sent_dt = datetime.now(timezone.utc)
-        sent_readable = sent_dt.strftime("%a, %d %b %Y %I:%M %p %Z")
-        created_at_readable = self._format_human_datetime(contact.get("created_at"))
+        sent_dt = datetime.now(ZoneInfo("America/Chicago"))
+        sent_readable = sent_dt.strftime("%a, %d %b %Y %I:%M %p CST")
+        # Use same timestamp for submitted time
+        created_at_readable = sent_readable
 
         plain = (
             f"Hi {contact.get('fname','')},\n\n"
@@ -240,7 +244,7 @@ class ContactManager:
             "lname": contact_obj.lname,
             "email": contact_obj.email,
             "phone_number": contact_obj.phone_number,
-            "created_at": contact_obj.created_at.isoformat() if hasattr(contact_obj.created_at, "isoformat") else str(contact_obj.created_at),
+            "created_at": contact_obj.created_at,  # Pass datetime object directly
             "metadata": payload.get("metadata", {}),
             "notify_to": notify_to or payload.get("notify_to")
         }
