@@ -242,6 +242,7 @@
         let currentAudioContext = null;
         let isProcessingQuery = false;
         let isBotSpeaking = false;
+        let isWaitingForResponse = false;
         let silenceInterval = null;
         let isManualStop = false;
         let voiceInterruptionStream = null;
@@ -335,29 +336,34 @@
                     const voiceRatio = totalEnergy > 0 ? voiceEnergy / totalEnergy : 0;
                     const midFreqRatio = totalEnergy > 0 ? midFreqEnergy / totalEnergy : 0;
 
+                    // Balanced thresholds - responsive but not too sensitive
                     const isVoiceDetected =
-                        db > -30 &&
-                        voiceRatio > 0.15 &&
-                        midFreqRatio > 0.1 &&
-                        totalEnergy > 30;
+                        db > -30 &&              // Moderate dB threshold
+                        voiceRatio > 0.15 &&     // Moderate voice frequency ratio
+                        midFreqRatio > 0.10 &&   // Moderate mid-frequency ratio
+                        totalEnergy > 35;        // Moderate total energy
 
                     if (isVoiceDetected) {
                         consecutiveVoiceDetections++;
-                        console.log(`Voice interruption: dB=${db.toFixed(1)}, voiceRatio=${voiceRatio.toFixed(2)}, count=${consecutiveVoiceDetections}`);
+                        // Log every 3rd detection for visibility
+                        if (consecutiveVoiceDetections % 3 === 0) {
+                            console.log(`🎤 Voice detected: dB=${db.toFixed(1)}, count=${consecutiveVoiceDetections}`);
+                        }
 
-                        if (consecutiveVoiceDetections >= 2) {
-                            console.log("Voice interruption triggered!");
+                        // Require 3 consecutive detections (600ms of speech)
+                        if (consecutiveVoiceDetections >= 3) {
+                            console.log("🎙️ Voice interruption confirmed!");
                             handleVoiceInterruption();
                         }
                     } else {
                         if (consecutiveVoiceDetections > 0) {
-                            consecutiveVoiceDetections = Math.max(0, consecutiveVoiceDetections - 0.5);
+                            consecutiveVoiceDetections = Math.max(0, consecutiveVoiceDetections - 1);
                         }
                     }
                 }
 
                 voiceInterruptionInterval = setInterval(detectVoiceInterruption, 200);
-                console.log("Background voice interruption detection started");
+                // Silent start - no console log
 
             } catch (error) {
                 console.error("Failed to start voice interruption detection:", error);
@@ -365,8 +371,6 @@
         }
 
         function stopVoiceInterruptionDetection() {
-            console.log("Stopping background voice interruption detection...");
-
             if (voiceInterruptionInterval) {
                 clearInterval(voiceInterruptionInterval);
                 voiceInterruptionInterval = null;
@@ -375,7 +379,6 @@
             if (voiceInterruptionStream) {
                 voiceInterruptionStream.getTracks().forEach(track => {
                     track.stop();
-                    console.log("Stopped interruption track:", track.kind);
                 });
                 voiceInterruptionStream = null;
             }
@@ -386,7 +389,6 @@
             }
 
             voiceInterruptionAnalyser = null;
-            console.log("Background voice interruption detection stopped");
         }
 
         function handleVoiceInterruption() {
@@ -451,10 +453,16 @@
             if (silenceInterval) {
                 clearInterval(silenceInterval);
                 silenceInterval = null;
-            }            // Stop mediaRecorder unless we're doing a manual stop (to avoid triggering onstop)
+            }
+
+            // Stop mediaRecorder unless we're doing a manual stop (to avoid triggering onstop)
             if (!skipStopRecorder && mediaRecorder && mediaRecorder.state !== "inactive") {
                 try {
-                    mediaRecorder.stop();
+                    // CRITICAL: Remove onstop handler to prevent stale execution
+                    const oldRecorder = mediaRecorder;
+                    oldRecorder.onstop = null;
+                    oldRecorder.stop();
+                    console.log("✅ Stopped old recorder with nullified onstop");
                 } catch (e) {
                     console.log("Error stopping mediaRecorder:", e);
                 }
@@ -549,7 +557,7 @@
                 audioChunks = [];
                 let hasSound = false;
                 let silenceCount = 0;
-                let isRecording = true;
+                isRecording = true; // Use global variable
                 let silenceThreshold = 10; // 2 seconds (10 × 200ms)
                 let lastSoundTime = Date.now();
                 let voiceConfidenceCount = 0;
@@ -587,31 +595,60 @@
                     const midFreqRatio = totalEnergy > 0 ? midFreqEnergy / totalEnergy : 0;
 
                     const isLikelyVoice =
-                        db > -35 &&
+                        db > -30 && // Strong voice signal
                         voiceRatio > 0.15 &&
                         midFreqRatio > 0.08 &&
-                        totalEnergy > 20;
+                        totalEnergy > 25;
 
-                    if (isLikelyVoice) {
+                    // Fallback detection for initial voice (more lenient)
+                    const isBasicVoice =
+                        !hasSound && // Only for initial detection
+                        db > -40 &&
+                        voiceRatio > 0.10 &&
+                        totalEnergy > 15;
+
+                    // Emergency fallback for very quiet environments
+                    const isFallbackVoice =
+                        !hasSound &&
+                        db > -45 &&
+                        totalEnergy > 10;
+
+                    if (isLikelyVoice || isBasicVoice || isFallbackVoice) {
                         voiceConfidenceCount++;
                         if (voiceConfidenceCount === 1) {
-                            console.log(`✅ Voice detected: dB=${db.toFixed(1)}, voiceRatio=${voiceRatio.toFixed(2)}`);
+                            const method = isLikelyVoice ? 'strong' : (isBasicVoice ? 'basic' : 'fallback');
+                            console.log(`✅ Voice detected: dB=${db.toFixed(1)}, voiceRatio=${voiceRatio.toFixed(2)}, method=${method}`);
                         }
 
-                        if (voiceConfidenceCount >= 1) {
+                        // Require confirmation for fallback voice
+                        const requiredConfidence = isFallbackVoice ? 3 : (isBasicVoice ? 2 : 1);
+
+                        if (voiceConfidenceCount >= requiredConfidence) {
                             hasSound = true;
                             silenceCount = 0;
                             lastSoundTime = Date.now();
                             if (!isManualStop) {
-                                statusDiv.textContent = "🎙️ Listening...";
+                                statusDiv.textContent = "🎙️ Listening... (Voice detected)";
                             }
                         }
                     } else {
+                        // Faster decay for confidence to allow quicker silence detection
                         if (voiceConfidenceCount > 0) {
-                            voiceConfidenceCount = Math.max(0, voiceConfidenceCount - 0.5);
+                            voiceConfidenceCount = Math.max(0, voiceConfidenceCount - 0.8); // Faster decay
                         }
+
+                        // Only count as silence if confidence is low
                         if (voiceConfidenceCount < 0.5) {
                             silenceCount++;
+
+                            // Show silence countdown
+                            if (hasSound && silenceCount > 0) {
+                                const remainingSilence = silenceThreshold - silenceCount;
+                                const secondsLeft = Math.ceil(remainingSilence * 0.2);
+                                if (!isManualStop && secondsLeft > 0) {
+                                    statusDiv.textContent = `🔇 Silence detected... ${secondsLeft}s`;
+                                }
+                            }
                         }
 
                         if (hasSound && silenceCount >= silenceThreshold) {
@@ -620,16 +657,16 @@
                                 return;
                             }
                             console.log("🔇 2 seconds of silence detected - preparing to send audio");
-                            isProcessingQuery = true;
+
+                            // CRITICAL: Don't set isProcessingQuery yet - let onstop handler do it
                             isRecording = false;
-                            if (!isManualStop) {
-                                statusDiv.textContent = "⏳ Processing your question...";
-                            }
+
                             if (silenceInterval) {
                                 clearInterval(silenceInterval);
                                 silenceInterval = null;
                             }
                             console.log("⏹️ Stopping media recorder...");
+
                             mediaRecorder.stop();
                         }
                     }
@@ -648,21 +685,56 @@
 
                 silenceInterval = setInterval(detectSilence, 200);
 
+                // Failsafe: Force processing after extended speaking (15 seconds)
+                setTimeout(() => {
+                    if (isRecording && hasSound && mediaRecorder && mediaRecorder.state === 'recording') {
+                        console.log("Failsafe: Force processing after 15 seconds of speaking");
+                        isProcessingQuery = true;
+                        isWaitingForResponse = true;
+                        isRecording = false;
+                        statusDiv.textContent = "🤔 Processing (timeout)...";
+
+                        if (silenceInterval) {
+                            clearInterval(silenceInterval);
+                            silenceInterval = null;
+                        }
+                        mediaRecorder.stop();
+                    }
+                }, 15000);
+
                 mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
 
                 mediaRecorder.onstop = async () => {
-                    console.log("MediaRecorder.onstop triggered");
+                    console.log("Recording stopped");
+
+                    // CRITICAL: Check if this recorder is still current
+                    if (mediaRecorder === null || mediaRecorder.onstop === null) {
+                        console.log("⚠️ Stale onstop handler - ignoring");
+                        return;
+                    }
+
                     if (silenceInterval) {
                         clearInterval(silenceInterval);
                         silenceInterval = null;
                     }
-                    isRecording = false;
 
                     if (isManualStop) {
                         console.log("Manual stop - not processing audio");
+                        isProcessingQuery = false;
                         cleanupRecordingSession();
                         return;
                     }
+
+                    // CRITICAL: Prevent recursive calls - but check AFTER manual stop
+                    if (isProcessingQuery) {
+                        console.log("Already processing, skipping onstop");
+                        return;
+                    }
+
+                    // NOW set the flag for first-time execution
+                    console.log("⚠️ Setting isProcessingQuery = true");
+                    isProcessingQuery = true;
+                    isWaitingForResponse = true;
 
                     const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
                     console.log("Audio blob size:", audioBlob.size, "hasSound:", hasSound);
@@ -670,36 +742,67 @@
                     if (!hasSound || audioBlob.size < 200) {
                         console.log("No meaningful audio detected");
                         statusDiv.textContent = "No speech detected. Try again...";
-                        isProcessingQuery = false;
                         cleanupRecordingSession();
-                        if (!isManualStop) {
+                        if (!isManualStop && !isProcessingQuery) {
                             setTimeout(() => {
-                                statusDiv.textContent = "🎙️ Listening...";
-                                startRecording();
+                                if (!isProcessingQuery && !isBotSpeaking) {
+                                    statusDiv.textContent = "🎙️ Listening...";
+                                    startRecording();
+                                }
                             }, 2000);
                         }
                     } else {
+                        // isProcessingQuery already set at line 729 - don't set again!
+
                         const arrayBuffer = await audioBlob.arrayBuffer();
-                        const base64Audio = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+                        const uint8Array = new Uint8Array(arrayBuffer);
+
+                        // Convert to base64 in chunks to avoid stack overflow
+                        let binary = '';
+                        const chunkSize = 8192;
+                        for (let i = 0; i < uint8Array.length; i += chunkSize) {
+                            const chunk = uint8Array.subarray(i, i + chunkSize);
+                            binary += String.fromCharCode(...chunk);
+                        }
+                        const base64Audio = btoa(binary);
 
                         if (ws && ws.readyState === WebSocket.OPEN) {
                             console.log("📤 Sending audio to server - size:", base64Audio.length, "session:", sessionId);
+
+                            // Set processing status ONLY when actually sending
+                            statusDiv.textContent = "🤖 Processing your question...";
+
                             ws.send(JSON.stringify({ audio: base64Audio, session_id: sessionId }));
                             console.log("✅ Audio sent successfully");
                             statusDiv.textContent = "🤖 Thinking...";
 
-                            // Safety timeout: if no response in 15s, reset and allow new input
-                            setTimeout(() => {
+                            // Enhanced timeout with auto-recovery
+                            window.processingTimeout = setTimeout(() => {
                                 if (isProcessingQuery && !isBotSpeaking) {
-                                    console.warn("⚠️ Processing timeout (15s) - resetting state");
+                                    console.warn("⚠️ Processing timeout (15s) - auto-recovering");
                                     isProcessingQuery = false;
+                                    isWaitingForResponse = false;
                                     isBotSpeaking = false;
                                     cleanupRecordingSession();
-                                    statusDiv.textContent = "⚠️ Timeout - Click mic to try again";
+                                    statusDiv.textContent = "⏰ Timeout - Auto-restarting...";
                                     micBtn.style.display = 'inline-flex';
                                     stopBtn.style.display = 'none';
+
+                                    // Auto-restart recording after timeout (with safeguards)
+                                    setTimeout(() => {
+                                        if (!isProcessingQuery && !isBotSpeaking && !isManualStop && !isRecording) {
+                                            console.log("Auto-restarting recording after timeout");
+                                            statusDiv.textContent = "🎙️ Ready for your question...";
+                                            try {
+                                                startRecording();
+                                            } catch (e) {
+                                                console.error("Error restarting recording:", e);
+                                                statusDiv.textContent = "❌ Recording restart failed";
+                                            }
+                                        }
+                                    }, 1500);
                                 }
-                            }, 15000);
+                            }, 15000); // Increased to 15 seconds
                         } else {
                             console.log("WebSocket not connected");
                             cleanupRecordingSession();
@@ -724,22 +827,51 @@
 
             } catch (err) {
                 console.error("Microphone error:", err);
-                statusDiv.textContent = "Microphone access denied!";
+
+                // Handle specific error cases after interrupt
+                if (err.name === 'NotAllowedError') {
+                    statusDiv.textContent = "Microphone access denied! Please allow and try again.";
+                } else if (err.name === 'NotFoundError') {
+                    statusDiv.textContent = "No microphone found! Check your device.";
+                } else if (err.name === 'AbortError') {
+                    statusDiv.textContent = "Microphone was interrupted. Click to restart.";
+                    // Auto-retry after abort error (common after interrupt)
+                    setTimeout(() => {
+                        if (!isManualStop && !isProcessingQuery) {
+                            console.log("Auto-retrying after abort error");
+                            startRecording();
+                        }
+                    }, 2000);
+                } else {
+                    statusDiv.textContent = "Microphone error! Click to retry.";
+                }
+
+                // Reset state on error
+                isProcessingQuery = false;
+                isWaitingForResponse = false;
+                cleanupRecordingSession(false, true);
             }
         }
 
         micBtn.onclick = async () => {
+            console.log("🎙️ Mic button clicked - Current state:", {
+                isManualStop,
+                isBotSpeaking,
+                isProcessingQuery,
+                wsState: ws?.readyState
+            });
+
             isManualStop = false;
 
+            // PRIORITY 1: Handle bot speaking interruption
             if (isBotSpeaking) {
                 console.log("========== USER MANUALLY INTERRUPTED BOT ==========");
 
                 // IMMEDIATELY clear all blocking flags
                 isBotSpeaking = false;
                 isProcessingQuery = false;
-                console.log("✅ Cleared all flags for manual interruption");
-
-                // Stop voice interruption detection
+                isWaitingForResponse = false; // Clear waiting flag on interruption
+                console.log("✅ Cleared all flags for manual interruption");                // Stop voice interruption detection
                 stopVoiceInterruptionDetection();
 
                 // Stop bot audio and speech
@@ -760,20 +892,50 @@
                 }
 
                 // Cleanup any existing recording
-                cleanupRecordingSession(false);
+                cleanupRecordingSession(true); // Force reset all flags
 
                 statusDiv.textContent = "🎙️ Interrupted - Starting fresh recording...";
-                statusDiv.className = "";
 
                 if (ws && ws.readyState === WebSocket.OPEN) {
                     setTimeout(() => {
                         console.log("Starting fresh recording after manual interruption");
+                        // Ensure clean state before restart
+                        isManualStop = false;
+                        isProcessingQuery = false;
+                        isWaitingForResponse = false;
                         startRecording();
-                    }, 600);
-                    return;
+                    }, 800); // Increased delay for better stability
                 }
-            } if (ws && ws.readyState === WebSocket.OPEN) {
-                console.warn("WebSocket already open");
+                return;
+            }
+
+            // PRIORITY 2: Handle processing interruption
+            if (isProcessingQuery || isWaitingForResponse) {
+                console.log("========== INTERRUPTING PROCESSING/WAITING ==========");
+                isProcessingQuery = false;
+                isWaitingForResponse = false; // Clear waiting flag
+
+                // Clear processing timeout
+                if (window.processingTimeout) {
+                    clearTimeout(window.processingTimeout);
+                    window.processingTimeout = null;
+                }
+
+                cleanupRecordingSession(true); // Force reset all flags
+                statusDiv.textContent = "🎙️ Interrupted - Ready for new question";
+
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    setTimeout(() => {
+                        startRecording();
+                    }, 500);
+                }
+                return;
+            }
+
+            // PRIORITY 3: Check if already connected
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                console.log("WebSocket already connected, starting recording directly");
+                startRecording();
                 return;
             }
 
@@ -787,7 +949,9 @@
             statusDiv.textContent = "🔄 Connecting...";
 
             try {
-                ws = new WebSocket(`ws://${window.location.host}/ws/voice`);
+                // Auto-detect protocol for WebSocket connection
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                ws = new WebSocket(`${protocol}//${window.location.host}/ws/voice`);
 
                 ws.onopen = () => {
                     console.log("WS Connected");
@@ -809,12 +973,19 @@
 
                     if (data.audio && data.bot_text) {
                         console.log("Received bot response");
-                        // IMMEDIATELY clear processing flag to unblock
+                        // IMMEDIATELY clear all processing flags to unblock
                         isProcessingQuery = false;
-                        console.log("✅ Cleared isProcessingQuery - received bot response");
+                        isWaitingForResponse = false; // Clear waiting flag when response received
+                        console.log("✅ Cleared all processing flags - received bot response");
+
+                        // Clear processing timeout
+                        if (window.processingTimeout) {
+                            clearTimeout(window.processingTimeout);
+                            window.processingTimeout = null;
+                        }
 
                         if (!isManualStop) {
-                            statusDiv.textContent = "🤖 Speaking... (Start talking to interrupt)";
+                            statusDiv.textContent = "🤖 Speaking... (Click mic to interrupt)";
                         }
 
                         addMessage(data.bot_text, 'assistant');

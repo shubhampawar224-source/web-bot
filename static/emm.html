@@ -98,6 +98,22 @@
       }
     }
 
+    /* Close button styling */
+    .chat-close-btn {
+      background: transparent;
+      border: none;
+      color: #fff;
+      font-size: 18px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+
+    .chat-close-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
     /* Enhanced Message Formatting */
     .numbered-item {
       margin: 8px 0;
@@ -287,9 +303,8 @@
     <div class="header">
       Chat Assistant
       <div class="session-controls">
-        <span class="session-id" title="Session ID">💬</span>
-        <button class="new-chat-btn" onclick="startNewChat()" title="Start New Conversation">🔄</button>
         <button class="new-chat-btn" onclick="testContactForm()" title="Test Contact Form">📋</button>
+        <button class="chat-close-btn" id="chat-close-btn" title="Close chat" aria-label="Close chat">✕</button>
       </div>
     </div>
 
@@ -471,6 +486,14 @@
           }, 500);
         }
       });
+
+      // ---------- Chat Close Button ----------
+      const chatCloseBtn = document.getElementById("chat-close-btn");
+      if (chatCloseBtn) {
+        chatCloseBtn.addEventListener("click", () => {
+          chatContainer.style.display = "none";
+        });
+      }
 
       // ---------- Send Message Function ----------
       async function sendMessage() {

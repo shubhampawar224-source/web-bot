@@ -42,12 +42,6 @@ pip install -r requirements.txt
 Create `.env` file:
 ```env
 OPENAI_API_KEY=your_key_here
-DEEPGRAM_API_KEY=your_key
-CARTESIA_API_KEY=your_key
-LIVEKIT_URL=wss://your-livekit-url
-LIVEKIT_API_KEY=your_key
-LIVEKIT_API_SECRET=your_secret
-SECRET_KEY=your-secret-key
 ```
 
 ### 3. Start Servers
@@ -87,7 +81,6 @@ docker-compose down
 | `/inject-url` | POST | Scrape & index website |
 | `/admin/dashboard` | GET | Admin panel |
 | `/voice-chat` | WebSocket | Voice assistant |
-| `/health` | GET | Server health check |
 
 ---
 
@@ -137,13 +130,6 @@ web-bot/
 
 ## 🔧 Key Scripts
 
-```bash
-# Reindex websites to FAISS
-python reindex_websites.py
-
-# Setup database
-python setup_database.py
-
 # Migration
 python migrate.py
 ```
@@ -169,13 +155,6 @@ python migrate.py
 5. Open Pull Request
 
 ---
-
-## 📄 License
-
-MIT License - See LICENSE file
-
----
-
 ## 💡 Pro Tips
 
 - Use **footer-focused scraping** for contact info
