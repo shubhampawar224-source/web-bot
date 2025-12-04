@@ -988,6 +988,11 @@
                             statusDiv.textContent = "🤖 Speaking... (Click mic to interrupt)";
                         }
 
+                        // Add user message if provided
+                        if (data.user_text) {
+                            addMessage(data.user_text, 'user');
+                        }
+
                         addMessage(data.bot_text, 'assistant');
 
                         const audioBlob = new Blob(

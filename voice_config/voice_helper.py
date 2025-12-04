@@ -231,11 +231,11 @@ class VoiceAssistant:
         print(f"🧠 User said: {user_text}")
 
         if any(kw in user_text.lower() for kw in ["bye","thanks", "exit", "stop", "thanks"]):
-            await self.safe_send(ws, "Goodbye! Have a great day!")
+            await self.safe_send(ws, "Goodbye! Have a great day!", user_text)
             return "exit"
 
         bot_text = await self.ask_agent(session_id, user_text)
-        await self.safe_send(ws, bot_text)
+        await self.safe_send(ws, bot_text, user_text)
         return None
 
     # -------------------------
@@ -480,7 +480,7 @@ Response:"""
     # -------------------------
     # Text-to-speech + Send
     # -------------------------
-    async def safe_send(self, ws: WebSocket, text: str):
+    async def safe_send(self, ws: WebSocket, text: str, user_text: str = None):
         try:
             # Check if WebSocket is still open
             if ws.client_state.name != "CONNECTED":
@@ -495,7 +495,10 @@ Response:"""
 
             # Double-check before sending
             if ws.client_state.name == "CONNECTED":
-                await ws.send_json({"bot_text": text, "audio": audio_b64})
+                response_data = {"bot_text": text, "audio": audio_b64}
+                if user_text:
+                    response_data["user_text"] = user_text
+                await ws.send_json(response_data)
             else:
                 print("WebSocket closed before sending audio response")
                 
