@@ -44,8 +44,13 @@ body {
 }
 
 @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
 }
 
 /* Admin Dashboard Layout */
@@ -151,9 +156,12 @@ body {
 
 /* Dashboard Title Animation */
 @keyframes titleGlow {
-    0%, 100% {
+
+    0%,
+    100% {
         filter: drop-shadow(0 2px 4px rgba(99, 102, 241, 0.2));
     }
+
     50% {
         filter: drop-shadow(0 4px 12px rgba(99, 102, 241, 0.4));
     }
@@ -413,6 +421,7 @@ body {
         opacity: 0;
         transform: translateY(-50%) translateX(-4px);
     }
+
     to {
         opacity: 1;
         transform: translateY(-50%) translateX(0);
@@ -439,13 +448,14 @@ body {
 }
 
 @keyframes fadeIn {
-    from { 
-        opacity: 0; 
-        transform: translateY(20px); 
+    from {
+        opacity: 0;
+        transform: translateY(20px);
     }
-    to { 
-        opacity: 1; 
-        transform: translateY(0); 
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
     }
 }
 
@@ -1207,12 +1217,12 @@ body {
     .admin-dashboard {
         flex-direction: column;
     }
-    
+
     .dashboard-body {
         grid-template-columns: 1fr;
         position: relative;
     }
-    
+
     .admin-sidebar {
         position: fixed;
         top: 60px;
@@ -1225,35 +1235,35 @@ body {
         border-right: 1px solid #f1f5f9;
         box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
     }
-    
+
     .admin-sidebar.mobile-open {
         left: 0;
     }
-    
+
     .admin-main {
         padding: 16px 12px;
     }
-    
+
     .section-header {
         flex-direction: column;
         align-items: flex-start;
         gap: 12px;
         margin-bottom: 16px;
     }
-    
+
     .section-header h2 {
         font-size: 20px;
     }
-    
+
     .stats-grid {
         grid-template-columns: 1fr;
         gap: 12px;
     }
-    
+
     .content-card {
         padding: 16px;
     }
-    
+
     /* Hide tooltips on mobile */
     .admin-dashboard.sidebar-collapsed .nav-link:hover::after {
         display: none;
@@ -1264,41 +1274,41 @@ body {
     .admin-main {
         padding: 16px;
     }
-    
+
     .section-header {
         flex-direction: column;
         align-items: flex-start;
         gap: 16px;
     }
-    
+
     .login-container {
         padding: 5px;
     }
-    
+
     .login-card {
         padding: 20px 15px;
         max-width: 320px;
         max-height: calc(100vh - 10px);
     }
-    
+
     .login-header {
         margin-bottom: 18px;
     }
-    
+
     .login-header i {
         font-size: 28px;
         margin-bottom: 8px;
     }
-    
+
     .login-header h2 {
         font-size: 18px;
         margin-bottom: 4px;
     }
-    
+
     .form-group {
         margin-bottom: 14px;
     }
-    
+
     .login-footer {
         margin-top: 15px;
         padding-top: 12px;
@@ -1316,6 +1326,7 @@ body {
         opacity: 0;
         transform: translateY(-20px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
@@ -1456,4 +1467,55 @@ body {
 .url-cell small {
     font-style: italic;
     margin-top: 2px;
+}
+
+/* Info Box Styles */
+.info-box {
+    background: linear-gradient(135deg, #e0f2fe 0%, #dbeafe 100%);
+    border: 1px solid #bae6fd;
+    border-radius: 8px;
+    padding: 20px;
+    margin-top: 20px;
+}
+
+.info-box h4 {
+    color: #0369a1;
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.info-box h4 i {
+    font-size: 18px;
+}
+
+.info-box p {
+    color: #334155;
+    font-size: 14px;
+    line-height: 1.6;
+    margin-bottom: 12px;
+}
+
+.info-box ul {
+    margin: 12px 0 0 20px;
+    color: #475569;
+}
+
+.info-box ul li {
+    margin-bottom: 6px;
+    font-size: 14px;
+}
+
+/* Knowledge Base Form Styles */
+#firm-name-kb-custom {
+    transition: all 0.3s ease;
+    border-left: 3px solid #3b82f6;
+}
+
+#firm-name-kb option[value="__custom__"] {
+    color: #3b82f6;
+    font-weight: 500;
 }

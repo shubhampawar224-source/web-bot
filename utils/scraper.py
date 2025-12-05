@@ -24,6 +24,30 @@ BACKOFF = 0.5
 
 logger = logging.getLogger(__name__)
 
+# Regex patterns for contact info extraction
+EMAIL_PATTERN = re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b')
+PHONE_PATTERN = re.compile(r'(?:\+\d{1,3}[-.\s]?)?(?:\(?\d{1,4}\)?[-.\s]?)?\d{1,4}[-.\s]?\d{1,4}[-.\s]?\d{1,9}')
+
+def extract_contact_info(text: str) -> dict:
+    """Extract emails and phone numbers from text."""
+    emails = list(set(EMAIL_PATTERN.findall(text)))
+    phones = []
+    
+    # Find potential phone numbers
+    potential_phones = PHONE_PATTERN.findall(text)
+    for phone in potential_phones:
+        # Clean and validate phone number (must have at least 7 digits)
+        cleaned = re.sub(r'[^0-9+]', '', phone)
+        if len(cleaned) >= 7:  # Minimum valid phone number length
+            phones.append(phone.strip())
+    
+    phones = list(set(phones))[:5]  # Limit to 5 unique phone numbers
+    
+    return {
+        "emails": emails[:10],  # Limit to 10 emails
+        "phones": phones
+    }
+
 
 async def fetch_page(client: httpx.AsyncClient, url: str, retries: int = RETRIES, backoff: float = BACKOFF) -> str:
     """Fetch a single page asynchronously with retries and exponential backoff."""
@@ -95,6 +119,15 @@ async def scrape_page(client, url, domain):
     # Combine: Footer first (highest priority), then contact info, then general content
     all_text = footer_texts + contact_texts + texts
     page_text = " ".join(all_text)
+    
+    # Extract contact information (emails and phone numbers)
+    contact_data = extract_contact_info(page_text)
+    
+    # Add extracted contact info prominently to page text
+    if contact_data["emails"]:
+        page_text += " [EMAILS: " + ", ".join(contact_data["emails"]) + "]"
+    if contact_data["phones"]:
+        page_text += " [PHONES: " + ", ".join(contact_data["phones"]) + "]"
 
     # Extract internal links
     links = []

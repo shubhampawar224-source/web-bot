@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,6 +9,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/admin.css">
 </head>
+
 <body>
     <!-- Loading Overlay -->
     <div id="loading-overlay" class="loading-overlay">
@@ -59,21 +61,31 @@
                 <nav class="sidebar-nav">
                     <ul class="nav-menu">
                         <li class="nav-item">
-                            <a href="#dashboard" class="nav-link active" data-section="dashboard" data-tooltip="Dashboard">
+                            <a href="#dashboard" class="nav-link active" data-section="dashboard"
+                                data-tooltip="Dashboard">
                                 <i class="fas fa-chart-pie"></i>
                                 <span>Dashboard</span>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a href="#url-management" class="nav-link" data-section="url-management" data-tooltip="URL Management">
+                            <a href="#url-management" class="nav-link" data-section="url-management"
+                                data-tooltip="URL Management">
                                 <i class="fas fa-link"></i>
                                 <span>URL Management</span>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a href="#user-management" class="nav-link" data-section="user-management" data-tooltip="User Management">
+                            <a href="#user-management" class="nav-link" data-section="user-management"
+                                data-tooltip="User Management">
                                 <i class="fas fa-users"></i>
                                 <span>User Management</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="#knowledge" class="nav-link" data-section="knowledge"
+                                data-tooltip="Knowledge Base">
+                                <i class="fas fa-brain"></i>
+                                <span>Knowledge Base</span>
                             </a>
                         </li>
                         <li class="nav-item">
@@ -89,7 +101,8 @@
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a href="#system-logs" class="nav-link" data-section="system-logs" data-tooltip="System Logs">
+                            <a href="#system-logs" class="nav-link" data-section="system-logs"
+                                data-tooltip="System Logs">
                                 <i class="fas fa-file-alt"></i>
                                 <span>System Logs</span>
                             </a>
@@ -106,367 +119,467 @@
 
             <!-- Main Content -->
             <main class="admin-main">
-            <!-- Dashboard Section -->
-            <section id="dashboard-section" class="content-section active">
-                <div class="section-header">
-                    <h2><i class="fas fa-chart-pie"></i> Dashboard Overview</h2>
-                </div>
-                
-                <!-- Stats Cards -->
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-icon">
-                            <i class="fas fa-link"></i>
-                        </div>
-                        <div class="stat-content">
-                            <h3 id="total-urls">0</h3>
-                            <p>Total URLs</p>
-                        </div>
+                <!-- Dashboard Section -->
+                <section id="dashboard-section" class="content-section active">
+                    <div class="section-header">
+                        <h2><i class="fas fa-chart-pie"></i> Dashboard Overview</h2>
                     </div>
-                    <div class="stat-card">
-                        <div class="stat-icon">
-                            <i class="fas fa-clock"></i>
-                        </div>
-                        <div class="stat-content">
-                            <h3 id="pending-urls">0</h3>
-                            <p>Pending URLs</p>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon">
-                            <i class="fas fa-users"></i>
-                        </div>
-                        <div class="stat-content">
-                            <h3 id="total-contacts">0</h3>
-                            <p>Total Contacts</p>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon">
-                            <i class="fas fa-building"></i>
-                        </div>
-                        <div class="stat-content">
-                            <h3 id="total-firms">0</h3>
-                            <p>Total Firms</p>
-                        </div>
-                    </div>
-                </div>
 
-                <!-- Recent Activity -->
-                <div class="dashboard-widgets">
-                    <div class="widget">
-                        <h3><i class="fas fa-history"></i> Recent URL Requests</h3>
-                        <div id="recent-urls" class="activity-list">
-                            <!-- Dynamic content -->
+                    <!-- Stats Cards -->
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-link"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3 id="total-urls">0</h3>
+                                <p>Total URLs</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-clock"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3 id="pending-urls">0</h3>
+                                <p>Pending URLs</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-users"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3 id="total-contacts">0</h3>
+                                <p>Total Contacts</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-building"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3 id="total-firms">0</h3>
+                                <p>Total Firms</p>
+                            </div>
                         </div>
                     </div>
-                    <div class="widget">
-                        <h3><i class="fas fa-user-plus"></i> Recent Contacts</h3>
-                        <div id="recent-contacts" class="activity-list">
-                            <!-- Dynamic content -->
+
+                    <!-- Recent Activity -->
+                    <div class="dashboard-widgets">
+                        <div class="widget">
+                            <h3><i class="fas fa-history"></i> Recent URL Requests</h3>
+                            <div id="recent-urls" class="activity-list">
+                                <!-- Dynamic content -->
+                            </div>
+                        </div>
+                        <div class="widget">
+                            <h3><i class="fas fa-user-plus"></i> Recent Contacts</h3>
+                            <div id="recent-contacts" class="activity-list">
+                                <!-- Dynamic content -->
+                            </div>
                         </div>
                     </div>
-                </div>
-            </section>
+                </section>
 
-            <!-- URL Management Section -->
-            <section id="url-management-section" class="content-section">
-                <div class="section-header">
-                    <h2><i class="fas fa-link"></i> URL Management</h2>
-                    <div class="section-actions">
-                        <button id="show-url-injection" class="btn btn-success">
-                            <i class="fas fa-plus"></i> Inject New URL
-                        </button>
-                        <button id="bulk-delete-urls" class="btn btn-danger" style="display: none;">
-                            <i class="fas fa-trash"></i> Delete Selected
-                        </button>
-                        <button id="refresh-urls" class="btn btn-secondary">
-                            <i class="fas fa-sync-alt"></i> Refresh
-                        </button>
-                        <button id="bulk-process-urls" class="btn btn-primary">
-                            <i class="fas fa-cogs"></i> Process All Confirmed
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Admin URL Injection Form -->
-                <div id="admin-url-injection-form" class="url-injection-container" style="display: none;">
-                    <div class="injection-card">
-                        <div class="injection-header">
-                            <h3><i class="fas fa-globe"></i> Admin URL Injection</h3>
-                            <button id="hide-url-injection" class="btn btn-secondary btn-sm">
-                                <i class="fas fa-times"></i> Cancel
+                <!-- URL Management Section -->
+                <section id="url-management-section" class="content-section">
+                    <div class="section-header">
+                        <h2><i class="fas fa-link"></i> URL Management</h2>
+                        <div class="section-actions">
+                            <button id="show-url-injection" class="btn btn-success">
+                                <i class="fas fa-plus"></i> Inject New URL
+                            </button>
+                            <button id="bulk-delete-urls" class="btn btn-danger" style="display: none;">
+                                <i class="fas fa-trash"></i> Delete Selected
+                            </button>
+                            <button id="refresh-urls" class="btn btn-secondary">
+                                <i class="fas fa-sync-alt"></i> Refresh
+                            </button>
+                            <button id="bulk-process-urls" class="btn btn-primary">
+                                <i class="fas fa-cogs"></i> Process All Confirmed
                             </button>
                         </div>
-                        <form id="url-injection-form">
-                            <div class="form-group">
-                                <label for="injection-url">Website URL:</label>
-                                <input type="url" id="injection-url" class="form-control" 
-                                       placeholder="https://example.com" required>
-                                <small class="form-text">Enter the complete URL of the website to scrape and add to knowledge base</small>
-                            </div>
-                            <div class="form-actions">
-                                <button type="submit" class="btn btn-primary">
-                                    <i class="fas fa-download"></i> Inject & Process URL
+                    </div>
+
+                    <!-- Admin URL Injection Form -->
+                    <div id="admin-url-injection-form" class="url-injection-container" style="display: none;">
+                        <div class="injection-card">
+                            <div class="injection-header">
+                                <h3><i class="fas fa-globe"></i> Admin URL Injection</h3>
+                                <button id="hide-url-injection" class="btn btn-secondary btn-sm">
+                                    <i class="fas fa-times"></i> Cancel
                                 </button>
                             </div>
-                        </form>
-                        <div id="injection-status" class="injection-status" style="display: none;"></div>
-                    </div>
-                </div>
-
-                <!-- URL Filters -->
-                <div class="filters">
-                    <select id="url-status-filter" class="filter-select">
-                        <option value="all">All URLs</option>
-                        <option value="pending">Pending Confirmation</option>
-                        <option value="confirmed">Confirmed</option>
-                        <option value="processed">Processed</option>
-                        <option value="expired">Expired</option>
-                        <option value="direct">Direct Injections</option>
-                    </select>
-                    <input type="text" id="url-search" class="filter-input" placeholder="Search URLs...">
-                </div>
-
-                <!-- URL Table -->
-                <div class="table-container">
-                    <table id="urls-table" class="data-table">
-                        <thead>
-                            <tr>
-                                <th><input type="checkbox" id="select-all-urls"></th>
-                                <th>URL</th>
-                                <th>Firm Name</th>
-                                <th>Source/Requester</th>
-                                <th>Status</th>
-                                <th>Created</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="urls-tbody">
-                            <!-- Dynamic content -->
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-
-            <!-- User Management Section -->
-            <section id="user-management-section" class="content-section">
-                <div class="section-header">
-                    <h2><i class="fas fa-users"></i> User Management</h2>
-                    <div class="section-actions">
-                        <button id="add-admin-user" class="btn btn-primary">
-                            <i class="fas fa-user-shield"></i> Add Admin
-                        </button>
-                        <button id="refresh-users" class="btn btn-secondary">
-                            <i class="fas fa-sync-alt"></i> Refresh
-                        </button>
-                    </div>
-                </div>
-
-                <!-- User Management Tabs -->
-                <div class="tabs-container">
-                    <div class="tabs">
-                        <button class="tab-btn active" data-tab="regular-users">
-                            <i class="fas fa-users"></i> Regular Users
-                        </button>
-                        <button class="tab-btn" data-tab="admin-users">
-                            <i class="fas fa-user-shield"></i> Admin Users
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Regular Users Table -->
-                <div id="regular-users-tab" class="tab-content active">
-                    <div class="users-stats">
-                        <div class="stat-card">
-                            <div class="stat-number" id="total-users">-</div>
-                            <div class="stat-label">Total Users</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-number" id="active-users">-</div>
-                            <div class="stat-label">Active Users</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-number" id="users-with-urls">-</div>
-                            <div class="stat-label">Users with URLs</div>
+                            <form id="url-injection-form">
+                                <div class="form-group">
+                                    <label for="injection-url">Website URL:</label>
+                                    <input type="url" id="injection-url" class="form-control"
+                                        placeholder="https://example.com" required>
+                                    <small class="form-text">Enter the complete URL of the website to scrape and add to
+                                        knowledge base</small>
+                                </div>
+                                <div class="form-actions">
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-download"></i> Inject & Process URL
+                                    </button>
+                                </div>
+                            </form>
+                            <div id="injection-status" class="injection-status" style="display: none;"></div>
                         </div>
                     </div>
-                    
+
+                    <!-- URL Filters -->
+                    <div class="filters">
+                        <select id="url-status-filter" class="filter-select">
+                            <option value="all">All URLs</option>
+                            <option value="pending">Pending Confirmation</option>
+                            <option value="confirmed">Confirmed</option>
+                            <option value="processed">Processed</option>
+                            <option value="expired">Expired</option>
+                            <option value="direct">Direct Injections</option>
+                        </select>
+                        <input type="text" id="url-search" class="filter-input" placeholder="Search URLs...">
+                    </div>
+
+                    <!-- URL Table -->
                     <div class="table-container">
-                        <table id="users-table" class="data-table">
+                        <table id="urls-table" class="data-table">
+                            <thead>
+                                <tr>
+                                    <th><input type="checkbox" id="select-all-urls"></th>
+                                    <th>URL</th>
+                                    <th>Firm Name</th>
+                                    <th>Source/Requester</th>
+                                    <th>Status</th>
+                                    <th>Created</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="urls-tbody">
+                                <!-- Dynamic content -->
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- User Management Section -->
+                <section id="user-management-section" class="content-section">
+                    <div class="section-header">
+                        <h2><i class="fas fa-users"></i> User Management</h2>
+                        <div class="section-actions">
+                            <button id="add-admin-user" class="btn btn-primary">
+                                <i class="fas fa-user-shield"></i> Add Admin
+                            </button>
+                            <button id="refresh-users" class="btn btn-secondary">
+                                <i class="fas fa-sync-alt"></i> Refresh
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- User Management Tabs -->
+                    <div class="tabs-container">
+                        <div class="tabs">
+                            <button class="tab-btn active" data-tab="regular-users">
+                                <i class="fas fa-users"></i> Regular Users
+                            </button>
+                            <button class="tab-btn" data-tab="admin-users">
+                                <i class="fas fa-user-shield"></i> Admin Users
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Regular Users Table -->
+                    <div id="regular-users-tab" class="tab-content active">
+                        <div class="users-stats">
+                            <div class="stat-card">
+                                <div class="stat-number" id="total-users">-</div>
+                                <div class="stat-label">Total Users</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number" id="active-users">-</div>
+                                <div class="stat-label">Active Users</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number" id="users-with-urls">-</div>
+                                <div class="stat-label">Users with URLs</div>
+                            </div>
+                        </div>
+
+                        <div class="table-container">
+                            <table id="users-table" class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Email</th>
+                                        <th>Phone</th>
+                                        <th>URLs Submitted</th>
+                                        <th>Registration Date</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+
+                                    </tr>
+                                </thead>
+                                <tbody id="users-tbody">
+                                    <!-- Dynamic content -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Admin Users Table -->
+                    <div id="admin-users-tab" class="tab-content">
+                        <div class="table-container">
+                            <table id="admins-table" class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Username</th>
+                                        <th>Email</th>
+                                        <th>Full Name</th>
+                                        <th>Role</th>
+                                        <th>Last Login</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="admins-tbody">
+                                    <!-- Dynamic content -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Knowledge Base Section -->
+                <section id="knowledge-section" class="content-section">
+                    <div class="section-header">
+                        <h2><i class="fas fa-brain"></i> Knowledge Base Management</h2>
+                        <div class="section-actions">
+                            <button id="show-knowledge-upload" class="btn btn-success">
+                                <i class="fas fa-upload"></i> Upload Knowledge
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Knowledge Upload Form -->
+                    <div id="knowledge-upload-form" class="url-injection-container" style="display: none;">
+                        <div class="injection-card">
+                            <div class="injection-header">
+                                <h3><i class="fas fa-upload"></i> Upload Knowledge to Vector Store</h3>
+                                <button id="hide-knowledge-upload" class="btn btn-secondary btn-sm">
+                                    <i class="fas fa-times"></i> Cancel
+                                </button>
+                            </div>
+                            <form id="knowledge-form" enctype="multipart/form-data">
+                                <div class="form-group">
+                                    <label for="firm-name-kb">Firm/Company Name (Optional):</label>
+                                    <select id="firm-name-kb" class="form-control">
+                                        <option value="">-- Select Existing Firm or Enter New --</option>
+                                    </select>
+                                    <input type="text" id="firm-name-kb-custom" class="form-control"
+                                        style="margin-top: 8px; display: none;" placeholder="Or enter new firm name">
+                                    <small class="form-text">Select an existing firm or enter a new name</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="knowledge-type">Knowledge Type:</label>
+                                    <select id="knowledge-type" class="form-control">
+                                        <option value="general">General Information</option>
+                                        <option value="contact">Contact Information</option>
+                                        <option value="services">Services/Products</option>
+                                        <option value="hours">Business Hours</option>
+                                        <option value="faq">FAQ</option>
+                                        <option value="policy">Policies</option>
+                                        <option value="other">Other</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="knowledge-file">Upload Text File:</label>
+                                    <input type="file" id="knowledge-file" class="form-control"
+                                        accept=".txt,.md,.doc,.docx">
+                                    <small class="form-text">Upload a .txt, .md, or .doc file with knowledge
+                                        content</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="knowledge-text">Or Enter Text Directly:</label>
+                                    <textarea id="knowledge-text" class="form-control" rows="8" placeholder="Enter knowledge content here... (minimum 50 characters)
+
+Example:
+Contact Information:
+Email: info@example.com
+Phone: +1 (555) 123-4567
+Address: 123 Main Street, City, State 12345
+
+Business Hours:
+Monday-Friday: 9:00 AM - 5:00 PM
+Saturday: 10:00 AM - 2:00 PM
+Sunday: Closed"></textarea>
+                                    <small class="form-text">Paste or type knowledge content (at least 50
+                                        characters)</small>
+                                </div>
+
+                                <div class="form-actions">
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-cloud-upload-alt"></i> Upload to Knowledge Base
+                                    </button>
+                                </div>
+                            </form>
+                            <div id="knowledge-status" class="injection-status" style="display: none;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Knowledge Info -->
+                    <div class="info-box">
+                        <h4><i class="fas fa-info-circle"></i> About Knowledge Base</h4>
+                        <p>
+                            Upload text files or directly enter information to add to the AI's knowledge base.
+                            This is useful for adding missing contact information, business hours, FAQs, or any
+                            other information that the chatbot should know about.
+                        </p>
+                        <ul>
+                            <li>Supported formats: .txt, .md files (UTF-8 encoded)</li>
+                            <li>Minimum content length: 50 characters</li>
+                            <li>Information will be immediately available to the chatbot</li>
+                            <li>Associate content with specific firms for targeted responses</li>
+                        </ul>
+                    </div>
+                </section>
+
+                <!-- Contacts Section -->
+                <section id="contacts-section" class="content-section">
+                    <div class="section-header">
+                        <h2><i class="fas fa-address-book"></i> Contact Management</h2>
+                        <div class="section-actions">
+                            <button id="export-contacts" class="btn btn-secondary">
+                                <i class="fas fa-download"></i> Export
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Contacts Table -->
+                    <div class="table-container">
+                        <table id="contacts-table" class="data-table">
                             <thead>
                                 <tr>
                                     <th>Name</th>
                                     <th>Email</th>
                                     <th>Phone</th>
-                                    <th>URLs Submitted</th>
-                                    <th>Registration Date</th>
-                                    <th>Status</th>
-                                <th>Actions</th>
-
+                                    <th>Created</th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
-                            <tbody id="users-tbody">
+                            <tbody id="contacts-tbody">
                                 <!-- Dynamic content -->
                             </tbody>
                         </table>
                     </div>
-                </div>
+                </section>
 
-                <!-- Admin Users Table -->
-                <div id="admin-users-tab" class="tab-content">
+                <!-- Firms Section -->
+                <section id="firms-section" class="content-section">
+                    <div class="section-header">
+                        <h2><i class="fas fa-building"></i> Firms Management</h2>
+                        <div class="section-actions">
+                            <button id="merge-duplicate-firms" class="btn btn-warning">
+                                <i class="fas fa-compress-arrows-alt"></i> Merge Duplicates
+                            </button>
+                            <button id="add-firm" class="btn btn-primary">
+                                <!-- <i class="fas fa-plus"></i> Add Firm -->
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Firms Table -->
                     <div class="table-container">
-                        <table id="admins-table" class="data-table">
+                        <table id="firms-table" class="data-table">
                             <thead>
                                 <tr>
-                                    <th>Username</th>
-                                    <th>Email</th>
-                                    <th>Full Name</th>
-                                    <th>Role</th>
-                                    <th>Last Login</th>
-                                    <th>Status</th>
+                                    <th>Name</th>
+                                    <th>Websites</th>
+                                    <th>Created</th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
-                            <tbody id="admins-tbody">
+                            <tbody id="firms-tbody">
                                 <!-- Dynamic content -->
                             </tbody>
                         </table>
                     </div>
-                </div>
-            </section>
+                </section>
 
-            <!-- Contacts Section -->
-            <section id="contacts-section" class="content-section">
-                <div class="section-header">
-                    <h2><i class="fas fa-address-book"></i> Contact Management</h2>
-                    <div class="section-actions">
-                        <button id="export-contacts" class="btn btn-secondary">
-                            <i class="fas fa-download"></i> Export
-                        </button>
+                <!-- System Logs Section -->
+                <section id="system-logs-section" class="content-section">
+                    <div class="section-header">
+                        <h2><i class="fas fa-file-alt"></i> System Logs</h2>
+                        <div class="section-actions">
+                            <button id="clear-logs" class="btn btn-danger">
+                                <i class="fas fa-trash"></i> Clear Logs
+                            </button>
+                        </div>
                     </div>
-                </div>
 
-                <!-- Contacts Table -->
-                <div class="table-container">
-                    <table id="contacts-table" class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Name</th>
-                                <th>Email</th>
-                                <th>Phone</th>
-                                <th>Created</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="contacts-tbody">
-                            <!-- Dynamic content -->
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-
-            <!-- Firms Section -->
-            <section id="firms-section" class="content-section">
-                <div class="section-header">
-                    <h2><i class="fas fa-building"></i> Firms Management</h2>
-                    <div class="section-actions">
-                        <button id="merge-duplicate-firms" class="btn btn-warning">
-                            <i class="fas fa-compress-arrows-alt"></i> Merge Duplicates
-                        </button>
-                        <button id="add-firm" class="btn btn-primary">
-                            <!-- <i class="fas fa-plus"></i> Add Firm -->
-                        </button>
+                    <div class="logs-container">
+                        <pre id="system-logs"></pre>
                     </div>
-                </div>
+                </section>
 
-                <!-- Firms Table -->
-                <div class="table-container">
-                    <table id="firms-table" class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Name</th>
-                                <th>Websites</th>
-                                <th>Created</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="firms-tbody">
-                            <!-- Dynamic content -->
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-
-            <!-- System Logs Section -->
-            <section id="system-logs-section" class="content-section">
-                <div class="section-header">
-                    <h2><i class="fas fa-file-alt"></i> System Logs</h2>
-                    <div class="section-actions">
-                        <button id="clear-logs" class="btn btn-danger">
-                            <i class="fas fa-trash"></i> Clear Logs
-                        </button>
+                <!-- Admin Bot Section -->
+                <section id="admin-bot-section" class="content-section">
+                    <div class="section-header">
+                        <h2><i class="fas fa-key"></i> API Key Management</h2>
+                        <div class="section-actions">
+                            <button id="update-admin-api-key" class="btn btn-primary" style="display: none;">
+                                <i class="fas fa-key"></i> <span id="api-button-text">Add API Key</span>
+                            </button>
+                        </div>
                     </div>
-                </div>
 
-                <div class="logs-container">
-                    <pre id="system-logs"></pre>
-                </div>
-            </section>
-
-            <!-- Admin Bot Section -->
-            <section id="admin-bot-section" class="content-section">
-                <div class="section-header">
-                    <h2><i class="fas fa-key"></i> API Key Management</h2>
-                    <div class="section-actions">
-                        <button id="update-admin-api-key" class="btn btn-primary" style="display: none;">
-                            <i class="fas fa-key"></i> <span id="api-button-text">Add API Key</span>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- API Key Status -->
-                <div class="content-card">
-                    <div class="api-key-status">
-                        <div class="status-indicator">
-                            <i id="api-status-icon" class="fas fa-times-circle" style="color: #dc2626;"></i>
-                            <div class="status-text">
-                                <h3>OpenAI API Key Status</h3>
-                                <p id="api-status-message">OpenAI API key required for bot functionality - Please configure your key</p>
+                    <!-- API Key Status -->
+                    <div class="content-card">
+                        <div class="api-key-status">
+                            <div class="status-indicator">
+                                <i id="api-status-icon" class="fas fa-times-circle" style="color: #dc2626;"></i>
+                                <div class="status-text">
+                                    <h3>OpenAI API Key Status</h3>
+                                    <p id="api-status-message">OpenAI API key required for bot functionality - Please
+                                        configure your key</p>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- API Key Configuration Form -->
-                <div id="api-key-form-container" class="content-card" style="display: none;">
-                    <h3><i class="fas fa-key"></i> OpenAI API Key Configuration</h3>
-                    <form id="admin-api-key-form">
-                        <div class="form-group">
-                            <label for="admin-api-key">OpenAI API Key</label>
-                            <div class="input-group">
-                                <input type="password" id="admin-api-key" class="form-control" 
-                                       placeholder="sk-..." required>
-                                <button type="button" id="toggle-admin-key" class="btn btn-outline-secondary">
-                                    <i class="fas fa-eye"></i>
+                    <!-- API Key Configuration Form -->
+                    <div id="api-key-form-container" class="content-card" style="display: none;">
+                        <h3><i class="fas fa-key"></i> OpenAI API Key Configuration</h3>
+                        <form id="admin-api-key-form">
+                            <div class="form-group">
+                                <label for="admin-api-key">OpenAI API Key</label>
+                                <div class="input-group">
+                                    <input type="password" id="admin-api-key" class="form-control" placeholder="sk-..."
+                                        required>
+                                    <button type="button" id="toggle-admin-key" class="btn btn-outline-secondary">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                                <small class="form-text text-muted">
+                                    Your API key will be encrypted and stored securely. Get your key from <a
+                                        href="https://platform.openai.com/api-keys" target="_blank">OpenAI Platform</a>
+                                </small>
+                            </div>
+
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-save"></i> Save API Key
+                                </button>
+                                <button type="button" id="cancel-api-form" class="btn btn-secondary">
+                                    Cancel
                                 </button>
                             </div>
-                            <small class="form-text text-muted">
-                                Your API key will be encrypted and stored securely. Get your key from <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI Platform</a>
-                            </small>
-                        </div>
-                        
-                        <div class="form-actions">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-save"></i> Save API Key
-                            </button>
-                            <button type="button" id="cancel-api-form" class="btn btn-secondary">
-                                Cancel
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </section>
-        </main>
+                        </form>
+                    </div>
+                </section>
+            </main>
         </div> <!-- End dashboard-body -->
     </div>
 
@@ -477,29 +590,29 @@
                 <i class="fas fa-shield-alt"></i>
                 <h2>Admin Login</h2>
             </div>
-            
+
             <form id="login-form" class="login-form">
                 <div class="form-group">
                     <label for="username">Username</label>
                     <input type="text" id="username" name="username" required>
                 </div>
-                
+
                 <div class="form-group">
                     <label for="password">Password</label>
                     <input type="password" id="password" name="password" required>
                 </div>
-                
+
                 <button type="submit" class="btn btn-primary btn-full">
                     <i class="fas fa-sign-in-alt"></i>
                     Login
                 </button>
             </form>
-            
+
             <!-- Signup Link -->
             <div class="login-footer">
                 <p>Don't have an admin account? <a href="/admin/signup" id="show-signup">Create one</a></p>
             </div>
-            
+
             <div id="login-error" class="error-message" style="display: none;">
                 Invalid username or password
             </div>
@@ -526,7 +639,7 @@
                         </div>
                     </div>
                     <div class="warning-text">
-                        <i class="fas fa-warning"></i> 
+                        <i class="fas fa-warning"></i>
                         This action cannot be undone and will remove all associated data from the knowledge base.
                     </div>
                 </div>
@@ -558,7 +671,7 @@
                         </div>
                     </div>
                     <div class="warning-text">
-                        <i class="fas fa-warning"></i> 
+                        <i class="fas fa-warning"></i>
                         This action cannot be undone and will remove all associated data from the knowledge base.
                     </div>
                 </div>
@@ -596,7 +709,7 @@
                         </div>
                     </div>
                     <div class="warning-text">
-                        <i class="fas fa-exclamation-triangle"></i> 
+                        <i class="fas fa-exclamation-triangle"></i>
                         This action cannot be undone and will permanently remove this contact from the system.
                     </div>
                 </div>
@@ -624,7 +737,7 @@
 
     <!-- Scripts -->
     <script src="/static/js/admin.js"></script>
-    
+
     <script>
         // Simple sidebar toggle function for testing
         function simpleSidebarToggle() {
@@ -645,22 +758,22 @@
                 return false;
             }
         }
-        
+
         // Add click event to hamburger button as backup (only if AdminDashboard is not available)
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             console.log('🔧 Adding backup handlers...');
             const toggleBtn = document.getElementById('sidebar-toggle');
             if (toggleBtn) {
                 console.log('✅ Found sidebar toggle button');
-                toggleBtn.addEventListener('click', function(e) {
+                toggleBtn.addEventListener('click', function (e) {
                     console.log('🖱️ Backup handler: Sidebar toggle clicked');
-                    
+
                     // Only use backup handler if AdminDashboard is not available
                     if (window.adminDashboard && window.adminDashboard.toggleSidebar) {
                         console.log('🎯 AdminDashboard available, letting it handle the click');
                         return; // Let AdminDashboard handle it
                     }
-                    
+
                     console.log('🚨 AdminDashboard not available, using backup handler');
                     e.preventDefault();
                     e.stopPropagation();
@@ -670,12 +783,12 @@
                 console.error('❌ Sidebar toggle button not found');
             }
         });
-        
+
         // Global functions for modal close buttons
         function hideContactDeleteConfirmation() {
             const modal = document.getElementById('contact-delete-confirmation-modal');
             modal.style.display = 'none';
-            
+
             // Remove escape key listener if exists
             if (window.adminDashboard && window.adminDashboard.removeEscapeKeyListener) {
                 window.adminDashboard.removeEscapeKeyListener();
@@ -683,4 +796,5 @@
         }
     </script>
 </body>
+
 </html>

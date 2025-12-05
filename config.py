@@ -15,8 +15,6 @@ LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET")
 
 # Database Configuration
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./kitkool_bot.db")
-DATABASE_URI = os.getenv("DATABASE_URI", "sqlite:///scraped_data.db")
-
 # Admin & Security Configuration
 SECRET_KEY = os.getenv("SECRET_KEY", "your-fallback-secret-key")
 APP_NAME = os.getenv("APP_NAME", "KitKool Web Bot")

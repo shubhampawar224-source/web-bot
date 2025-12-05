@@ -70,7 +70,6 @@ Migration auto-detects new models/columns from `model/*.py` and applies them saf
 
 ### Database URLs (config.py)
 - `DATABASE_URL`: Main app DB (firms, users, admin) - defaults to `sqlite:///./kitkool_bot.db`
-- `DATABASE_URI`: Legacy scraper DB - avoid using (old pattern)
 
 ## Configuration
 

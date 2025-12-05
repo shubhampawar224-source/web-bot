@@ -27,6 +27,30 @@ BACKOFF = 0.5
 
 logger = logging.getLogger(__name__)
 
+# Regex patterns for contact info extraction
+EMAIL_PATTERN = re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b')
+PHONE_PATTERN = re.compile(r'(?:\+\d{1,3}[-.\s]?)?(?:\(?\d{1,4}\)?[-.\s]?)?\d{1,4}[-.\s]?\d{1,4}[-.\s]?\d{1,9}')
+
+def extract_contact_info(text: str) -> dict:
+    """Extract emails and phone numbers from text."""
+    emails = list(set(EMAIL_PATTERN.findall(text)))
+    phones = []
+    
+    # Find potential phone numbers
+    potential_phones = PHONE_PATTERN.findall(text)
+    for phone in potential_phones:
+        # Clean and validate phone number (must have at least 7 digits)
+        cleaned = re.sub(r'[^0-9+]', '', phone)
+        if len(cleaned) >= 7:  # Minimum valid phone number length
+            phones.append(phone.strip())
+    
+    phones = list(set(phones))[:5]  # Limit to 5 unique phone numbers
+    
+    return {
+        "emails": emails[:10],  # Limit to 10 emails
+        "phones": phones
+    }
+
 
 # ========================================
 # FETCHING UTILITIES
@@ -129,13 +153,28 @@ async def scrape_page(client, url, domain):
             title_txt = a.get_text(strip=True) or "link"
             links.append({"title": title_txt, "url": href})
 
+    # Extract contact information (emails and phone numbers) from page text
+    contact_data = extract_contact_info(page_text)
+    
+    # Add extracted contact info prominently to page text
+    if contact_data["emails"]:
+        page_text += " [EMAILS: " + ", ".join(contact_data["emails"]) + "]"
+    if contact_data["phones"]:
+        page_text += " [PHONES: " + ", ".join(contact_data["phones"]) + "]"
+    
     # Append schema and phone data to page text for better search
     if phone_info:
-        page_text += f" Phone: {phone_info}"
+        page_text += f" [META_PHONE: {phone_info}]"
     if schema_text:
-        page_text += " " + schema_text
+        page_text += " [SCHEMA: " + schema_text + "]"
     
-    meta_info = {"title": title, "meta_description": meta_desc, "phone": phone_info}
+    meta_info = {
+        "title": title, 
+        "meta_description": meta_desc, 
+        "phone": phone_info,
+        "extracted_emails": contact_data["emails"],
+        "extracted_phones": contact_data["phones"]
+    }
     return page_text, links, meta_info
 
 

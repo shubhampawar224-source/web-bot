@@ -5,101 +5,21 @@ import re
 import json
 import base64
 import time
-import uuid
-from typing import List, Dict, Any
 from fastapi import WebSocket
-from collections import defaultdict
+from typing import List, Dict, Any
+import uuid
 from dotenv import load_dotenv
 from openai import OpenAI
-from langchain_openai import ChatOpenAI
-from langchain_community.utilities import SQLDatabase
-from langchain_community.agent_toolkits import SQLDatabaseToolkit
-from langchain.memory import ConversationSummaryBufferMemory
-from langchain.agents import create_sql_agent, AgentType
-from sqlalchemy import inspect
-from voice_config.prompt_manager import voice_rag_prompt
 from voice_config.simple_rag_agent import EnhancedRAGAgent
 
-# ========================================
-# ENVIRONMENT
-# ========================================
 load_dotenv(override=True)
 OPENAI_KEY = os.getenv("OPENAI_API_KEY")
-# Use the main application database that contains firms, websites, and pages data
-db_uri = os.getenv("DATABASE_URL", "sqlite:///./kitkool_bot.db")
-
 if not OPENAI_KEY:
     raise RuntimeError("Please set OPENAI_API_KEY in .env")
-
-# ========================================
-# DYNAMIC SCHEMA HANDLER
-# ========================================
-def get_allowed_columns(db: SQLDatabase):
-    """Auto-detect table names and their columns dynamically."""
-    try:
-        inspector = inspect(db._engine)
-        schema_summary = {}
-
-        for table_name in inspector.get_table_names():
-            columns = [col["name"] for col in inspector.get_columns(table_name)]
-            schema_summary[table_name] = columns
-
-        return schema_summary
-    except Exception as e:
-        print(f"⚠️ Schema introspection failed: {e}")
-        return {}
-
-
-def summarize_schema(db: SQLDatabase, max_cols=8):
-    """Generate a compact schema summary for prompts (avoids large schema dumps)."""
-    inspector = inspect(db._engine)
-    summaries = []
-    for table in inspector.get_table_names():
-        cols = [c["name"] for c in inspector.get_columns(table)]
-        if len(cols) > max_cols:
-            cols = cols[:max_cols] + ["..."]
-        summaries.append(f"{table}({', '.join(cols)})")
-    return "; ".join(summaries)
-
-
-# ========================================
-# MEMORY MANAGER
-# ========================================
-class MemoryManager:
-    """Manages session-based memory with expiration."""
-    def __init__(self, expiry_seconds: int = 1800):
-        self.memories = defaultdict(
-            lambda: {
-                "memory": ConversationSummaryBufferMemory(
-                    llm=ChatOpenAI(model="gpt-4o-mini", temperature=0),
-                    max_token_limit=1000
-                ),
-                "last_access": time.time()
-            }
-        )
-        self.expiry_seconds = expiry_seconds
-
-    def get_memory(self, session_id: str):
-        self.cleanup()
-        self.memories[session_id]["last_access"] = time.time()
-        return self.memories[session_id]["memory"]
-
-    def cleanup(self):
-        now = time.time()
-        expired = [sid for sid, data in self.memories.items()
-                   if now - data["last_access"] > self.expiry_seconds]
-        for sid in expired:
-            del self.memories[sid]
-
-# ========================================
-# VOICE ASSISTANT CLASS
-# ========================================
 
 class VoiceAssistant:
     def __init__(self):
         self.client = OpenAI(api_key=OPENAI_KEY)
-        self.memory_manager = MemoryManager()
-        
         # Initialize Enhanced RAG Agent for advanced vector search
         try:
             self.rag_agent = EnhancedRAGAgent()
@@ -107,46 +27,6 @@ class VoiceAssistant:
         except Exception as e:
             print(f"[VoiceAssistant] Warning: Could not initialize RAG Agent: {e}")
             self.rag_agent = None
-
-        # --- Database setup ---
-        self.db = SQLDatabase.from_uri(
-            db_uri,
-            sample_rows_in_table_info=3,  # Show more examples including JSON data
-            max_string_length=2000  # Allow longer strings to show full JSON structures
-        )
-        self.llm = ChatOpenAI(
-            model="gpt-4o-mini", 
-            temperature=0,
-            request_timeout=15,  # 15 second timeout for LLM calls
-            max_retries=1  # Reduce retries for faster failure
-        )
-
-        # --- Dynamic schema mapping ---
-        allowed_columns = get_allowed_columns(self.db)
-        schema_summary = summarize_schema(self.db)
-
-        # --- Toolkit with dynamic schema ---
-        self.toolkit = SQLDatabaseToolkit(
-            db=self.db,
-            llm=self.llm,
-            allowed_columns=allowed_columns
-        )
-
-        # --- Custom prompt with actual schema summary ---
-        self.prompt = voice_rag_prompt(schema_summary)
-
-        # --- SQL Agent with optimization ---
-        self.voice_agent = create_sql_agent(
-            llm=self.llm,
-            toolkit=self.toolkit,
-            verbose=True,  # Enable verbose to see what agent is doing
-            handle_parsing_errors=True,
-            agent_type=AgentType.OPENAI_FUNCTIONS,
-            prompt=self.prompt,
-            max_iterations=8,  # Increase for deeper search
-            max_execution_time=20,  # Increase timeout for thorough search
-            early_stopping_method="generate"  # Stop early if answer found
-        )
 
     # -------------------------
     # WebSocket Handling
@@ -217,7 +97,9 @@ class VoiceAssistant:
 
         try:
             stt_resp = self.client.audio.transcriptions.create(
-                model="whisper-1", file=audio_file
+                model="whisper-1", 
+                file=audio_file,
+                language="en"  # Force English transcription only
             )
             user_text = stt_resp.text.strip()
         except Exception as e:
@@ -243,38 +125,24 @@ class VoiceAssistant:
     # -------------------------
     async def ask_agent(self, session_id: str, user_text: str) -> str:
         try:
-            memory = self.memory_manager.get_memory(session_id)
-            memory.chat_memory.add_user_message(user_text)
-
             # Use Enhanced RAG Agent for intelligent search
             if self.rag_agent:
                 print(f"🔍 Using Enhanced RAG Agent for query: {user_text}")
                 start_time = time.time()
-                
                 try:
-                    # Use Enhanced RAG Agent's intelligent search
                     response = await asyncio.to_thread(
                         self.rag_agent.search_and_respond, user_text
                     )
-                    
                     elapsed = time.time() - start_time
                     print(f"✅ Enhanced RAG search completed in {elapsed:.2f}s")
-                    
                     if response and len(response.strip()) > 10:
-                        memory.chat_memory.add_ai_message(response)
                         return response
                     else:
                         print("⚠️ Enhanced RAG returned empty response")
-                        
                 except Exception as rag_error:
                     print(f"❌ Enhanced RAG error: {rag_error}")
-                    
             # Fallback response
-            bot_text = "I'm having trouble accessing my knowledge base right now. Could you try rephrasing your question or ask something else?"
-            
-            memory.chat_memory.add_ai_message(bot_text)
-            return bot_text
-
+            return "I'm having trouble accessing my knowledge base right now. Could you try rephrasing your question or ask something else?"
         except asyncio.TimeoutError:
             print(f"⏰ Agentic search timeout")
             return "I'm taking longer than usual to search. Please try your question again, perhaps with different keywords."

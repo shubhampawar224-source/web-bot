@@ -104,7 +104,7 @@ class EnhancedRAGAgent:
         if 'about' in q or 'who' in q:
             keywords.extend(['about us', 'company'])
         if 'contact' in q:
-            keywords.extend(['contact', 'phone', 'address'])
+            keywords.extend(['contact', 'email','phone', 'address'])
             
         return keywords
     
@@ -146,7 +146,7 @@ Voice Response:"""
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=200,
-                temperature=0.7
+                temperature=0
             )
             
             return response.choices[0].message.content.strip()

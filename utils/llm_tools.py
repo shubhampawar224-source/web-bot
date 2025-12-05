@@ -261,13 +261,17 @@ def get_answer_from_db(query: str, firm_id: int = None, session_id: Optional[str
                             break
                         
         elif firm_id:
-            # 2️⃣ Retrieve top 5 firm-specific docs from vector DB
+            # 2️⃣ Retrieve top 20 firm-specific docs from vector DB (include manual_knowledge)
             results = collection.query(
                 query_embeddings=[query_embedding],
-                n_results=5,
-                where={"$and": [{"type": "website"}, {"firm_id": str(firm_id)}]},
+                n_results=20,
+                where={"$and": [
+                    {"type": {"$in": ["website", "manual_knowledge"]}},
+                    {"firm_id": str(firm_id)}
+                ]},
             )
             docs = results["documents"][0] if results["documents"] else []
+            # Let RAG agent handle all queries semantically, no manual keyword filtering
             
             # 🤖 AGENTIC BYPASS: If traditional search returns poor results, use intelligent multi-query search
             if AGENTIC_SEARCH_ENABLED and len(docs) < 3:

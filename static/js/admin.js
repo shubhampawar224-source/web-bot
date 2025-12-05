@@ -178,6 +178,22 @@ class AdminDashboard {
             urlInjectionForm.addEventListener('submit', (e) => this.handleUrlInjection(e));
         }
 
+        // Knowledge Base upload form
+        const showKnowledgeUpload = document.getElementById('show-knowledge-upload');
+        if (showKnowledgeUpload) {
+            showKnowledgeUpload.addEventListener('click', () => this.showKnowledgeUploadForm());
+        }
+
+        const hideKnowledgeUpload = document.getElementById('hide-knowledge-upload');
+        if (hideKnowledgeUpload) {
+            hideKnowledgeUpload.addEventListener('click', () => this.hideKnowledgeUploadForm());
+        }
+
+        const knowledgeForm = document.getElementById('knowledge-form');
+        if (knowledgeForm) {
+            knowledgeForm.addEventListener('submit', (e) => this.handleKnowledgeUpload(e));
+        }
+
         // User management tabs
         document.querySelectorAll('.tab-btn').forEach(tab => {
             tab.addEventListener('click', (e) => this.switchTab(e.target.dataset.tab));
@@ -1573,6 +1589,179 @@ class AdminDashboard {
         const statusDiv = document.getElementById('injection-status');
         if (statusDiv) {
             statusDiv.style.display = 'none';
+        }
+    }
+
+    // Knowledge Base Upload Methods
+    async showKnowledgeUploadForm() {
+        const formContainer = document.getElementById('knowledge-upload-form');
+        if (formContainer) {
+            formContainer.style.display = 'block';
+            this.hideKnowledgeStatus();
+
+            // Load firm names
+            await this.loadFirmNamesForKnowledge();
+        }
+    }
+
+    async loadFirmNamesForKnowledge() {
+        try {
+            const response = await fetch('/admin/firms', {
+                headers: {
+                    'Authorization': `Bearer ${this.authToken}`
+                }
+            });
+
+            const result = await response.json();
+
+            if (result.status === 'success' && result.firms) {
+                const selectElement = document.getElementById('firm-name-kb');
+                const customInput = document.getElementById('firm-name-kb-custom');
+
+                if (selectElement) {
+                    // Clear existing options except the first one
+                    selectElement.innerHTML = '<option value="">-- Select Existing Firm or Enter New --</option>';
+
+                    // Add "Enter Custom" option
+                    const customOption = document.createElement('option');
+                    customOption.value = '__custom__';
+                    customOption.textContent = '✏️ Enter Custom Firm Name';
+                    selectElement.appendChild(customOption);
+
+                    // Add all firms
+                    result.firms.forEach(firm => {
+                        const option = document.createElement('option');
+                        option.value = firm.name;
+                        option.textContent = `${firm.name} (${firm.website_count} websites)`;
+                        selectElement.appendChild(option);
+                    });
+
+                    // Handle custom input toggle
+                    selectElement.addEventListener('change', (e) => {
+                        if (e.target.value === '__custom__') {
+                            customInput.style.display = 'block';
+                            customInput.focus();
+                        } else {
+                            customInput.style.display = 'none';
+                            customInput.value = '';
+                        }
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('Failed to load firm names:', error);
+        }
+    }
+
+    hideKnowledgeUploadForm() {
+        const formContainer = document.getElementById('knowledge-upload-form');
+        if (formContainer) {
+            formContainer.style.display = 'none';
+            document.getElementById('knowledge-form').reset();
+            // Hide custom input
+            const customInput = document.getElementById('firm-name-kb-custom');
+            if (customInput) {
+                customInput.style.display = 'none';
+                customInput.value = '';
+            }
+            this.hideKnowledgeStatus();
+        }
+    }
+
+    showKnowledgeStatus(message, type) {
+        const statusDiv = document.getElementById('knowledge-status');
+        if (statusDiv) {
+            statusDiv.textContent = message;
+            statusDiv.className = `injection-status ${type}`;
+            statusDiv.style.display = 'block';
+        }
+    }
+
+    hideKnowledgeStatus() {
+        const statusDiv = document.getElementById('knowledge-status');
+        if (statusDiv) {
+            statusDiv.style.display = 'none';
+        }
+    }
+
+    async handleKnowledgeUpload(e) {
+        e.preventDefault();
+
+        const firmSelect = document.getElementById('firm-name-kb');
+        const firmCustomInput = document.getElementById('firm-name-kb-custom');
+        let firmName = '';
+
+        // Determine firm name from select or custom input
+        if (firmSelect.value === '__custom__') {
+            firmName = firmCustomInput.value.trim();
+        } else {
+            firmName = firmSelect.value.trim();
+        }
+
+        const knowledgeType = document.getElementById('knowledge-type').value;
+        const knowledgeText = document.getElementById('knowledge-text').value.trim();
+        const fileInput = document.getElementById('knowledge-file');
+        const file = fileInput.files[0];
+
+        // Validate that either file or text is provided
+        if (!file && !knowledgeText) {
+            this.showKnowledgeStatus('Please upload a file or enter text content', 'error');
+            return;
+        }
+
+        if (knowledgeText && knowledgeText.length < 50) {
+            this.showKnowledgeStatus('Text content must be at least 50 characters', 'error');
+            return;
+        }
+
+        this.showKnowledgeStatus('Uploading knowledge to vector store...', 'info');
+
+        try {
+            const formData = new FormData();
+            formData.append('firm_name', firmName);
+            formData.append('knowledge_type', knowledgeType);
+            formData.append('knowledge_text', knowledgeText);
+
+            if (file) {
+                formData.append('knowledge_file', file);
+            }
+
+            const response = await fetch('/admin/upload-knowledge', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.authToken}`
+                },
+                body: formData
+            });
+
+            const result = await response.json();
+
+            if (result.status === 'success') {
+                this.showKnowledgeStatus(
+                    `✅ ${result.message}. Added ${result.chunks_added} knowledge chunks.`,
+                    'success'
+                );
+                this.showToast('Knowledge uploaded successfully!', 'success');
+
+                // Reset form after 2 seconds
+                setTimeout(() => {
+                    document.getElementById('knowledge-form').reset();
+                    // Hide custom input
+                    const customInput = document.getElementById('firm-name-kb-custom');
+                    if (customInput) {
+                        customInput.style.display = 'none';
+                        customInput.value = '';
+                    }
+                    this.hideKnowledgeStatus();
+                }, 2000);
+            } else {
+                this.showKnowledgeStatus(`❌ ${result.message}`, 'error');
+                this.showToast('Failed to upload knowledge', 'error');
+            }
+        } catch (error) {
+            console.error('Knowledge upload error:', error);
+            this.showKnowledgeStatus('❌ Upload failed. Please try again.', 'error');
+            this.showToast('Failed to upload knowledge', 'error');
         }
     }
 

@@ -1941,6 +1941,71 @@ async def delete_contact(contact_id: int, request: Request):
     finally:
         db.close()
 
+@app.post("/admin/upload-knowledge")
+async def upload_knowledge(request: Request):
+    """Upload text file or direct text to knowledge base vector store"""
+    admin_info = await verify_admin_auth(request)
+    
+    try:
+        from fastapi import UploadFile, File, Form
+        
+        # Get form data
+        form = await request.form()
+        knowledge_text = form.get("knowledge_text", "").strip()
+        firm_name = form.get("firm_name", "").strip()
+        knowledge_type = form.get("knowledge_type", "general").strip()
+        file = form.get("knowledge_file")
+        
+        # Extract text from file if uploaded
+        if file and hasattr(file, 'read'):
+            file_content = await file.read()
+            try:
+                # Try UTF-8 first
+                knowledge_text = file_content.decode('utf-8')
+            except UnicodeDecodeError:
+                # Fallback to latin-1 if UTF-8 fails
+                try:
+                    knowledge_text = file_content.decode('latin-1')
+                except:
+                    return {"status": "error", "message": "Unable to decode file. Please use UTF-8 encoded text files."}
+        
+        if not knowledge_text:
+            return {"status": "error", "message": "No content provided. Please upload a file or enter text."}
+        
+        if len(knowledge_text.strip()) < 50:
+            return {"status": "error", "message": "Content too short. Please provide at least 50 characters."}
+        
+        # Add to vector store
+        try:
+            chunks = chunk_text(knowledge_text)
+            
+            metadata = {
+                "type": "manual_knowledge",
+                "knowledge_type": knowledge_type,
+                "firm_name": firm_name if firm_name else "General",
+                "added_by": admin_info.get('username', 'admin'),
+                "added_at": datetime.now().isoformat(),
+                "session_id": f"admin_upload_{uuid.uuid4().hex[:8]}"
+            }
+            
+            add_text_chunks_to_collection(chunks, metadata)
+            
+            return {
+                "status": "success",
+                "message": f"Successfully added {len(chunks)} knowledge chunks to vector store",
+                "chunks_added": len(chunks),
+                "firm_name": firm_name if firm_name else "General"
+            }
+            
+        except Exception as ve:
+            return {"status": "error", "message": f"Vector store error: {str(ve)}"}
+            
+    except Exception as e:
+        import traceback
+        print(f"Upload knowledge error: {e}")
+        traceback.print_exc()
+        return {"status": "error", "message": f"Failed to upload knowledge: {str(e)}"}
+
 @app.post("/admin/bulk-process-urls")
 async def bulk_process_urls(request: Request):
     """Process all confirmed URLs"""
@@ -2618,3 +2683,64 @@ async def frame_headers_middleware(request: Request, call_next):
 
     return resp
 
+
+
+import io
+import base64
+import os
+import uuid
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from dotenv import load_dotenv
+from voice_config.voice_helper import *
+# ----------------------------------
+# ENVIRONMENT SETUP
+voice_assistant = VoiceAssistant()
+
+@app.get("/voice")
+async def get_index():
+    return FileResponse("static/voice.html")
+
+
+@app.websocket("/ws/voice")
+async def ws_voice(ws: WebSocket):
+    await ws.accept()
+    session_id = str(ws.client.host)  # or uuid.uuid4() for uniqueness
+    session_id = str(uuid.uuid4())
+    print(f"🎧 Voice session started: {session_id}")
+
+    try:
+        # Send greeting
+        greeting = "Hello! I’m your AI voice assistant. How can I help you today?"
+        # The VoiceAssistant's safe_send needs to be adapted to send JSON
+        # For now, we assume it can handle it or we would modify it.
+        # A simple implementation would be:
+        # await ws.send_json({"type": "text", "data": greeting})
+        await voice_assistant.safe_send(ws, greeting)
+
+        # Listen loop
+        while True:
+            try:
+                data = await ws.receive_json()
+            except WebSocketDisconnect:
+                print("⚠️ Client disconnected during receive.")
+                break
+
+            if not data.get("audio") or data.get("silence"):
+                continue
+
+            audio_bytes = base64.b64decode(data["audio"])
+            exit_signal = await voice_assistant.process_audio(ws, audio_bytes, session_id)
+            if exit_signal == "exit":
+                break
+
+    except Exception as e:
+        print(f"💥 WebSocket error: {e}")
+    finally:
+        if ws.client_state.name == "CONNECTED":
+            await ws.close()
+        print(f"🔒 Session {session_id} closed.")
+
+
+        
