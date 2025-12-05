@@ -97,11 +97,15 @@ class VoiceAssistant:
 
         try:
             stt_resp = self.client.audio.transcriptions.create(
-                model="whisper-1", 
+                model="whisper-1",
                 file=audio_file,
                 language="en"  # Force English transcription only
             )
             user_text = stt_resp.text.strip()
+            # If Whisper returns empty or gibberish, or if user_text contains non-ASCII (non-English) chars, reject
+            if not user_text or not all(ord(c) < 128 for c in user_text):
+                await self.safe_send(ws, "Please speak in English only.")
+                return None
         except Exception as e:
             print(f"STT Error: {e}")
             await self.safe_send(ws, "Sorry, I couldn't understand you clearly.")
