@@ -2706,41 +2706,39 @@ async def get_index():
 @app.websocket("/ws/voice")
 async def ws_voice(ws: WebSocket):
     await ws.accept()
-    session_id = str(ws.client.host)  # or uuid.uuid4() for uniqueness
+    
     session_id = str(uuid.uuid4())
-    print(f"🎧 Voice session started: {session_id}")
+    print(f"🎧 Session Started: {session_id}")
+
+    # [IMPORTANT] Frontend ko batao session ID mil gaya
+    await ws.send_json({"session_id": session_id})
 
     try:
-        # Send greeting
-        greeting = "Hello! I’m your AI voice assistant. How can I help you today?"
-        # The VoiceAssistant's safe_send needs to be adapted to send JSON
-        # For now, we assume it can handle it or we would modify it.
-        # A simple implementation would be:
-        # await ws.send_json({"type": "text", "data": greeting})
+        # Initial Greeting
+        greeting = "Hello! I am your DJF Law Firm AI Assistant, How can I help you?"
         await voice_assistant.safe_send(ws, greeting)
 
-        # Listen loop
         while True:
             try:
                 data = await ws.receive_json()
             except WebSocketDisconnect:
-                print("⚠️ Client disconnected during receive.")
                 break
-
-            if not data.get("audio") or data.get("silence"):
+            
+            # Handle Stop Signal
+            if data.get("stop"):
+                print("🛑 User stopped manually")
+                # Yahan break nahi karenge, bas current processing rukegi
+                # kyunki 'safe_send' async hai, wo loop ko block nahi karega
                 continue
 
-            audio_bytes = base64.b64decode(data["audio"])
-            exit_signal = await voice_assistant.process_audio(ws, audio_bytes, session_id)
-            if exit_signal == "exit":
-                break
+            if data.get("audio"):
+                audio_bytes = base64.b64decode(data["audio"])
+                await voice_assistant.process_audio(ws, audio_bytes, session_id)
 
     except Exception as e:
-        print(f"💥 WebSocket error: {e}")
+        print(f"Connection Error: {e}")
     finally:
-        if ws.client_state.name == "CONNECTED":
-            await ws.close()
-        print(f"🔒 Session {session_id} closed.")
-
-
+        if session_id in voice_assistant.sessions:
+            del voice_assistant.sessions[session_id]
+        print(f"🔒 Session Closed: {session_id}")
         

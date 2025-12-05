@@ -9,25 +9,24 @@ AI-powered web chatbot with **Agentic RAG**, voice assistant, and intelligent mu
 | Component | Technology |
 |-----------|-----------|
 | **Backend** | FastAPI (Python 3.9-3.11) |
-| **AI/LLM** | OpenAI GPT-4.1-preview |
+| **AI/LLM** | OpenAI GPT-4o |
 | **Vector DB** | FAISS + ChromaDB-compatible wrapper |
 | **Embeddings** | SentenceTransformers (paraphrase-multilingual-MiniLM-L12-v2) |
 | **Database** | SQLite (SQLAlchemy ORM) |
-| **Voice AI** | Deepgram STT + Cartesia TTS + LiveKit |
+| **Voice AI** | OpenAI Whisper STT + OpenAI TTS (English-only) |
 | **Web Scraping** | BeautifulSoup4 + httpx (async) |
-| **Auth** | bcrypt + Google OAuth |
 
 ---
 
 ## ✨ Features
 
 - 🔍 **Agentic RAG**: Auto-generates multiple search queries for fuzzy/vague questions
-- 🎤 **Voice Assistant**: Real-time voice interaction via LiveKit
+- 🎤 **Voice Assistant**: Real-time voice interaction via WebSocket (English-only)
 - 📊 **Admin Dashboard**: Manage firms, websites, users, and chat analytics
 - 🌐 **Smart Web Scraping**: Prioritizes footer content (hours, contact, address)
 - 💬 **Session-Based Chat**: Maintains conversation context
-- 🔐 **Multi-Auth**: Admin/User with Google OAuth support
 - 📈 **Vector Search**: FAISS indexing for fast semantic retrieval
+- 📋 **Manual Knowledge**: Upload custom documents via admin panel
 
 ---
 
@@ -51,9 +50,10 @@ OPENAI_API_KEY=your_key_here
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-**Voice Assistant (Port 8001):**
+**Voice Assistant (Port 8000):**
 ```bash
-uvicorn my_agent:app --reload --host 0.0.0.0 --port 8001
+# Access voice bot via WebSocket at /voice endpoint
+# Frontend: /voice.html
 ```
 
 ---
@@ -80,7 +80,9 @@ docker-compose down
 | `/chat` | POST | Main chat interface |
 | `/inject-url` | POST | Scrape & index website |
 | `/admin/dashboard` | GET | Admin panel |
-| `/voice-chat` | WebSocket | Voice assistant |
+| `/voice-chat` | WebSocket | Voice assistant (English-only) |
+| `/admin/upload-knowledge` | POST | Upload manual knowledge |
+| `/firms` | GET | List all firms |
 
 ---
 
@@ -92,16 +94,6 @@ When traditional RAG finds <3 results, **Agentic Search** activates:
 3. Results merged & deduplicated
 4. Best matches returned
 
-**Example:**
-```
-User: "hours and operations" 
-  ↓ Agentic generates:
-  - "business hours"
-  - "opening closing time"
-  - "office schedule"
-  ↓ Result: 5+ documents found ✅
-```
-
 ---
 
 ## 📁 Project Structure
@@ -109,7 +101,7 @@ User: "hours and operations"
 ```
 web-bot/
 ├── main.py                 # Main FastAPI app (port 8000)
-├── my_agent.py            # Voice assistant (port 8001)
+├── my_agent.py            # Legacy voice assistant file
 ├── config.py              # Environment config
 ├── requirements.txt       # Dependencies
 ├── database/
@@ -121,7 +113,9 @@ web-bot/
 │   ├── scraper.py        # Web scraping (footer priority)
 │   ├── vector_store.py   # FAISS wrapper
 │   └── voice_bot_helper.py
-├── routers/              # API routes
+├── voice_config/
+│   ├── voice_helper.py   # Voice assistant WebSocket handler
+│   └── simple_rag_agent.py # Enhanced RAG agent for voice
 ├── static/               # Frontend HTML/CSS/JS
 └── rag_db_faiss/         # Vector store persistence
 ```
@@ -160,14 +154,27 @@ python migrate.py
 - Use **footer-focused scraping** for contact info
 - **Agentic search** automatically activates for poor results
 - Monitor console for `🔄 Activating Agentic Search` logs
-- Voice bot requires LiveKit WebRTC server
+- **Voice bot** uses OpenAI Whisper + TTS (English-only enforcement)
+- Upload **manual knowledge** via admin panel for firm-specific info
 - Re-scrape websites after scraper updates to populate FAISS
 
 ---
 
-**Made with ❤️ using FastAPI + OpenAI GPT-4.1**
+## 🎤 Voice Bot Features
 
-my server widgets,admin and user 
-http://127.0.0.1:8000/admin
-http://127.0.0.1:8000/widget
-http://localhost:8000/djf-bot
+- **English-only transcription** using OpenAI Whisper
+- **Real-time WebSocket** communication
+- **Enhanced RAG agent** with context merging
+- **Automatic language detection** - rejects non-English input
+- **Session management** with silence timeout
+- **Contact info extraction** from both website and manual knowledge
+
+---
+
+**Made with ❤️ using FastAPI + OpenAI GPT-4o + Whisper**
+
+## 🌐 Server URLs
+- **Admin Panel**: http://127.0.0.1:8000/admin  
+- **Widget Demo**: http://127.0.0.1:8000/widget  
+- **Chat Interface**: http://localhost:8000/djf-bot
+- **Voice Bot**: http://localhost:8000/voice

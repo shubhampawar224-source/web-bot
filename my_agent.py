@@ -34,10 +34,6 @@ async def ws_voice(ws: WebSocket):
     try:
         # Send greeting
         greeting = "Hello! I’m your AI voice assistant. How can I help you today?"
-        # The VoiceAssistant's safe_send needs to be adapted to send JSON
-        # For now, we assume it can handle it or we would modify it.
-        # A simple implementation would be:
-        # await ws.send_json({"type": "text", "data": greeting})
         await voice_assistant.safe_send(ws, greeting)
 
         # Listen loop

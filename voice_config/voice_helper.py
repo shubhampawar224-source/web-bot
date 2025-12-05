@@ -11,14 +11,17 @@ import uuid
 from dotenv import load_dotenv
 from openai import OpenAI
 from voice_config.simple_rag_agent import EnhancedRAGAgent
+from openai import AsyncOpenAI
 
 load_dotenv(override=True)
+client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 OPENAI_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_KEY:
     raise RuntimeError("Please set OPENAI_API_KEY in .env")
 
 class VoiceAssistant:
     def __init__(self):
+        self.sessions = {}
         self.client = OpenAI(api_key=OPENAI_KEY)
         # Initialize Enhanced RAG Agent for advanced vector search
         try:
@@ -86,45 +89,50 @@ class VoiceAssistant:
     # -------------------------
     # Audio -> Text -> Agent
     # -------------------------
+    # --- PART 2: PROCESS LOGIC (STT + LLM) ---
     async def process_audio(self, ws: WebSocket, audio_bytes: bytes, session_id: str):
-        # Check if WebSocket is still connected
-        if ws.client_state.name != "CONNECTED":
-            print("WebSocket disconnected during audio processing")
-            return None
-            
-        audio_file = io.BytesIO(audio_bytes)
-        audio_file.name = "input.wav"
+        # Temp file for Whisper
+        filename = f"temp_{uuid.uuid4()}.wav"
+        with open(filename, "wb") as f:
+            f.write(audio_bytes)
 
         try:
-            stt_resp = self.client.audio.transcriptions.create(
-                model="whisper-1",
-                file=audio_file,
-                language="en"  # Force English transcription only
-            )
-            user_text = stt_resp.text.strip()
-            # If Whisper returns empty or gibberish, or if user_text contains non-ASCII (non-English) chars, reject
-            if not user_text or not all(ord(c) < 128 for c in user_text):
-                await self.safe_send(ws, "Please speak in English only.")
-                return None
+            # 1. Transcribe (Speech to Text)
+            with open(filename, "rb") as audio_file:
+                transcription = await client.audio.transcriptions.create(
+                    model="whisper-1", 
+                    file=audio_file,
+                    language="en"
+                )
+            
+            user_text = transcription.text.strip()
+            print(f"🗣️ User Said: {user_text}")
+
+            if not user_text:
+                return "continue"
+
+            # 2. Update Session History
+            if session_id not in self.sessions:
+                self.sessions[session_id] = [
+                    {"role": "system", "content": "You are a helpful, quick-witted AI assistant. Keep responses short and conversational for voice output."}
+                ]
+            
+            self.sessions[session_id].append({"role": "user", "content": user_text})
+
+            # 3. Get RAG Agent Response (instead of direct GPT)
+            bot_reply = await self.ask_agent(session_id, user_text)
+
+            # 4. Call Streaming Sender
+            await self.safe_send(ws, bot_reply, user_text)
+
+            return "continue"
+
         except Exception as e:
-            print(f"STT Error: {e}")
-            await self.safe_send(ws, "Sorry, I couldn't understand you clearly.")
-            return None
-
-        if not user_text:
-            return None
-
-        print(f"🧠 User said: {user_text}")
-
-        if any(kw in user_text.lower() for kw in ["bye","thanks", "exit", "stop", "thanks"]):
-            await self.safe_send(ws, "Goodbye! Have a great day!", user_text)
-            return "exit"
-
-        bot_text = await self.ask_agent(session_id, user_text)
-        await self.safe_send(ws, bot_text, user_text)
-        return None
-
-    # -------------------------
+            print(f"❌ Process Error: {e}")
+            return "error"
+        finally:
+            if os.path.exists(filename):
+                os.remove(filename)# -------------------------
     # Agent Processing
     # -------------------------
     async def ask_agent(self, session_id: str, user_text: str) -> str:
@@ -352,33 +360,45 @@ Response:"""
     # -------------------------
     # Text-to-speech + Send
     # -------------------------
+    # -------------------------
+    # FAST STREAMING TTS + SEND  (REPLACE FULL SECTION)
+    # --- PART 1: STREAMING AUDIO SENDER (Chunks wala logic) ---
     async def safe_send(self, ws: WebSocket, text: str, user_text: str = None):
-        try:
-            # Check if WebSocket is still open
-            if ws.client_state.name != "CONNECTED":
-                print(f"WebSocket not connected, state: {ws.client_state.name}")
-                return
-                
-            tts = self.client.audio.speech.create(
-                model="tts-1", voice="alloy", input=text
-            )
-            audio_stream = io.BytesIO(tts.read())
-            audio_b64 = base64.b64encode(audio_stream.getvalue()).decode()
+        if ws.client_state.name != "CONNECTED":
+            return
 
-            # Double-check before sending
-            if ws.client_state.name == "CONNECTED":
-                response_data = {"bot_text": text, "audio": audio_b64}
-                if user_text:
-                    response_data["user_text"] = user_text
-                await ws.send_json(response_data)
-            else:
-                print("WebSocket closed before sending audio response")
+        print(f"🎵 Starting Streaming for: {text[:30]}...")
+        
+        try:
+            # STEP 1: Pehle Text/Metadata bhej dein
+            # Taaki frontend par text turant dikh jaye
+            await ws.send_json({
+                "type": "text_start",
+                "bot_text": text,
+                "user_text": user_text
+            })
+
+            # STEP 2: OpenAI Streaming API Call
+            # STEP 2: OpenAI Streaming API Call
+            async with client.audio.speech.with_streaming_response.create(
+                model="tts-1",
+                voice="alloy",
+                input=text,
+                response_format="mp3"
+            ) as response:
                 
+                # CHANGE: 24576 -> 4096 (Faster first byte, smoother stream)
+                async for chunk in response.iter_bytes(chunk_size=24576): 
+                    if not chunk: continue
+                    if ws.client_state.name != "CONNECTED": break
+
+                    audio_b64 = base64.b64encode(chunk).decode('utf-8')
+                    await ws.send_json({"type": "audio_chunk", "audio": audio_b64})
+            print("✅ Streaming Finished")
+
         except Exception as e:
-            print(f"TTS/Send Error: {e}")
-            # Only try to send error message if WebSocket is still connected
-            try:
-                if ws.client_state.name == "CONNECTED":
-                    await ws.send_json({"bot_text": "I couldn't speak the response.", "audio": ""})
-            except Exception as send_error:
-                print(f"Failed to send error message: {send_error}")
+            print(f"❌ Streaming Error: {e}")
+            # Error bhej sakte hain agar zaroorat ho
+            if ws.client_state.name == "CONNECTED":
+                await ws.send_json({"type": "error", "message": "TTS Failed"})
+
