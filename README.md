@@ -61,17 +61,24 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ## 🐳 Docker Deployment
 
 ```bash
-# Build and run
+pip install fastapi uvicorn sentence-transformers chromadb
+pip install -r reuirements.txt
+uvicorn mains:app --reload --host 0.0.0.0 --port 8000
+
+
+## for docker deploy 
+# go to the web-bot
+docker compose build --no-cache docker compose up -d
+or 
+# Simple deployment
 docker-compose up -d --build
 
 # View logs
-docker-compose logs -f
+sudo docker-compose logs -f
 
 # Stop
 docker-compose down
-```
 
----
 
 ## 📡 API Endpoints
 
@@ -80,7 +87,7 @@ docker-compose down
 | `/chat` | POST | Main chat interface |
 | `/inject-url` | POST | Scrape & index website |
 | `/admin/dashboard` | GET | Admin panel |
-| `/voice-chat` | WebSocket | Voice assistant (English-only) |
+| `/voice` | WebSocket | Voice assistant (English-only) |
 | `/admin/upload-knowledge` | POST | Upload manual knowledge |
 | `/firms` | GET | List all firms |
 
