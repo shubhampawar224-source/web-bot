@@ -7,138 +7,142 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: #f6f7fa;
+            background: #fff;
+            color: #222;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 0;
+            padding: 0;
             min-height: 100vh;
         }
 
         .container {
-            min-height: 100vh;
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: flex-start;
-            padding: 20px 10px;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
         }
 
         .chat-window {
             width: 100%;
-            max-width: 480px;
-            height: 500px;
+            max-width: 500px;
             background: #fff;
-            border-radius: 22px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-            display: flex;
-            flex-direction: column;
+            border-radius: 24px;
+            box-shadow: 0 4px 32px rgba(0, 0, 0, 0.08);
             overflow: hidden;
-            border: 1.5px solid #e0e6ed;
         }
 
         .chat-header {
-            background: #4a90e2;
+            background: #2563eb;
             color: #fff;
-            padding: 20px 0;
             text-align: center;
-            font-size: 1.4rem;
+            padding: 15px 0 10px 0;
+            font-size: 2rem;
             font-weight: bold;
+            border-radius: 24px 24px 0 0;
+            letter-spacing: 1px;
         }
 
         .chat-messages {
-            flex: 1;
-            padding: 20px;
+            padding: 24px;
+            height: 250px;
             overflow-y: auto;
+            background: #fff;
             display: flex;
             flex-direction: column;
-            gap: 15px;
-            background: #fcfdff;
         }
 
         .message {
-            padding: 12px 18px;
-            border-radius: 14px;
-            max-width: 85%;
-            line-height: 1.5;
-            font-size: 15px;
+            padding: 18px 22px;
+            border-radius: 16px;
+            margin-bottom: 14px;
+            font-size: 1.1rem;
+            line-height: 1.6;
+            background: #f3f6fa;
+            color: #222;
+            border: 1px solid #e5e7eb;
+            max-width: 75%;
             word-break: break-word;
         }
 
         .message.user {
-            background: #e3f2fd;
-            color: #1565c0;
+            background: #e0e7ff;
+            color: #222;
             align-self: flex-end;
-            border-bottom-right-radius: 2px;
+            border: 1px solid #c7d2fe;
+            margin-left: auto;
+            margin-right: 0;
         }
 
         .message.assistant {
-            background: #f5f5f5;
-            color: #333;
+            background: #f3f6fa;
+            color: #222;
             align-self: flex-start;
-            border-bottom-left-radius: 2px;
-            border: 1px solid #eee;
+            border: 1px solid #e5e7eb;
+            margin-right: auto;
+            margin-left: 0;
         }
 
         .status-bar {
-            background: #fff8e1;
-            color: #f57f17;
-            font-size: 13px;
+            background: #f3f6fa;
+            color: #2563eb;
             text-align: center;
-            padding: 4px 8px;
-            border-top: 1px solid #ffe082;
+            padding: 10px;
+            font-size: 1rem;
         }
 
         .bottom-bar {
             background: #fff;
-            padding: 15px;
-            border-top: 1px solid #eee;
+            padding: 18px 24px 24px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: relative;
         }
 
         .input-bar {
             display: flex;
             align-items: center;
-            gap: 10px;
+            width: 100%;
         }
 
         .input-box {
             flex: 1;
-            padding: 12px;
-            border: 1px solid #ddd;
-            border-radius: 25px;
-            outline: none;
-            background: #f9f9f9;
+            padding: 14px 18px;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            background: #f3f6fa;
+            color: #222;
+            font-size: 1.1rem;
+            margin-right: 12px;
         }
 
-        .mic-btn,
-        .stop-btn {
-            width: 48px;
-            height: 48px;
-            border-radius: 50%;
-            border: none;
-            font-size: 20px;
-            cursor: pointer;
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: 0.2s;
+        .input-box::placeholder {
+            color: #94a3b8;
+            opacity: 1;
         }
 
         .mic-btn {
-            background: #4a90e2;
+            width: 54px;
+            height: 54px;
+            border-radius: 50%;
+            border: none;
+            background: linear-gradient(135deg, #3b4cca 0%, #5a6ee6 100%);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background 0.3s, box-shadow 0.3s;
+            box-shadow: 0 4px 16px rgba(42, 57, 144, 0.15);
+            font-size: 1.5rem;
+            margin-right: 0;
         }
 
         .mic-btn:hover {
-            background: #357abd;
-            transform: scale(1.05);
-        }
-
-        .mic-btn.recording {
-            background: #ef5350;
-            animation: pulse 1.5s infinite;
-        }
-
-        .mic-btn.interrupt-ready {
-            background: #ffa726;
+            background: linear-gradient(135deg, #5a6ee6 0%, #3b4cca 100%);
+            box-shadow: 0 6px 24px rgba(42, 57, 144, 0.18);
         }
 
         .stop-btn {
@@ -382,84 +386,123 @@
         }
 
         // --- RECORDING ---
+        // --- IMPROVED RECORDING LOGIC ---
         async function startRecording() {
             if (isManualStop || !ws || ws.readyState !== WebSocket.OPEN) return;
-
+            
             cleanupRecordingSession(false);
             if (isBotSpeaking) handleInterruption();
 
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: { 
+                        echoCancellation: true, 
+                        noiseSuppression: true,
+                        autoGainControl: true // Added AGC for better volume
+                    } 
+                });
                 currentStream = stream;
                 recordingContext = new AudioContext();
                 const source = recordingContext.createMediaStreamSource(stream);
                 const analyser = recordingContext.createAnalyser();
-                analyser.fftSize = 4096;
+                analyser.fftSize = 2048; // Smaller FFT for faster reaction
                 source.connect(analyser);
 
                 mediaRecorder = new MediaRecorder(stream);
                 audioChunks = [];
+                
                 let hasSound = false;
                 let silenceCount = 0;
+                let recordingStartTime = Date.now(); // Track start time
                 isRecording = true;
+                
                 const dataArray = new Float32Array(analyser.frequencyBinCount);
 
+                // --- NEW SILENCE DETECTION LOGIC ---
                 silenceInterval = setInterval(() => {
                     if (!isRecording) return;
+                    
                     analyser.getFloatTimeDomainData(dataArray);
-                    const rms = Math.sqrt(dataArray.reduce((s, v) => s + v * v, 0) / dataArray.length);
-                    const db = 20 * Math.log10(rms + 1e-8);
+                    
+                    // Calculate RMS (Volume Level)
+                    let sum = 0;
+                    for (let i = 0; i < dataArray.length; i++) {
+                        sum += dataArray[i] * dataArray[i];
+                    }
+                    const rms = Math.sqrt(sum / dataArray.length);
+                    const db = 20 * Math.log10(rms + 1e-8); // Convert to decibels
 
-                    if (db > -45) {
+                    // CHANGE 1: Threshold lowered to -60 (More sensitive)
+                    // Allows quieter speech to be detected as "Voice"
+                    if (db > -60) { 
+                        if (!hasSound) console.log("🗣️ Voice detected");
                         hasSound = true;
                         silenceCount = 0;
                         statusDiv.textContent = "🎙️ Listening...";
-                        statusDiv.style.color = "#666";
-                    } else if (hasSound) {
-                        silenceCount++;
-                        if (silenceCount > 10) {
-                            isRecording = false;
-                            mediaRecorder.stop();
+                        statusDiv.style.color = "#ef5350"; // Red for recording
+                    } 
+                    else if (hasSound) {
+                        // Check if minimum recording time (1.5s) has passed
+                        // This prevents cutting off if you start with a pause
+                        if (Date.now() - recordingStartTime > 1500) {
+                            silenceCount++;
+                            
+                            // CHANGE 2: Wait longer (12 * 200ms = 2.4 seconds)
+                            if (silenceCount > 12) { 
+                                console.log("🤫 Silence detected, stopping...");
+                                isRecording = false;
+                                mediaRecorder.stop();
+                            }
                         }
                     }
-                }, 200);
+                }, 200); // Check every 200ms
 
-                setTimeout(() => { if (isRecording) mediaRecorder.stop(); }, 15000);
+                // Max duration safety (30 seconds)
+                setTimeout(() => { if (isRecording) mediaRecorder.stop(); }, 30000);
 
-                mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+                mediaRecorder.ondataavailable = e => {
+                    if (e.data.size > 0) audioChunks.push(e.data);
+                };
+
                 mediaRecorder.onstop = () => {
                     if (isManualStop) return;
-                    if (!hasSound) {
+                    
+                    // If audio is too short, ignore
+                    if (!hasSound || audioChunks.length === 0) {
+                        console.log("No meaningful audio, restarting...");
                         cleanupRecordingSession();
-                        setTimeout(startRecording, 1000);
+                        setTimeout(startRecording, 500);
                         return;
                     }
-
+                    
                     isProcessingQuery = true;
                     statusDiv.textContent = "🤖 Thinking...";
+                    statusDiv.style.color = "#4a90e2";
+
                     const blob = new Blob(audioChunks, { type: 'audio/wav' });
                     const reader = new FileReader();
                     reader.readAsDataURL(blob);
                     reader.onloadend = () => {
                         const base64 = reader.result.split(',')[1];
                         if (ws && ws.readyState === WebSocket.OPEN) {
+                            // Send to backend
                             ws.send(JSON.stringify({ audio: base64, session_id: sessionId }));
                         }
                     };
                 };
 
-                mediaRecorder.start();
+                mediaRecorder.start(500); // Request data every 500ms to ensure buffer isn't empty
                 micBtn.style.display = 'none';
                 stopBtn.style.display = 'inline-flex';
                 statusDiv.textContent = "🎙️ Listening...";
-                statusDiv.style.color = "#666";
 
             } catch (e) {
                 console.error(e);
-                handleConnectionLost("Mic Error");
+                statusDiv.textContent = "Mic Error";
+                cleanupRecordingSession(true);
+                handleConnectionLost("Mic Failed");
             }
         }
-
         // --- WEBSOCKET SETUP ---
         function initWebSocket() {
             micBtn.disabled = true;
@@ -495,15 +538,12 @@
                     if (data.user_text) addMessage(data.user_text, 'user');
                     statusDiv.textContent = "🤖 Speaking...";
                     if (!isManualStop) startInterruptionDetection();
-                }
-                else if (data.type === 'audio_chunk') {
+                } else if (data.type === 'audio_chunk') {
                     playAudioChunk(data.audio);
-                }
-                else if (data.audio && !data.type) {
+                } else if (data.audio && !data.type) {
                     addMessage(data.bot_text, 'assistant');
                     playAudioChunk(data.audio);
-                }
-                else if (data.type === 'error') {
+                } else if (data.type === 'error') {
                     statusDiv.textContent = "Error: " + data.message;
                 }
             };
@@ -536,7 +576,6 @@
             // Call the centralized handler
             handleConnectionLost("Manual Stop Button");
         };
-
     </script>
 </body>
 
