@@ -3,15 +3,14 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>🚀 Robust Voice AI</title>
+    <title>🎤 WAV Voice AI</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         body {
             background: #fff;
             color: #222;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Segoe UI', sans-serif;
             margin: 0;
-            padding: 0;
             min-height: 100vh;
         }
 
@@ -31,38 +30,36 @@
             border-radius: 24px;
             box-shadow: 0 4px 32px rgba(0, 0, 0, 0.08);
             overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 600px;
         }
 
         .chat-header {
             background: #2563eb;
             color: #fff;
             text-align: center;
-            padding: 15px 0 10px 0;
-            font-size: 2rem;
+            padding: 15px;
+            font-size: 1.5rem;
             font-weight: bold;
-            border-radius: 24px 24px 0 0;
-            letter-spacing: 1px;
         }
 
         .chat-messages {
-            padding: 24px;
-            height: 250px;
+            padding: 20px;
+            flex: 1;
             overflow-y: auto;
             background: #fff;
             display: flex;
             flex-direction: column;
+            gap: 10px;
         }
 
         .message {
-            padding: 18px 22px;
-            border-radius: 16px;
-            margin-bottom: 14px;
-            font-size: 1.1rem;
-            line-height: 1.6;
-            background: #f3f6fa;
-            color: #222;
-            border: 1px solid #e5e7eb;
-            max-width: 75%;
+            padding: 12px 16px;
+            border-radius: 12px;
+            font-size: 1rem;
+            line-height: 1.5;
+            max-width: 80%;
             word-break: break-word;
         }
 
@@ -71,87 +68,84 @@
             color: #222;
             align-self: flex-end;
             border: 1px solid #c7d2fe;
-            margin-left: auto;
-            margin-right: 0;
         }
 
         .message.assistant {
-            background: #f3f6fa;
+            background: #f3f4f6;
             color: #222;
             align-self: flex-start;
             border: 1px solid #e5e7eb;
-            margin-right: auto;
-            margin-left: 0;
         }
 
         .status-bar {
-            background: #f3f6fa;
-            color: #2563eb;
+            background: #f8fafc;
+            color: #64748b;
             text-align: center;
-            padding: 10px;
-            font-size: 1rem;
+            padding: 8px;
+            font-size: 0.9rem;
+            border-top: 1px solid #e2e8f0;
         }
 
         .bottom-bar {
             background: #fff;
-            padding: 18px 24px 24px 24px;
+            padding: 15px;
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            position: relative;
+            justify-content: center;
+            border-top: 1px solid #f1f5f9;
         }
 
         .input-bar {
             display: flex;
             align-items: center;
             width: 100%;
+            gap: 10px;
         }
 
         .input-box {
             flex: 1;
-            padding: 14px 18px;
-            border: 1px solid #e5e7eb;
-            border-radius: 12px;
-            background: #f3f6fa;
-            color: #222;
-            font-size: 1.1rem;
-            margin-right: 12px;
+            padding: 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 20px;
+            background: #f8fafc;
+            outline: none;
         }
 
-        .input-box::placeholder {
-            color: #94a3b8;
-            opacity: 1;
-        }
-
-        .mic-btn {
-            width: 54px;
-            height: 54px;
+        .mic-btn,
+        .stop-btn {
+            width: 50px;
+            height: 50px;
             border-radius: 50%;
             border: none;
-            background: linear-gradient(135deg, #3b4cca 0%, #5a6ee6 100%);
             color: #fff;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: background 0.3s, box-shadow 0.3s;
-            box-shadow: 0 4px 16px rgba(42, 57, 144, 0.15);
-            font-size: 1.5rem;
-            margin-right: 0;
+            font-size: 1.2rem;
+            transition: 0.2s;
+        }
+
+        .mic-btn {
+            background: #2563eb;
         }
 
         .mic-btn:hover {
-            background: linear-gradient(135deg, #5a6ee6 0%, #3b4cca 100%);
-            box-shadow: 0 6px 24px rgba(42, 57, 144, 0.18);
+            transform: scale(1.05);
         }
 
         .stop-btn {
-            background: #ef5350;
+            background: #ef4444;
             display: none;
         }
 
-        .stop-btn:hover {
-            background: #d32f2f;
+        .mic-btn.recording {
+            background: #ef4444;
+            animation: pulse 1.5s infinite;
+        }
+
+        .mic-btn.interrupt-ready {
+            background: #f59e0b;
         }
 
         @keyframes pulse {
@@ -160,7 +154,7 @@
             }
 
             50% {
-                opacity: 0.5;
+                opacity: 0.6;
             }
 
             100% {
@@ -173,7 +167,7 @@
 <body>
     <div class="container">
         <div class="chat-window">
-            <div class="chat-header">AI voice assistant</div>
+            <div class="chat-header">Voice AI (WAV)</div>
             <div class="chat-messages" id="chat-messages"></div>
             <div class="status-bar" id="status">Ready to connect</div>
             <div class="bottom-bar">
@@ -187,38 +181,38 @@
     </div>
 
     <script>
-        // --- UI Elements ---
         const statusDiv = document.getElementById('status');
         const chatMessages = document.getElementById('chat-messages');
         const micBtn = document.getElementById('micBtn');
         const stopBtn = document.getElementById('stopBtn');
 
-        // --- Core State ---
+        // --- Core Variables ---
         let ws = null;
-        let mediaRecorder = null;
-        let audioChunks = [];
         let sessionId = null;
 
-        // --- Flags ---
+        // --- State Flags ---
         let isProcessingQuery = false;
         let isBotSpeaking = false;
-        let isWaitingForResponse = false;
         let isManualStop = false;
+
+        // --- Audio Recording (WAV) ---
+        let audioContext = null;
+        let mediaStream = null;
+        let processor = null;
+        let input = null;
         let isRecording = false;
+        let pcmData = []; // Raw audio data buffer
 
-        // --- Audio Context & Streams ---
-        let currentStream = null;
-        let recordingContext = null;
-        let audioCtx = null;
+        // --- Playback ---
+        let playbackCtx = null;
         let nextStartTime = 0;
-        const BUFFER_AHEAD_TIME = 0.5;
+        const BUFFER_AHEAD = 0.5;
 
-        // --- Detection Vars ---
-        let silenceInterval = null;
-        let voiceInterruptionStream = null;
-        let voiceInterruptionContext = null;
-        let voiceInterruptionAnalyser = null;
-        let voiceInterruptionInterval = null;
+        // --- Detection ---
+        let silenceStart = Date.now();
+        let recordingStart = Date.now();
+        let hasSpoken = false;
+        let volumeInterval = null;
 
         function addMessage(text, sender) {
             const div = document.createElement('div');
@@ -228,286 +222,263 @@
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
-        // ==========================================
-        // 🔥 THE FIX: CENTRALIZED DISCONNECT LOGIC
-        // ==========================================
         function handleConnectionLost(reason) {
-            console.log("🛑 Connection Reset Triggered:", reason);
-
-            // 1. Flags Reset (Sabse Pehle)
+            console.log("🛑 Reset:", reason);
             isManualStop = true;
-            isRecording = false;
             isBotSpeaking = false;
             isProcessingQuery = false;
-            isWaitingForResponse = false;
 
-            // 2. Kill Audio & Mic
             stopAudioPlayback();
-            cleanupRecordingSession(true);
+            stopWavRecording(); // Kill mic
 
-            // 3. Close Socket if open
-            if (ws) {
-                ws.onclose = null; // Prevent loop
-                ws.onerror = null;
-                if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-                    ws.close();
-                }
-                ws = null;
-            }
+            if (ws) { ws.close(); ws = null; }
 
-            // 4. Force UI Reset (Ye "Speaking..." ko hata dega)
-            statusDiv.textContent = "Disconnected. Click mic to connect.";
-            statusDiv.style.color = "red"; // Red color to indicate stopped
-
+            statusDiv.textContent = "Disconnected. Click mic.";
+            statusDiv.style.color = "red";
             stopBtn.style.display = 'none';
-            micBtn.style.display = 'inline-flex';
+            micBtn.style.display = 'flex';
             micBtn.classList.remove('recording', 'interrupt-ready');
             micBtn.disabled = false;
         }
 
-        // --- AUDIO PLAYBACK ---
-        function initAudioContext() {
-            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            if (audioCtx.state === 'suspended') audioCtx.resume();
+        // ==========================================
+        // 🔊 AUDIO PLAYBACK (Gapless)
+        // ==========================================
+        function initPlayback() {
+            if (!playbackCtx) playbackCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (playbackCtx.state === 'suspended') playbackCtx.resume();
         }
 
         async function playAudioChunk(base64Data) {
-            if (isManualStop) return; // Agar stop daba diya to audio mat chalao
-
-            initAudioContext();
+            if (isManualStop) return;
+            initPlayback();
             const binaryString = atob(base64Data);
             const len = binaryString.length;
             const bytes = new Uint8Array(len);
             for (let i = 0; i < len; i++) bytes[i] = binaryString.charCodeAt(i);
-
             try {
-                const buffer = await audioCtx.decodeAudioData(bytes.buffer);
+                const buffer = await playbackCtx.decodeAudioData(bytes.buffer);
                 scheduleBuffer(buffer);
-            } catch (e) { console.error("Decode error", e); }
+            } catch (e) { console.error(e); }
         }
 
         function scheduleBuffer(buffer) {
             if (isManualStop) return;
+            const src = playbackCtx.createBufferSource();
+            src.buffer = buffer;
+            src.connect(playbackCtx.destination);
 
-            const source = audioCtx.createBufferSource();
-            source.buffer = buffer;
-            source.connect(audioCtx.destination);
+            const now = playbackCtx.currentTime;
+            if (nextStartTime < now) nextStartTime = now + BUFFER_AHEAD;
 
-            const now = audioCtx.currentTime;
-            if (nextStartTime < now) nextStartTime = now + BUFFER_AHEAD_TIME;
-
-            source.start(nextStartTime);
+            src.start(nextStartTime);
             nextStartTime += buffer.duration;
 
             isBotSpeaking = true;
             micBtn.classList.add("interrupt-ready");
-
-            // Speaking status sirf tab dikhana jab actually connect ho
             if (!isManualStop) statusDiv.textContent = "🤖 Speaking...";
         }
 
         function stopAudioPlayback() {
-            if (audioCtx) {
-                audioCtx.close().then(() => { audioCtx = null; nextStartTime = 0; });
-            }
+            if (playbackCtx) { playbackCtx.close().then(() => { playbackCtx = null; nextStartTime = 0; }); }
             isBotSpeaking = false;
-        }
-
-        function speakText(text) {
-            window.speechSynthesis.cancel();
-            const u = new SpeechSynthesisUtterance(text);
-            window.speechSynthesis.speak(u);
-        }
-
-        // --- INTERRUPTION LOGIC ---
-        async function startInterruptionDetection() {
-            if (voiceInterruptionStream) return;
-            try {
-                voiceInterruptionStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
-                voiceInterruptionContext = new AudioContext();
-                const source = voiceInterruptionContext.createMediaStreamSource(voiceInterruptionStream);
-                voiceInterruptionAnalyser = voiceInterruptionContext.createAnalyser();
-                voiceInterruptionAnalyser.fftSize = 2048;
-                source.connect(voiceInterruptionAnalyser);
-
-                const dataArray = new Float32Array(voiceInterruptionAnalyser.frequencyBinCount);
-                let consecutive = 0;
-
-                voiceInterruptionInterval = setInterval(() => {
-                    if (!isBotSpeaking || isManualStop) return;
-                    voiceInterruptionAnalyser.getFloatTimeDomainData(dataArray);
-                    const rms = Math.sqrt(dataArray.reduce((s, v) => s + v * v, 0) / dataArray.length);
-                    const db = 20 * Math.log10(rms + 1e-8);
-
-                    if (db > -30) {
-                        consecutive++;
-                        if (consecutive >= 3) handleInterruption();
-                    } else {
-                        consecutive = Math.max(0, consecutive - 1);
-                    }
-                }, 200);
-            } catch (e) { console.error(e); }
-        }
-
-        function stopInterruptionDetection() {
-            if (voiceInterruptionInterval) clearInterval(voiceInterruptionInterval);
-            if (voiceInterruptionStream) voiceInterruptionStream.getTracks().forEach(t => t.stop());
-            if (voiceInterruptionContext) voiceInterruptionContext.close();
-            voiceInterruptionStream = null;
-        }
-
-        function handleInterruption() {
-            console.log("Interruption triggered");
-            isBotSpeaking = false;
-            stopAudioPlayback();
-            stopInterruptionDetection();
-            window.speechSynthesis.cancel();
             micBtn.classList.remove("interrupt-ready");
-
-            cleanupRecordingSession(false);
-            if (!isManualStop && ws && ws.readyState === WebSocket.OPEN) {
-                statusDiv.textContent = "Interrupted! Listening...";
-                setTimeout(startRecording, 500);
-            }
         }
 
-        function cleanupRecordingSession(fullStop = false) {
-            stopInterruptionDetection();
-            if (silenceInterval) clearInterval(silenceInterval);
-            if (recordingContext) recordingContext.close();
-
-            if (mediaRecorder && mediaRecorder.state !== "inactive") {
-                if (fullStop) mediaRecorder.onstop = null;
-                mediaRecorder.stop();
-            }
-            if (currentStream) currentStream.getTracks().forEach(t => t.stop());
-            recordingContext = null;
-            audioChunks = [];
-        }
-
-        // --- RECORDING ---
-        // --- IMPROVED RECORDING LOGIC ---
-        async function startRecording() {
+        // ==========================================
+        // 🎤 MANUAL WAV RECORDING (The Fix)
+        // ==========================================
+        async function startWavRecording() {
             if (isManualStop || !ws || ws.readyState !== WebSocket.OPEN) return;
-            
-            cleanupRecordingSession(false);
-            if (isBotSpeaking) handleInterruption();
+
+            // If already recording, just reset buffers (Don't restart stream)
+            if (isRecording) return;
 
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    audio: { 
-                        echoCancellation: true, 
-                        noiseSuppression: true,
-                        autoGainControl: true // Added AGC for better volume
-                    } 
-                });
-                currentStream = stream;
-                recordingContext = new AudioContext();
-                const source = recordingContext.createMediaStreamSource(stream);
-                const analyser = recordingContext.createAnalyser();
-                analyser.fftSize = 2048; // Smaller FFT for faster reaction
-                source.connect(analyser);
+                if (!mediaStream) {
+                    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+                }
 
-                mediaRecorder = new MediaRecorder(stream);
-                audioChunks = [];
-                
-                let hasSound = false;
-                let silenceCount = 0;
-                let recordingStartTime = Date.now(); // Track start time
+                if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 }); // Force 16kHz for small WAV
+
+                input = audioContext.createMediaStreamSource(mediaStream);
+                // Processor buffer size 4096 = approx 250ms latency
+                processor = audioContext.createScriptProcessor(4096, 1, 1);
+
+                input.connect(processor);
+                processor.connect(audioContext.destination);
+
                 isRecording = true;
-                
-                const dataArray = new Float32Array(analyser.frequencyBinCount);
+                pcmData = [];
+                hasSpoken = false;
+                recordingStart = Date.now();
+                silenceStart = Date.now();
 
-                // --- NEW SILENCE DETECTION LOGIC ---
-                silenceInterval = setInterval(() => {
+                // AUDIO PROCESS LOOP
+                processor.onaudioprocess = (e) => {
                     if (!isRecording) return;
-                    
-                    analyser.getFloatTimeDomainData(dataArray);
-                    
-                    // Calculate RMS (Volume Level)
-                    let sum = 0;
-                    for (let i = 0; i < dataArray.length; i++) {
-                        sum += dataArray[i] * dataArray[i];
-                    }
-                    const rms = Math.sqrt(sum / dataArray.length);
-                    const db = 20 * Math.log10(rms + 1e-8); // Convert to decibels
 
-                    // CHANGE 1: Threshold lowered to -60 (More sensitive)
-                    // Allows quieter speech to be detected as "Voice"
-                    if (db > -60) { 
-                        if (!hasSound) console.log("🗣️ Voice detected");
-                        hasSound = true;
-                        silenceCount = 0;
+                    const inputData = e.inputBuffer.getChannelData(0);
+
+                    // 1. Volume Detection (Manual calculation)
+                    let sum = 0;
+                    for (let i = 0; i < inputData.length; i++) sum += inputData[i] * inputData[i];
+                    const rms = Math.sqrt(sum / inputData.length);
+                    const volume = rms * 100; // rough scale
+
+                    // --- LOGIC: INTERRUPTION ---
+                    if (isBotSpeaking) {
+                        if (volume > 5) { // Interruption Threshold
+                            console.log("🔥 Interruption!");
+                            stopAudioPlayback();
+                            pcmData = []; // Clear buffer (ignore bot sound)
+                            // Keep recording User's voice immediately
+                            hasSpoken = true;
+                            recordingStart = Date.now();
+
+                            // Capture this chunk!
+                            const bufferCopy = new Float32Array(inputData);
+                            pcmData.push(bufferCopy);
+
+                            statusDiv.textContent = "🎙️ Interrupted! Listening...";
+                            statusDiv.style.color = "#ef5350";
+                        }
+                        return; // Don't collect data if bot is speaking and user is silent
+                    }
+
+                    // --- LOGIC: RECORDING ---
+                    // Only collect data if not waiting for processing
+                    if (!isProcessingQuery) {
+                        const bufferCopy = new Float32Array(inputData);
+                        pcmData.push(bufferCopy);
+                    }
+
+                    // --- LOGIC: SILENCE ---
+                    if (volume > 2) { // Speech Threshold
+                        hasSpoken = true;
+                        silenceStart = Date.now();
                         statusDiv.textContent = "🎙️ Listening...";
-                        statusDiv.style.color = "#ef5350"; // Red for recording
-                    } 
-                    else if (hasSound) {
-                        // Check if minimum recording time (1.5s) has passed
-                        // This prevents cutting off if you start with a pause
-                        if (Date.now() - recordingStartTime > 1500) {
-                            silenceCount++;
-                            
-                            // CHANGE 2: Wait longer (12 * 200ms = 2.4 seconds)
-                            if (silenceCount > 12) { 
-                                console.log("🤫 Silence detected, stopping...");
-                                isRecording = false;
-                                mediaRecorder.stop();
+                        statusDiv.style.color = "#ef5350";
+                    } else if (hasSpoken) {
+                        // Silence Logic
+                        if (Date.now() - silenceStart > 2000) { // 2s Silence
+                            if (Date.now() - recordingStart > 1000) { // Min 1s recording
+                                console.log("✅ Silence. Sending WAV...");
+                                sendWavData();
                             }
                         }
                     }
-                }, 200); // Check every 200ms
-
-                // Max duration safety (30 seconds)
-                setTimeout(() => { if (isRecording) mediaRecorder.stop(); }, 30000);
-
-                mediaRecorder.ondataavailable = e => {
-                    if (e.data.size > 0) audioChunks.push(e.data);
                 };
 
-                mediaRecorder.onstop = () => {
-                    if (isManualStop) return;
-                    
-                    // If audio is too short, ignore
-                    if (!hasSound || audioChunks.length === 0) {
-                        console.log("No meaningful audio, restarting...");
-                        cleanupRecordingSession();
-                        setTimeout(startRecording, 500);
-                        return;
-                    }
-                    
-                    isProcessingQuery = true;
-                    statusDiv.textContent = "🤖 Thinking...";
-                    statusDiv.style.color = "#4a90e2";
-
-                    const blob = new Blob(audioChunks, { type: 'audio/wav' });
-                    const reader = new FileReader();
-                    reader.readAsDataURL(blob);
-                    reader.onloadend = () => {
-                        const base64 = reader.result.split(',')[1];
-                        if (ws && ws.readyState === WebSocket.OPEN) {
-                            // Send to backend
-                            ws.send(JSON.stringify({ audio: base64, session_id: sessionId }));
-                        }
-                    };
-                };
-
-                mediaRecorder.start(500); // Request data every 500ms to ensure buffer isn't empty
                 micBtn.style.display = 'none';
                 stopBtn.style.display = 'inline-flex';
                 statusDiv.textContent = "🎙️ Listening...";
+                statusDiv.style.color = "#666";
 
             } catch (e) {
                 console.error(e);
-                statusDiv.textContent = "Mic Error";
-                cleanupRecordingSession(true);
-                handleConnectionLost("Mic Failed");
+                handleConnectionLost("Mic Error");
             }
         }
-        // --- WEBSOCKET SETUP ---
+
+        function stopWavRecording() {
+            isRecording = false;
+            if (processor) { processor.disconnect(); processor = null; }
+            if (input) { input.disconnect(); input = null; }
+            if (audioContext) { audioContext.close(); audioContext = null; }
+            if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+            pcmData = [];
+        }
+
+        function sendWavData() {
+            isRecording = false; // Pause recording
+
+            // 1. Flatten Data
+            let length = 0;
+            pcmData.forEach(d => length += d.length);
+
+            if (length === 0) {
+                // Restart if empty
+                isRecording = true;
+                return;
+            }
+
+            let merged = new Float32Array(length);
+            let offset = 0;
+            pcmData.forEach(d => { merged.set(d, offset); offset += d.length; });
+
+            // 2. Encode WAV (16-bit PCM)
+            const wavBlob = encodeWAV(merged);
+
+            // 3. Send
+            isProcessingQuery = true;
+            statusDiv.textContent = "🤖 Thinking...";
+            statusDiv.style.color = "#2563eb";
+
+            const reader = new FileReader();
+            reader.readAsDataURL(wavBlob);
+            reader.onloadend = () => {
+                const base64 = reader.result.split(',')[1];
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ audio: base64, session_id: sessionId }));
+                }
+                // Don't stop mic fully, just reset buffers for next turn
+                pcmData = [];
+                hasSpoken = false;
+                // Note: isRecording will be set to true when response finishes or we force it.
+                // Actually, we should keep it true to catch interruption, but we paused logic.
+                // Let's keep listener alive but ignore data until response or interrupt.
+                // Handled by `if (!isProcessingQuery)` check above.
+                isRecording = true;
+            };
+        }
+
+        // --- WAV ENCODER HELPER ---
+        function encodeWAV(samples) {
+            const buffer = new ArrayBuffer(44 + samples.length * 2);
+            const view = new DataView(buffer);
+
+            // RIFF chunk descriptor
+            writeString(view, 0, 'RIFF');
+            view.setUint32(4, 36 + samples.length * 2, true);
+            writeString(view, 8, 'WAVE');
+            // fmt sub-chunk
+            writeString(view, 12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true); // PCM
+            view.setUint16(22, 1, true); // Mono
+            view.setUint32(24, 16000, true); // Sample Rate
+            view.setUint32(28, 16000 * 2, true); // Byte Rate
+            view.setUint16(32, 2, true); // Block Align
+            view.setUint16(34, 16, true); // Bits per sample
+            // data sub-chunk
+            writeString(view, 36, 'data');
+            view.setUint32(40, samples.length * 2, true);
+
+            // Write PCM samples
+            floatTo16BitPCM(view, 44, samples);
+
+            return new Blob([view], { type: 'audio/wav' });
+        }
+
+        function floatTo16BitPCM(output, offset, input) {
+            for (let i = 0; i < input.length; i++, offset += 2) {
+                let s = Math.max(-1, Math.min(1, input[i]));
+                s = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                output.setInt16(offset, s, true);
+            }
+        }
+
+        function writeString(view, offset, string) {
+            for (let i = 0; i < string.length; i++) {
+                view.setUint8(offset + i, string.charCodeAt(i));
+            }
+        }
+
+        // --- WEBSOCKET ---
         function initWebSocket() {
             micBtn.disabled = true;
             statusDiv.textContent = "🔄 Connecting...";
-            statusDiv.style.color = "#666";
 
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             ws = new WebSocket(`${protocol}//${window.location.host}/ws/voice`);
@@ -515,40 +486,29 @@
             ws.onopen = () => statusDiv.textContent = "⏳ Authenticating...";
 
             ws.onmessage = (event) => {
-                if (isManualStop) return; // Ignore messages if stopped
-
+                if (isManualStop) return;
                 const data = JSON.parse(event.data);
 
                 if (data.session_id) {
                     sessionId = data.session_id;
-                    statusDiv.textContent = "🎙️ Ready!";
                     micBtn.disabled = false;
-                    startRecording();
+                    startWavRecording(); // Auto Start
                     return;
                 }
 
-                if (isWaitingForResponse) {
-                    isWaitingForResponse = false;
-                    isProcessingQuery = false;
-                    if (window.processingTimeout) clearTimeout(window.processingTimeout);
-                }
+                if (isProcessingQuery) isProcessingQuery = false;
 
                 if (data.type === 'text_start') {
                     addMessage(data.bot_text, 'assistant');
                     if (data.user_text) addMessage(data.user_text, 'user');
                     statusDiv.textContent = "🤖 Speaking...";
-                    if (!isManualStop) startInterruptionDetection();
                 } else if (data.type === 'audio_chunk') {
-                    playAudioChunk(data.audio);
-                } else if (data.audio && !data.type) {
-                    addMessage(data.bot_text, 'assistant');
                     playAudioChunk(data.audio);
                 } else if (data.type === 'error') {
                     statusDiv.textContent = "Error: " + data.message;
                 }
             };
 
-            // Ensures UI resets on close/error
             ws.onerror = () => handleConnectionLost("Socket Error");
             ws.onclose = () => handleConnectionLost("Socket Closed");
         }
@@ -557,24 +517,21 @@
         micBtn.onclick = () => {
             isManualStop = false;
             if (isBotSpeaking) {
-                handleInterruption();
+                // Force interruption manually if needed
+                stopAudioPlayback();
+                pcmData = [];
                 return;
             }
-            // Connect logic
             if (!ws || ws.readyState !== WebSocket.OPEN) {
                 initWebSocket();
             } else {
-                startRecording();
+                startWavRecording();
             }
         };
 
         stopBtn.onclick = () => {
-            // Send stop to server just in case
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ stop: true }));
-            }
-            // Call the centralized handler
-            handleConnectionLost("Manual Stop Button");
+            if (ws) ws.send(JSON.stringify({ stop: true }));
+            handleConnectionLost("Manual Stop");
         };
     </script>
 </body>
