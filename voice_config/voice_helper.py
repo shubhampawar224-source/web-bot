@@ -388,7 +388,7 @@ Response:"""
             ) as response:
                 
                 # CHANGE: 24576 -> 4096 (Faster first byte, smoother stream)
-                async for chunk in response.iter_bytes(chunk_size=24576): 
+                async for chunk in response.iter_bytes(chunk_size=15576): 
                     if not chunk: continue
                     if ws.client_state.name != "CONNECTED": break
 

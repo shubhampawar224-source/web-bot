@@ -549,39 +549,6 @@ def add_text_chunks_to_collection(chunks, metadata: dict):
 
     print(f"[VectorStore] Completed adding {total_chunks} chunks for {url}")
     print(f"[VectorStore] Metadata optimization: Single template used for all {total_chunks} chunks")
-
-# ---------------- Helper: Query Similar Texts ----------------
-def query_similar_texts(query: str, n_results: int = 10, doc_type: str = "website"):
-    """
-    Given a query (any language) → retrieves most relevant chunks from FAISS vector store.
-    Works with multi-lingual queries using SentenceTransformer embeddings.
-    
-    Args:
-        query (str): User query in any language
-        n_results (int): Number of top results to return
-        doc_type (str): Filter metadata type (default: 'website')
-    
-    Returns:
-        List of documents (chunks) with metadata
-    """
-    
-    # Search in FAISS vector store
-    results = vector_store.search(
-        query=query,
-        n_results=n_results,
-        filter_metadata={"type": doc_type}
-    )
-    
-    # Convert to expected format
-    retrieved_chunks = []
-    for result in results:
-        retrieved_chunks.append({
-            "text": result["text"],
-            "metadata": result["metadata"]
-        })
-
-    return retrieved_chunks
-
 # ---------------- Helper: Delete Documents by URL ----------------
 def delete_documents_by_url(url: str):
     """

@@ -51,13 +51,10 @@ from utils.vector_store import (
     embedding_model,
     chunk_text,
     add_text_chunks_to_collection,
-    query_similar_texts
 )
 
 load_dotenv()
 ALLOWED_IFRAME_ORIGINS = os.getenv("ALLOWED_IFRAME_ORIGINS", "")  # space-separated list e.g. "https://siteA.com https://siteB.com"
-
-
 
 # ---------------- Disable HuggingFace Tokenizer Warning ----------------
 os.environ["TOKENIZERS_PARALLELISM"] = "false"

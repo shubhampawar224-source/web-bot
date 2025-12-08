@@ -109,7 +109,7 @@ class EnhancedRAGAgent:
         return keywords
     
     def _generate_ai_response(self, query: str, results: List[Dict[str, Any]]) -> str:
-        """Generate proper AI response using OpenAI"""
+        """Generate proper AI response using OpenAI, but ONLY from context"""
         try:
             # Clean and prepare context from search results
             context_parts = []
@@ -118,22 +118,25 @@ class EnhancedRAGAgent:
                 if text and len(text.strip()) > 30:
                     context_parts.append(text)
             
-            if not context_parts:
-                return "I found some information but couldn't process it properly. Please try rephrasing your question."
+            # If context is empty or too weak, block out-of-topic answers
+            if not context_parts or all(len(part.strip()) < 40 for part in context_parts):
+                return "Sorry, I don't have information about this topic."  # Removed 'in my database'
             
             context = "\n\n".join(context_parts)
             
             # Create proper prompt for voice response
-            prompt = f"""You are a helpful voice assistant. Based on the provided context, answer the user's question in a natural, conversational way suitable for voice output.
+            prompt = f"""You are a helpful voice assistant. Based ONLY on the provided context, answer the user's question in a natural, conversational way suitable for voice output.
 
 IMPORTANT GUIDELINES:
+- ONLY use the context below. Do NOT use any outside knowledge.
+- If the context does not answer the question, say: 'Sorry, I don't have information about this topic.'
+- Do NOT generate any out-of-topic or unrelated answers.
 - Provide a direct, helpful answer
-- Use natural, conversational language 
+- Use natural, conversational language
 - Keep response concise but informative (under 200 words)
 - DO NOT mention URLs, website links, or technical details
-- DO NOT say "according to the context" or "based on the provided information"
+- DO NOT say 'according to the context' or 'based on the provided information'
 - Speak as if you naturally know this information
-- If the context doesn't fully answer the question, provide what information is available
 
 User Question: {query}
 
@@ -150,7 +153,7 @@ Voice Response:"""
             )
             
             return response.choices[0].message.content.strip()
-            
+        
         except Exception as e:
             logger.error(f"AI response generation error: {e}")
             return self._format_basic_response(query, results)

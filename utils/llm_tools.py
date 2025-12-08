@@ -14,7 +14,7 @@ from openai import OpenAI
 
 from database.db import SessionLocal
 from model.models import Firm, Website
-from utils.vector_store import collection, embedding_model, query_similar_texts
+from utils.vector_store import collection, embedding_model
 from utils.prompt_engine import my_prompt_function, session_memory
 from config import OPENAI_API_KEY
 
