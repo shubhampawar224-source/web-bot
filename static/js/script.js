@@ -6,7 +6,30 @@ document.addEventListener("DOMContentLoaded", () => {
     const widgetFirm = urlParams.get('widget_firm');
     const widgetFirmId = urlParams.get('widget_firm_id');
     const isWidgetMode = !!(widgetUrls || widgetUserId);
+    function formatFirmName(name) {
+    if (!name) return "";
 
+    // 1) Convert "Thedjflawfirm" → "The djflawfirm"
+    let formatted = name.replace(/^(the)(.*)/i, (m, thePart, rest) => {
+        const restTrimmed = rest.trim();
+        return (
+            thePart.charAt(0).toUpperCase() +
+            thePart.slice(1).toLowerCase() +
+            " " +
+            restTrimmed.charAt(0).toUpperCase() +
+            restTrimmed.slice(1).toLowerCase()
+        );
+    });
+
+    return formatted;
+}
+
+
+    // Convert "Thedjflawfirm" → "The djflawfirm"
+    const formattedFirm = widgetFirm ? formatFirmName(widgetFirm) : "";
+
+
+    console.log("my split", formattedFirm);
     console.log('Widget context:', { widgetUrls, widgetUserId, widgetFirm, widgetFirmId, isWidgetMode });
 
     // ---------- DOM Elements ----------
@@ -50,7 +73,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             // Widget-specific greeting
             if (widgetFirm) {
-                addMessage(`Hello! I'm here to help you with questions about ${widgetFirm}. How can I assist you today? 😊`, "bot-msg");
+                addMessage(`Hello! I'm here to help you with questions about ${formattedFirm}. How can I assist you today? 😊`, "bot-msg");
             } else {
                 addMessage("Hello! I'm here to help you with your questions. How can I assist you today? 😊", "bot-msg");
             }
