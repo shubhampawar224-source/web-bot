@@ -190,6 +190,7 @@ def extract_suggestions_from_response(response_text: str) -> List[str]:
 
 
 # ---------------- Helper: Load Firm & Links from DB ----------------
+# ---------------- Helper: Load Firm & Links from DB ----------------
 def load_firm_and_links(firm_id: int) -> Tuple[str, List[str]]:
     """Fetch firm name and all links from websites associated with this firm."""
     db: Session = SessionLocal()

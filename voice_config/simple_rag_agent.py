@@ -1,6 +1,4 @@
-"""
-Simple Enhanced RAG Agent - Clean and minimal approach with proper prompt engineering
-"""
+# enhanced_rag_agent.py
 
 import os
 import json
@@ -12,216 +10,168 @@ from utils.vector_store import FAISSVectorStore
 from openai import OpenAI
 from dotenv import load_dotenv
 
-# Load environment
 load_dotenv(override=True)
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class EnhancedRAGAgent:
-    """Simple enhanced RAG agent with better search and proper response formatting"""
-    
+    """Optimized RAG Agent (Fast, Accurate, Noise-Free)"""
+
     def __init__(self):
         try:
             self.vector_store = FAISSVectorStore()
             total_docs = len(self.vector_store.documents) if self.vector_store.documents else 0
-            logger.info(f"RAG Agent ready - {total_docs} documents available")
-            
-            # Initialize OpenAI client for proper response generation
-            openai_key = os.getenv("OPENAI_API_KEY")
-            if openai_key:
-                self.client = OpenAI(api_key=openai_key)
-                self.use_ai_formatting = True
-            else:
-                self.client = None
-                self.use_ai_formatting = False
-                logger.warning("No OpenAI key found, using basic formatting")
-                
+            logger.info(f"RAG Ready - {total_docs} documents indexed")
+
+            key = os.getenv("OPENAI_API_KEY")
+            self.client = OpenAI(api_key=key) if key else None
+            self.use_ai_formatting = bool(key)
+
         except Exception as e:
-            logger.error(f"RAG Agent init error: {e}")
+            logger.error(f"RAG Init Failed: {e}")
             self.vector_store = None
             self.client = None
-    
+            self.use_ai_formatting = False
+
+    # ----------------------------------------------------
+    # MAIN ENTRY POINT
+    # ----------------------------------------------------
     def search_and_respond(self, query: str) -> str:
-        """Main search method with proper response formatting"""
         try:
-            if not self.vector_store or not query:
-                return "Sorry, I can't search right now. Please try again."
-            
-            # Search with multiple approaches
+            if not self.vector_store:
+                return "I cannot access my knowledge base at the moment."
+
             results = self._smart_search(query)
-            
+
             if not results:
-                return f"I don't have information about '{query}'. Try asking about legal services, law firms, or contact details."
-            
-            # Advanced response formatting with AI
+                return f"I couldn't find information about '{query}'. Try rephrasing the question."
+
             if self.use_ai_formatting:
                 return self._generate_ai_response(query, results)
             else:
                 return self._format_basic_response(query, results)
-            
+
         except Exception as e:
-            logger.error(f"Search error: {e}")
-            return "I encountered an error. Please try rephrasing your question."
-    
-    def _smart_search(self, query: str) -> List[Dict[str, Any]]:
-        """Enhanced search with keyword expansion"""
+            logger.error(f"RAG Error: {e}")
+            return "Something went wrong. Please try again."
+
+    # ----------------------------------------------------
+    # SMART SEARCH (Optimized)
+    # ----------------------------------------------------
+    def _smart_search(self, query: str):
         all_results = []
-        
-        # Direct search
-        results1 = self.vector_store.search(query=query, n_results=10)
-        all_results.extend(results1)
-        
-        # Keyword expansion
-        keywords = self._get_keywords(query)
-        for keyword in keywords[:2]:  # Only top 2
-            results2 = self.vector_store.search(query=keyword, n_results=5)
-            all_results.extend(results2)
-        
-        # Remove duplicates and filter
-        unique_results = []
-        seen_texts = set()
-        
-        for result in all_results:
-            text = result.get('text', '')[:100]  # First 100 chars for comparison
-            if text not in seen_texts and result.get('score', 0) > 0.2:
-                seen_texts.add(text)
-                unique_results.append(result)
-        
-        # Sort by score
-        unique_results.sort(key=lambda x: x.get('score', 0), reverse=True)
-        return unique_results[:5]  # Top 5 results
-    
-    def _get_keywords(self, query: str) -> List[str]:
-        """Simple keyword expansion"""
-        keywords = []
+
+        # Direct fast lookup
+        direct = self.vector_store.search(query=query, n_results=7)
+        all_results.extend(direct)
+
+        # Keyword expansion (2 best keywords only)
+        for kw in self._extract_keywords(query)[:2]:
+            all_results.extend(self.vector_store.search(kw, n_results=4))
+
+        # Remove duplicates using short-window matching
+        unique = []
+        seen = []
+
+        for r in all_results:
+            text = r.get("text", "").strip()
+            if len(text) < 40:
+                continue
+
+            short_slice = text[:60]
+            if any(short_slice in s or s in short_slice for s in seen):
+                continue
+
+            seen.append(short_slice)
+            unique.append(r)
+
+        # Highest confidence first
+        unique.sort(key=lambda x: x.get("score", 0), reverse=True)
+
+        return unique[:3]  # Top 3 → best for accuracy & speed
+
+    # ----------------------------------------------------
+    # Smart keyword extraction
+    # ----------------------------------------------------
+    def _extract_keywords(self, query: str):
         q = query.lower()
-        
-        if 'law' in q or 'legal' in q:
-            keywords.extend(['legal services', 'attorneys', 'law firm'])
-        if 'service' in q or 'help' in q:
-            keywords.extend(['services', 'practice areas'])
-        if 'about' in q or 'who' in q:
-            keywords.extend(['about us', 'company'])
-        if 'contact' in q:
-            keywords.extend(['contact', 'email','phone', 'address'])
-            
-        return keywords
-    
-    def _generate_ai_response(self, query: str, results: List[Dict[str, Any]]) -> str:
-        """Generate proper AI response using OpenAI, but ONLY from context"""
+        keys = []
+
+        if "law" in q or "legal" in q:
+            keys.append("legal services")
+            keys.append("law firm overview")
+
+        if "contact" in q or "email" in q or "phone" in q:
+            keys.append("contact information")
+
+        if "about" in q or "who" in q:
+            keys.append("about the firm")
+
+        return keys
+
+    # ----------------------------------------------------
+    # AI FORMATTED RESPONSE
+    # ----------------------------------------------------
+    def _generate_ai_response(self, query, results):
         try:
-            # Clean and prepare context from search results
-            context_parts = []
-            for result in results[:3]:  # Top 3 results
-                text = self._clean_content(result.get('text', ''))
-                if text and len(text.strip()) > 30:
-                    context_parts.append(text)
-            
-            # If context is empty or too weak, block out-of-topic answers
-            if not context_parts or all(len(part.strip()) < 40 for part in context_parts):
-                return "Sorry, I don't have information about this topic."  # Removed 'in my database'
-            
-            context = "\n\n".join(context_parts)
-            
-            # Create proper prompt for voice response
-            prompt = f"""You are a helpful voice assistant. Based ONLY on the provided context, answer the user's question in a natural, conversational way suitable for voice output.
+            context = "\n\n".join(
+                self._clean(r.get("text", ""))[:400]
+                for r in results if r.get("text")
+            )
 
-IMPORTANT GUIDELINES:
-- ONLY use the context below. Do NOT use any outside knowledge.
-- If the context does not answer the question, say: 'Sorry, I don't have information about this topic.'
-- Do NOT generate any out-of-topic or unrelated answers.
-- Provide a direct, helpful answer
-- Use natural, conversational language
-- Keep response concise but informative (under 200 words)
-- DO NOT mention URLs, website links, or technical details
-- DO NOT say 'according to the context' or 'based on the provided information'
-- Speak as if you naturally know this information
+            prompt = f"""
+                Answer the user's question using ONLY the context below.
+                Do NOT add any outside knowledge.
+                Do NOT mention that you're using context.
+                Keep the reply short (3–4 sentences), natural, and conversational.
 
-User Question: {query}
+                User Question:
+                {query}
 
-Context Information:
-{context}
+                Context:
+                {context}
 
-Voice Response:"""
+                Voice Assistant Reply:
+                """
 
-            response = self.client.chat.completions.create(
+            resp = self.client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=200,
-                temperature=0
+                temperature=0,
+                max_tokens=180
             )
-            
-            return response.choices[0].message.content.strip()
-        
+
+            return resp.choices[0].message.content.strip()
+
         except Exception as e:
-            logger.error(f"AI response generation error: {e}")
+            logger.error(f"AI formatting error: {e}")
             return self._format_basic_response(query, results)
-    
-    def _clean_content(self, text: str) -> str:
-        """Clean content by removing URLs and unwanted elements"""
+
+    # ----------------------------------------------------
+    # CLEAN CONTENT
+    # ----------------------------------------------------
+    def _clean(self, text: str):
         if not text:
             return ""
-        
-        # Remove URLs
-        text = re.sub(r'http[s]?://\S+', '', text)
-        text = re.sub(r'www\.\S+', '', text)
-        
-        # Remove email addresses
-        text = re.sub(r'\S+@\S+\.\S+', '', text)
-        
-        # Remove HTML tags
-        text = re.sub(r'<[^>]+>', '', text)
-        
-        # Remove technical markers and brackets
-        text = re.sub(r'\[[^\]]+\]', '', text)
-        text = re.sub(r'\([^)]*http[^)]*\)', '', text)  # Remove parentheses with URLs
-        
-        # Clean up extra whitespace
-        text = ' '.join(text.split())
-        
-        # Remove very short fragments
-        if len(text.strip()) < 20:
-            return ""
-        
-        return text.strip()
-    
-    def _format_basic_response(self, query: str, results: List[Dict[str, Any]]) -> str:
-        """Basic response formatting fallback"""
-        texts = []
-        for result in results[:2]:  # Top 2 results
-            text = self._clean_content(result.get('text', ''))
-            if text:
-                texts.append(text[:300])  # Limit length
-        
-        if not texts:
-            return "I found some information but couldn't format it properly."
-        
-        if len(texts) == 1:
-            return f"Based on my knowledge, {texts[0]}"
-        else:
-            return f"Here's what I can tell you: {texts[0]} Additionally, {texts[1]}"
-    
-    def _format_response(self, query: str, results: List[Dict[str, Any]]) -> str:
-        """Legacy method - now uses _format_basic_response"""
-        return self._format_basic_response(query, results)
-    
-    def get_stats(self) -> Dict[str, Any]:
-        """Simple stats"""
-        if not self.vector_store:
-            return {"error": "Not available"}
-        
-        total_docs = len(self.vector_store.documents) if self.vector_store.documents else 0
-        total_vectors = self.vector_store.index.ntotal if self.vector_store.index else 0
-        
-        return {
-            "documents": total_docs,
-            "vectors": total_vectors,
-            "status": "active" if total_docs > 0 else "empty"
-        }
 
-# Simple utility functions
-def quick_search(query: str) -> str:
-    """Quick search utility function"""
-    agent = EnhancedRAGAgent()
-    return agent.search_and_respond(query)
+        text = re.sub(r"http[^ ]+", "", text)
+        text = re.sub(r"<[^>]+>", "", text)
+        text = re.sub(r"\S+@\S+\.\S+", "", text)
+        text = re.sub(r"\[[^\]]*\]", "", text)
+        text = re.sub(r"\s+", " ", text)
+
+        return text.strip()
+
+    # ----------------------------------------------------
+    # BASIC RESPONSE (fallback)
+    # ----------------------------------------------------
+    def _format_basic_response(self, query, results):
+        parts = [self._clean(r.get("text", ""))[:250] for r in results if r.get("text")]
+
+        if not parts:
+            return "I found related data but couldn't format it."
+
+        if len(parts) == 1:
+            return parts[0]
+
+        return f"{parts[0]} Additionally, {parts[1]}."

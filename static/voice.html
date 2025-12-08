@@ -1,35 +1,176 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <title>🚀 AudioWorklet Voice AI</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { background: #fff; color: #222; font-family: 'Segoe UI', sans-serif; margin: 0; min-height: 100vh; }
-        .container { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
-        .chat-window { width: 100%; max-width: 500px; background: #fff; border-radius: 24px; box-shadow: 0 4px 32px rgba(0, 0, 0, 0.08); overflow: hidden; display: flex; flex-direction: column; height: 600px; }
-        .chat-header { background: #2563eb; color: #fff; text-align: center; padding: 15px; font-size: 1.5rem; font-weight: bold; }
-        .chat-messages { padding: 20px; flex: 1; overflow-y: auto; background: #fff; display: flex; flex-direction: column; gap: 10px; }
-        .message { padding: 12px 16px; border-radius: 12px; font-size: 1rem; line-height: 1.5; max-width: 80%; word-break: break-word; }
-        .message.user { background: #e0e7ff; color: #222; align-self: flex-end; border: 1px solid #c7d2fe; }
-        .message.assistant { background: #f3f4f6; color: #222; align-self: flex-start; border: 1px solid #e5e7eb; }
-        .status-bar { background: #f8fafc; color: #64748b; text-align: center; padding: 8px; font-size: 0.9rem; border-top: 1px solid #e2e8f0; }
-        .bottom-bar { background: #fff; padding: 15px; display: flex; align-items: center; justify-content: center; border-top: 1px solid #f1f5f9; }
-        .input-bar { display: flex; align-items: center; width: 100%; gap: 10px; }
-        .input-box { flex: 1; padding: 12px; border: 1px solid #e2e8f0; border-radius: 20px; background: #f8fafc; outline: none; }
-        .mic-btn, .stop-btn { width: 50px; height: 50px; border-radius: 50%; border: none; color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 1.2rem; transition: 0.2s; }
-        .mic-btn { background: #2563eb; }
-        .mic-btn:hover { transform: scale(1.05); }
-        .stop-btn { background: #ef4444; display: none; }
-        .mic-btn.recording { background: #ef4444; animation: pulse 1.5s infinite; }
-        .mic-btn.interrupt-ready { background: #f59e0b; }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+        body {
+            background: #fff;
+            color: #222;
+            font-family: 'Segoe UI', sans-serif;
+            margin: 0;
+            min-height: 80vh;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 80vh;
+            padding: 20px;
+        }
+
+        .chat-window {
+            width: 100%;
+            max-width: 500px;
+            background: #fff;
+            border-radius: 24px;
+            box-shadow: 0 4px 32px rgba(0, 0, 0, 0.08);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 540px;
+            /* Reduced height to minimize scroll */
+        }
+
+        .chat-header {
+            background: #2563eb;
+            color: #fff;
+            text-align: center;
+            padding: 15px;
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .chat-messages {
+            padding: 20px;
+            flex: 1;
+            overflow-y: auto;
+            background: #fff;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            height: 650px;
+            /* Reduced height to minimize scroll */
+        }
+
+        .message {
+            padding: 12px 16px;
+            border-radius: 12px;
+            font-size: 1rem;
+            line-height: 1.5;
+            max-width: 80%;
+            word-break: break-word;
+        }
+
+        .message.user {
+            background: #e0e7ff;
+            color: #222;
+            align-self: flex-end;
+            border: 1px solid #c7d2fe;
+        }
+
+        .message.assistant {
+            background: #f3f4f6;
+            color: #222;
+            align-self: flex-start;
+            border: 1px solid #e5e7eb;
+        }
+
+        .status-bar {
+            background: #f8fafc;
+            color: #64748b;
+            text-align: center;
+            padding: 8px;
+            font-size: 0.9rem;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .bottom-bar {
+            background: #fff;
+            padding: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-top: 1px solid #f1f5f9;
+        }
+
+        .input-bar {
+            display: flex;
+            align-items: center;
+            width: 100%;
+            gap: 10px;
+        }
+
+        .input-box {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 20px;
+            background: #f8fafc;
+            outline: none;
+        }
+
+        .mic-btn,
+        .stop-btn {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: none;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 1.2rem;
+            transition: 0.2s;
+        }
+
+        .mic-btn {
+            background: #2563eb;
+        }
+
+        .mic-btn:hover {
+            transform: scale(1.05);
+        }
+
+        .stop-btn {
+            background: #ef4444;
+            display: none;
+        }
+
+        .mic-btn.recording {
+            background: #ef4444;
+            animation: pulse 1.5s infinite;
+        }
+
+        .mic-btn.interrupt-ready {
+            background: #f59e0b;
+        }
+
+        @keyframes pulse {
+            0% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.6;
+            }
+
+            100% {
+                opacity: 1;
+            }
+        }
     </style>
 </head>
+
 <body>
     <div class="container">
         <div class="chat-window">
-            <div class="chat-header">AI Voice (WAV/Worklet)</div>
+            <div class="chat-header">AI Voice Assistant</div>
             <div class="chat-messages" id="chat-messages"></div>
             <div class="status-bar" id="status">Ready to connect</div>
             <div class="bottom-bar">
@@ -90,13 +231,13 @@
         let isProcessingQuery = false;
         let isBotSpeaking = false;
         let isManualStop = false;
-        
+
         // --- Audio Recording ---
         let audioContext = null;
         let mediaStream = null;
         let workletNode = null;
         let sourceNode = null;
-        let pcmData = []; 
+        let pcmData = [];
         let isRecording = false;
 
         // --- Playback ---
@@ -119,13 +260,13 @@
 
         function handleConnectionLost(reason) {
             console.log("🛑 Reset:", reason);
-            isManualStop = true; 
+            isManualStop = true;
             isBotSpeaking = false;
             isProcessingQuery = false;
-            
+
             stopAudioPlayback();
-            stopWavRecording(); 
-            
+            stopWavRecording();
+
             if (ws) { ws.close(); ws = null; }
 
             statusDiv.textContent = "Disconnected. Click mic.";
@@ -143,7 +284,7 @@
         }
 
         async function playAudioChunk(base64Data) {
-            if(isManualStop) return;
+            if (isManualStop) return;
             initPlayback();
             const binaryString = atob(base64Data);
             const len = binaryString.length;
@@ -156,7 +297,7 @@
         }
 
         function scheduleBuffer(buffer) {
-            if(isManualStop) return;
+            if (isManualStop) return;
             const src = playbackCtx.createBufferSource();
             src.buffer = buffer;
             src.connect(playbackCtx.destination);
@@ -166,7 +307,7 @@
             nextStartTime += buffer.duration;
             isBotSpeaking = true;
             micBtn.classList.add("interrupt-ready");
-            if(!isManualStop) statusDiv.textContent = "🤖 Speaking...";
+            if (!isManualStop) statusDiv.textContent = "🤖 Speaking...";
         }
 
         function stopAudioPlayback() {
@@ -182,7 +323,7 @@
             if (!audioContext) {
                 audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 }); // Force 16kHz
             }
-            
+
             // Resume if suspended
             if (audioContext.state === 'suspended') await audioContext.resume();
 
@@ -207,8 +348,8 @@
                 await setupAudioWorklet();
 
                 if (!mediaStream) {
-                    mediaStream = await navigator.mediaDevices.getUserMedia({ 
-                        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
+                    mediaStream = await navigator.mediaDevices.getUserMedia({
+                        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
                     });
                 }
 
@@ -235,7 +376,7 @@
                         if (volume > 5) { // Interruption Threshold
                             console.log("🔥 Interruption!");
                             stopAudioPlayback();
-                            pcmData = []; 
+                            pcmData = [];
                             hasSpoken = true;
                             recordingStart = Date.now();
                             pcmData.push(audio); // Capture interrupt chunk
@@ -258,8 +399,8 @@
                         statusDiv.style.color = "#ef5350";
                     } else if (hasSpoken) {
                         // 2s Silence Detection
-                        if (Date.now() - silenceStart > 2000) { 
-                            if (Date.now() - recordingStart > 1000) { 
+                        if (Date.now() - silenceStart > 1500) {
+                            if (Date.now() - recordingStart > 800) {
                                 console.log("✅ Silence. Sending WAV...");
                                 sendWavData();
                             }
@@ -288,11 +429,11 @@
         }
 
         function sendWavData() {
-            isRecording = false; 
-            
+            isRecording = false;
+
             let length = 0;
             pcmData.forEach(d => length += d.length);
-            
+
             if (length === 0) { isRecording = true; return; }
 
             let merged = new Float32Array(length);
@@ -300,7 +441,7 @@
             pcmData.forEach(d => { merged.set(d, offset); offset += d.length; });
 
             const wavBlob = encodeWAV(merged);
-            
+
             isProcessingQuery = true;
             statusDiv.textContent = "🤖 Thinking...";
             statusDiv.style.color = "#2563eb";
@@ -314,7 +455,7 @@
                 }
                 pcmData = [];
                 hasSpoken = false;
-                isRecording = true; 
+                isRecording = true;
             };
         }
 
@@ -327,12 +468,12 @@
             writeString(view, 8, 'WAVE');
             writeString(view, 12, 'fmt ');
             view.setUint32(16, 16, true);
-            view.setUint16(20, 1, true); 
-            view.setUint16(22, 1, true); 
-            view.setUint32(24, 16000, true); 
-            view.setUint32(28, 16000 * 2, true); 
-            view.setUint16(32, 2, true); 
-            view.setUint16(34, 16, true); 
+            view.setUint16(20, 1, true);
+            view.setUint16(22, 1, true);
+            view.setUint32(24, 16000, true);
+            view.setUint32(28, 16000 * 2, true);
+            view.setUint16(32, 2, true);
+            view.setUint16(34, 16, true);
             writeString(view, 36, 'data');
             view.setUint32(40, samples.length * 2, true);
             floatTo16BitPCM(view, 44, samples);
@@ -357,14 +498,14 @@
         function initWebSocket() {
             micBtn.disabled = true;
             statusDiv.textContent = "🔄 Connecting...";
-            
+
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             ws = new WebSocket(`${protocol}//${window.location.host}/ws/voice`);
 
             ws.onopen = () => statusDiv.textContent = "⏳ Authenticating...";
 
             ws.onmessage = (event) => {
-                if(isManualStop) return;
+                if (isManualStop) return;
                 const data = JSON.parse(event.data);
 
                 if (data.session_id) {
@@ -378,7 +519,7 @@
 
                 if (data.type === 'text_start') {
                     addMessage(data.bot_text, 'assistant');
-                    if(data.user_text) addMessage(data.user_text, 'user');
+                    if (data.user_text) addMessage(data.user_text, 'user');
                     statusDiv.textContent = "🤖 Speaking...";
                 } else if (data.type === 'audio_chunk') {
                     playAudioChunk(data.audio);
@@ -412,4 +553,5 @@
         };
     </script>
 </body>
+
 </html>
