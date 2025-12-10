@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DJF Web Assistant</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./css/style.css">
+<link rel="stylesheet" href="./css/popup.css">
+<!-- Fallback CSS paths for iframe context -->
+<link rel="stylesheet" href="/static/css/style.css">
+<link rel="stylesheet" href="/static/css/popup.css">
+<style>
+  /* Additional CSS to ensure proper rendering in iframe */
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow-x: hidden;
+  }
+  
+  /* Ensure all positioned elements work properly in iframe context */
+  .chat-container,
+  #chat-container {
+    position: absolute !important;
+  }
+  
+  /* Force proper box-sizing */
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+  
+  /* Debug styles to ensure CSS is working */
+  body {
+    background-color: #f5f6fa !important;
+  }
+  
+  .navbar {
+    background-color: #2c3e50 !important;
+    color: #ecf0f1 !important;
+  }
+</style>
+
+</head>
+
+<body>
+
+<!-- Navbar -->
+<div class="navbar">
+    <div class="logo">Helping Assistant</div>
+</div>
+
+<!-- Sidebar toggle (hamburger) -->
+<div class="sidebar-toggle" id="sidebar-toggle">☰</div>
+
+
+<!-- Left Sidebar -->
+<div class="left-sidebar" id="left-sidebar">
+    <div class="sidebar-header">
+        <!-- <div class="sidebar-logo">Helping Assistant</div> -->
+        <button class="close-sidebar" id="close-sidebar">&times;</button>
+    </div>
+    <div class="sidebar-content">
+
+        <!-- Firm Selection -->
+        <h4>Select Firm</h4>
+        <select id="firm-select">
+            <option value="">Select a firm</option>
+            <!-- Firms will be dynamically populated -->
+        </select>
+
+        <!-- Inject URLs -->
+        <!-- <h4>Inject URLs</h4>
+        <input type="url" id="sidebar-url" placeholder="https://example.com/page" style="margin-bottom: 8px;">
+        <button id="sidebar-add" class="btn">Inject URL</button>
+        <div id="url-loader" class="loader-overlay" style="display:none">Processing URL...</div> -->
+
+    </div>
+</div>
+
+<!-- Chat Icon -->
+<div class="chat-icon" id="chat-icon">💬</div>
+
+<!-- Chat Container -->
+<!-- Chat Container -->
+<div class="chat-container" id="chat-container">
+    <div class="header">Web Assistant</div>
+
+    <div id="chat-box"></div>
+
+    <!-- Typing indicator inside chat box -->
+    <div id="chat-loader" class="chat-typing" style="display:none">
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+    </div>
+
+    <div class="chat-input">
+        <input type="text" id="user-input" placeholder="Ask anything...">
+        <button id="send-btn">Send</button>
+    </div>
+</div>
+
+<!-- Contact Form Modal -->
+<div id="contactModal" class="modal" aria-hidden="true">
+  <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="contactTitle">
+    <div class="modal-header">
+      <h2 id="contactTitle">Provide Your Contact Details</h2>
+      <button class="modal-close" aria-label="Close">&times;</button>
+    </div>
+
+    <div class="modal-form">
+      <div class="grid-2">
+        <div>
+          <label for="fname">First Name</label>
+          <input type="text" id="fname" placeholder="First Name">
+        </div>
+        <div>
+          <label for="lname">Last Name</label>
+          <input type="text" id="lname" placeholder="Last Name">
+        </div>
+      </div>
+
+      <label for="email">Email</label>
+      <input type="email" id="email" placeholder="Email">
+
+      <label for="phone">Phone Number</label>
+      <input type="text" id="phone" placeholder="Phone Number">
+
+      <div class="modal-actions">
+        <button id="contactSkip" class="btn secondary">Skip</button>
+        <button id="contactSubmit" class="btn primary">Submit</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- load popup helper BEFORE main chat script so handle/show functions exist when script.js runs -->
+<script src="./js/popup.js"></script>
+<script src="./js/script.js"></script>
+
+<script>
+// Handle iframe embedding and CSS loading
+document.addEventListener('DOMContentLoaded', function() {
+  console.log('Index.html loaded in iframe context');
+  
+  // Check if we're in an iframe
+  const isInIframe = window !== window.parent;
+  
+  if (isInIframe) {
+    console.log('Running inside iframe - widget mode');
+    
+    // Notify parent that iframe is ready
+    try {
+      window.parent.postMessage({
+        type: 'IFRAME_READY',
+        timestamp: Date.now()
+      }, '*');
+    } catch (e) {
+      console.warn('Could not send ready message to parent:', e);
+    }
+    
+    // Debug CSS loading
+    const stylesheets = document.querySelectorAll('link[rel="stylesheet"]');
+    stylesheets.forEach((link, index) => {
+      link.addEventListener('load', () => {
+        console.log(`Stylesheet ${index + 1} loaded:`, link.href);
+      });
+      link.addEventListener('error', () => {
+        console.error(`Stylesheet ${index + 1} failed to load:`, link.href);
+      });
+    });
+    
+    // Ensure chat container positioning works in iframe
+    setTimeout(() => {
+      const chatContainer = document.getElementById('chat-container');
+      if (chatContainer) {
+        console.log('Chat container found, ensuring proper styling');
+        chatContainer.style.position = 'absolute';
+        chatContainer.style.zIndex = '2100';
+      }
+    }, 1000);
+  }
+  
+  // Listen for messages from parent widget
+  window.addEventListener('message', function(event) {
+    if (event.data.type === 'WIDGET_CONFIG') {
+      console.log('Received widget config:', event.data.config);
+      // Handle any configuration from parent
+    }
+  });
+});
+</script>
+</body>
+</html>

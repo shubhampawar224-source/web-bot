@@ -1,245 +1,178 @@
-# voice_assistant.py
-"""
-Optimized VoiceAssistant with:
-- local STT via faster-whisper (tiny-int8)
-- strict RAG (EnhancedRAGAgent)
-- streaming TTS via OpenAI Async client
-- tuned chunk size for smooth playback
-"""
-
 import asyncio
-import io
 import os
 import json
-import base64
-import uuid
 import logging
-from fastapi import WebSocket
+import websockets
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
-# OpenAI async client for TTS and optional fallback STT
-from openai import AsyncOpenAI
-
-# RAG agent (strict) — your local file
+# Import the robust RAG agent
 from voice_config.simple_rag_agent import EnhancedRAGAgent
 
-load_dotenv(override=True)
-logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
-logger = logging.getLogger("VoiceAssistant")
+# Load Environment Variables
+load_dotenv()
+API_KEY = os.getenv("OPENAI_API_KEY")
 
-# Async OpenAI
-ASYNC_CLIENT = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# Logging Setup
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("VoiceServer")
 
-# Local STT settings (we selected tiny-int8)
-USE_LOCAL_STT = True
-LOCAL_STT_MODEL = os.getenv("LOCAL_STT_MODEL", "tiny-int8")  # tiny-int8 as requested
+app = FastAPI()
 
-# Try initialize faster-whisper
-whisper_model = None
-if USE_LOCAL_STT:
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
+
+# Initialize RAG
+RAG = EnhancedRAGAgent()
+
+# OpenAI WebSocket URL
+OPENAI_URL = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17"
+
+# Tool Definition
+RAG_TOOL = {
+    "type": "function",
+    "name": "query_knowledge_base",
+    "description": "Use this tool to get information about DJF Law Firm cases, pricing, or specific legal topics.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "The user's question or topic to search for."}
+        },
+        "required": ["query"]
+    }
+}
+
+@app.websocket("/ws/voice")
+async def voice_socket(websocket: WebSocket):
+    await websocket.accept()
+    logger.info("Client connected.")
+
+    headers = {
+        "Authorization": f"Bearer {API_KEY}",
+        "OpenAI-Beta": "realtime=v1"
+    }
+
     try:
-        from faster_whisper import WhisperModel
-        logger.info("Loading local Whisper model: %s (this may take a moment)...", LOCAL_STT_MODEL)
-        whisper_model = WhisperModel(LOCAL_STT_MODEL, device="cpu", compute_type="int8")
-        logger.info("Local Whisper loaded.")
-    except Exception as e:
-        logger.exception("Failed to load local whisper: %s. Falling back to OpenAI STT.", e)
-        whisper_model = None
-        USE_LOCAL_STT = False
+        async with websockets.connect(OPENAI_URL, additional_headers=headers) as openai_ws:
+            
+            # 1. Initialize Session
+            session_config = {
+                "type": "session.update",
+                "session": {
+                    "modalities": ["text", "audio"],
+                    "voice": "alloy",
+                    "input_audio_format": "pcm16",
+                    "output_audio_format": "pcm16",
+                    
+                    # ⭐⭐⭐ FIX: YE MISSING THA ⭐⭐⭐
+                    # Iske bina user ka text wapas nahi aata
+                    "input_audio_transcription": {
+                        "model": "whisper-1"
+                    },
+                    # -------------------------------
 
-class VoiceAssistant:
-    def __init__(self):
-        self.sessions = {}
-        self.rag = EnhancedRAGAgent()
-        # TTS settings
-        self.tts_model = os.getenv("TTS_MODEL", "tts-1")
-        self.tts_voice = os.getenv("TTS_VOICE", "alloy")
-        # streaming chunk tuning
-        self.chunk_size = int(os.getenv("TTS_CHUNK_SIZE", "4096"))
+                    "turn_detection": {
+                        "type": "server_vad",
+                        "threshold": 0.5,
+                        "prefix_padding_ms": 300,
+                        "silence_duration_ms": 500
+                    },
+                    "tools": [RAG_TOOL],
+                    "tool_choice": "auto",
+                    "instructions": "You are a helpful assistant for DJF Law Firm. Keep answers short. If the user asks about cases or info, use the tool."
+                }
+            }
+            await openai_ws.send(json.dumps(session_config))
 
-    async def handle_ws(self, ws: WebSocket):
-        await ws.accept()
-        session_id = str(uuid.uuid4())
-        await ws.send_json({"info": "session_created", "session_id": session_id})
+            # 2. Trigger Welcome Greeting
+            await openai_ws.send(json.dumps({
+                "type": "response.create",
+                "response": {
+                    "modalities": ["text", "audio"],
+                    "instructions": "Say 'Hello! I am your DJF Law Firm assistant. How can I help you today?'"
+                }
+            }))
 
-        # greeting (streamed)
-        try:
-            await self.safe_send(ws, "Hello! I am your Law Firm voice assistant. How can I help you today?")
-        except Exception as e:
-            logger.debug("Greeting failed: %s", e)
-
-        silence = asyncio.create_task(self._silence_watchdog(ws))
-
-        try:
-            while True:
-                data = await ws.receive_text()
-                msg = json.loads(data)
-
-                if msg.get("stop"):
-                    silence.cancel()
-                    await ws.close()
-                    break
-
-                audio_b64 = msg.get("audio")
-                if audio_b64:
-                    silence.cancel()
-                    silence = asyncio.create_task(self._silence_watchdog(ws))
-                    try:
-                        audio_bytes = base64.b64decode(audio_b64)
-                    except Exception:
-                        logger.warning("Received invalid base64 audio")
-                        continue
-
-                    # process request (run in background)
-                    await self.process_audio(ws, audio_bytes, session_id)
-
-        except Exception as e:
-            logger.exception("Websocket loop error: %s", e)
-            try:
-                await ws.close()
-            except:
-                pass
-            silence.cancel()
-
-    async def _silence_watchdog(self, ws: WebSocket, timeout: int = 10):
-        try:
-            await asyncio.sleep(timeout)
-            if ws.client_state.name == "CONNECTED":
-                await ws.send_json({"bot_text": "No input detected. Closing session."})
-                await ws.close()
-        except asyncio.CancelledError:
-            pass
-        except Exception as e:
-            logger.debug("watchdog error: %s", e)
-
-    async def process_audio(self, ws: WebSocket, audio_bytes: bytes, session_id: str):
-        # write temp file
-        tmp = f"temp_{uuid.uuid4()}.wav"
-        try:
-            with open(tmp, "wb") as f:
-                f.write(audio_bytes)
-        except Exception as e:
-            logger.exception("Failed to write temp audio: %s", e)
-            return
-
-        try:
-            # 1) Transcribe (local faster-whisper if available)
-            if USE_LOCAL_STT and whisper_model:
-                user_text = await asyncio.to_thread(self._local_transcribe, tmp)
-            else:
-                # fallback to OpenAI API (async)
+            # --- Concurrent Tasks ---
+            
+            async def receive_from_client():
                 try:
-                    with open(tmp, "rb") as f:
-                        resp = await ASYNC_CLIENT.audio.transcriptions.create(
-                            model="whisper-1",
-                            file=f,
-                            language="en"
-                        )
-                    user_text = getattr(resp, "text", "") or ""
+                    while True:
+                        data = await websocket.receive_text()
+                        msg = json.loads(data)
+
+                        if "audio" in msg:
+                            await openai_ws.send(json.dumps({
+                                "type": "input_audio_buffer.append",
+                                "audio": msg["audio"]
+                            }))
+                except WebSocketDisconnect:
+                    logger.info("Client disconnected (WebSocket).")
                 except Exception as e:
-                    logger.exception("OpenAI STT error: %s", e)
-                    user_text = ""
+                    logger.error(f"Error receiving from client: {e}")
 
-            user_text = (user_text or "").strip()
-            if not user_text:
-                logger.info("Empty transcription result.")
-                return
+            async def receive_from_openai():
+                try:
+                    async for message in openai_ws:
+                        event = json.loads(message)
+                        evt_type = event.get("type")
 
-            logger.info("User said: %s", user_text)
+                        if evt_type == "response.audio.delta":
+                            await websocket.send_json({
+                                "type": "audio_chunk",
+                                "audio": event["delta"]
+                            })
 
-            # 2) RAG search + answer (strict)
-            # run in thread to avoid blocking
-            reply = await asyncio.to_thread(self.rag.search_and_respond, user_text)
-            if not reply:
-                reply = "I couldn't find an answer right now. Could you try rephrasing?"
+                        elif evt_type == "response.audio_transcript.done":
+                            await websocket.send_json({
+                                "type": "transcript",
+                                "role": "assistant",
+                                "text": event["transcript"]
+                            })
 
-            # 3) Stream TTS
-            await self.safe_send(ws, reply, user_text)
+                        # ⭐ Ye event ab trigger hoga kyunki humne whisper-1 enable kiya hai
+                        elif evt_type == "conversation.item.input_audio_transcription.completed":
+                            transcript = event.get("transcript", "")
+                            # Backgorund noise kabhi kabhi khali text bhejta hai, use filter karein
+                            if transcript and transcript.strip() != "":
+                                await websocket.send_json({
+                                    "type": "transcript",
+                                    "role": "user",
+                                    "text": transcript
+                                })
 
-        except Exception as e:
-            logger.exception("process_audio error: %s", e)
-        finally:
-            try:
-                if os.path.exists(tmp):
-                    os.remove(tmp)
-            except Exception:
-                pass
+                        elif evt_type == "response.function_call_arguments.done":
+                            call_id = event["call_id"]
+                            args = json.loads(event["arguments"])
+                            query = args.get("query")
+                            
+                            logger.info(f"Tool Triggered: {query}")
+                            await websocket.send_json({"type": "log", "message": f"Searching for: {query}..."})
 
-    def _local_transcribe(self, path: str) -> str:
-        try:
-            segments, info = whisper_model.transcribe(path, beam_size=1)
-            text = " ".join([s.text for s in segments]).strip()
-            return text
-        except Exception as e:
-            logger.exception("Local transcribe failed: %s", e)
-            return ""
+                            # RAG Execution
+                            result = await RAG.search_and_respond(query)
 
-    async def safe_send(self, ws: WebSocket, text: str, user_text: str = None):
-        """
-        Stream TTS to client:
-        - Send text start so frontend can display immediately
-        - Stream mp3 chunks (base64) to frontend as 'audio_chunk'
-        """
-        try:
-            if ws.client_state.name != "CONNECTED":
-                logger.debug("Client not connected, aborting safe_send.")
-                return
-        except Exception:
-            # ws might not have client_state in certain frameworks - continue
-            pass
+                            await openai_ws.send(json.dumps({
+                                "type": "conversation.item.create",
+                                "item": {
+                                    "type": "function_call_output",
+                                    "call_id": call_id,
+                                    "output": result
+                                }
+                            }))
+                            
+                            await openai_ws.send(json.dumps({"type": "response.create"}))
+                            
+                except Exception as e:
+                    logger.error(f"OpenAI Error: {e}")
 
-        # immediate text event
-        try:
-            await ws.send_json({
-                "type": "text_start",
-                "bot_text": text,
-                "user_text": user_text
-            })
-        except Exception as e:
-            logger.debug("Could not send text_start: %s", e)
+            await asyncio.gather(receive_from_client(), receive_from_openai())
 
-        # call OpenAI streaming TTS
-        try:
-            async with ASYNC_CLIENT.audio.speech.with_streaming_response.create(
-                model=self.tts_model,
-                voice=self.tts_voice,
-                input=text,
-                response_format="mp3"
-            ) as resp:
-                async for chunk in resp.iter_bytes(chunk_size=self.chunk_size):
-                    if not chunk:
-                        continue
-
-                    # quick disconnected check
-                    try:
-                        if ws.client_state.name != "CONNECTED":
-                            logger.debug("Client disconnected during TTS stream.")
-                            break
-                    except Exception:
-                        # not all WS have client_state, ignore
-                        pass
-
-                    try:
-                        audio_b64 = base64.b64encode(chunk).decode("utf-8")
-                        await ws.send_json({"type": "audio_chunk", "audio": audio_b64})
-                    except Exception as e:
-                        logger.debug("Failed sending chunk: %s", e)
-                        # break if ws closed
-                        try:
-                            if ws.client_state.name != "CONNECTED":
-                                break
-                        except Exception:
-                            break
-
-                    # tiny sleep to avoid backpressure on slower clients
-                    await asyncio.sleep(0.0005)
-
-            logger.info("TTS stream finished for text length %d", len(text))
-
-        except Exception as e:
-            logger.exception("TTS streaming failed: %s", e)
-            try:
-                if ws.client_state.name == "CONNECTED":
-                    await ws.send_json({"type": "error", "message": "TTS failed"})
-            except Exception:
-                pass
+    except Exception as e:
+        logger.error(f"Connection Error: {e}")
+        await websocket.close()

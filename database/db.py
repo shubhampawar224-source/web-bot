@@ -22,12 +22,11 @@ def init_db():
         from model.url_injection_models import URLInjectionRequest
         from model.admin_models import AdminUser, AdminSession
         from model.user_models import User, UserSession
+        from model.chat_message import ChatMessage 
         
-        # Create all tables
         Base.metadata.create_all(bind=engine)
         print("✅ Database tables created successfully!")
         
-        # Run migration to add missing columns to existing tables
         try:
             migrate_existing_tables()
         except Exception as e:

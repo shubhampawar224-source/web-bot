@@ -1,182 +1,113 @@
-# enhanced_rag_agent.py
-"""
-Optimized Enhanced RAG Agent (strict context-only)
-- top-3 FAISS results
-- dedup + short clean
-- builds compact context
-- calls gpt-4o-mini for final voice-friendly answer
-"""
-
 import os
-import re
 import logging
-from typing import List, Dict, Any
+import asyncio
 from dotenv import load_dotenv
+from openai import AsyncOpenAI
 
+# Load Environment Variables
 load_dotenv(override=True)
-logger = logging.getLogger("EnhancedRAGAgent")
-logging_level = os.getenv("LOG_LEVEL", "INFO")
-logger.setLevel(logging_level)
 
-try:
-    from utils.vector_store import FAISSVectorStore
-except Exception as e:
-    logger.error("Could not import FAISSVectorStore: %s", e)
-    FAISSVectorStore = None
+# Logger Setup
+logger = logging.getLogger("LiteRAG")
+logger.setLevel(os.getenv("LOG_LEVEL", "INFO"))
 
-# OpenAI sync client for agent-level calls
-try:
-    from openai import OpenAI
-    OPENAI_KEY = os.getenv("OPENAI_API_KEY")
-    openai_client = OpenAI(api_key=OPENAI_KEY) if OPENAI_KEY else None
-except Exception as e:
-    logger.warning("OpenAI client not available: %s", e)
-    openai_client = None
+OPENAI_KEY = os.getenv("OPENAI_API_KEY")
+aclient = AsyncOpenAI(api_key=OPENAI_KEY) if OPENAI_KEY else None
 
-
+# --- MAIN AGENT LINKED TO FAISS ---
 class EnhancedRAGAgent:
     def __init__(self):
-        try:
-            if FAISSVectorStore is None:
-                raise RuntimeError("FAISSVectorStore not available")
-            self.store = FAISSVectorStore()
-            self.indexed_docs = len(self.store.documents) if getattr(self.store, "documents", None) else 0
-            logger.info(f"EnhancedRAGAgent ready - {self.indexed_docs} documents")
-        except Exception as e:
-            logger.error("RAG init error: %s", e)
-            self.store = None
-
+        self.store = None
         self.llm_model = os.getenv("RAG_LLM_MODEL", "gpt-4o-mini")
-        self.max_context_chars = 1000  # cap context length sent to LLM
 
-    # Public entry
-    def search_and_respond(self, query: str) -> str:
-        if not query or not self.store:
-            return "Sorry, my knowledge base is unavailable right now."
-
-        # 1) fast search
-        chunks = self._fast_search(query)
-
-        if not chunks:
-            return f"I couldn't find information about '{query}'. Could you try rephrasing the question?"
-
-        # 2) build strict context
-        context = self._build_context(chunks)
-
-        # 3) generate strict response using LLM (only context)
-        resp = self._generate_strict_response(query, context)
-        return resp
-
-    # top-3 fast search + dedupe
-    def _fast_search(self, query: str) -> List[Dict[str, Any]]:
+        # 1. Connect to Real FAISS Database
         try:
-            raw = self.store.search(query=query, n_results=8)
+            from utils.vector_store import FAISSVectorStore
+            self.store = FAISSVectorStore()
+            logger.info("✅ Successfully connected to FAISS Vector Database.")
+        except ImportError:
+            logger.error("❌ CRITICAL: 'utils.vector_store' not found. Please check your file structure.")
         except Exception as e:
-            logger.error("Vector search failed: %s", e)
-            return []
+            logger.error(f"❌ Error loading FAISS Store: {e}")
 
-        unique = []
-        seen_short = set()
-        for r in raw:
-            text = (r.get("text") or "").strip()
-            score = float(r.get("score", 0.0) or 0.0)
-            if not text or len(text) < 30 or score <= 0:
-                continue
+    # =======================================================
+    # 🚀 MAIN SEARCH FUNCTION (Async Wrapper)
+    # =======================================================
+    async def search_and_respond(self, query: str) -> str:
+        if not query:
+            return "Please ask a question."
 
-            short = re.sub(r'\s+', ' ', text)[:120]
-            key = short.lower()
-            # simple near-duplicate detection
-            if any(key in s or s in key for s in seen_short):
-                continue
-            seen_short.add(key)
-            unique.append({"text": text, "score": score, "meta": r.get("metadata", {})})
+        if not self.store:
+            return "Database connection is not active."
 
-            if len(unique) >= 10:
-                break
+        logger.info(f"🔎 FAISS Searching for: {query}")
 
-        unique.sort(key=lambda x: x["score"], reverse=True)
-        return unique[:3]
+        # STEP 1: Search FAISS (Run in Thread to prevent Audio Lag)
+        # Hum 'asyncio.to_thread' use kar rahe hain kyunki FAISS CPU heavy hota hai
+        try:
+            # Note: Ensure your FAISSVectorStore.search accepts 'n_results' or change to 'k'
+            results = await asyncio.to_thread(self.store.search, query=query, n_results=4)
+        except Exception as e:
+            logger.error(f"FAISS Search Error: {e}")
+            return "I encountered an error searching the database."
 
-    def _build_context(self, chunks: List[Dict[str, Any]]) -> str:
-        parts = []
-        for i, c in enumerate(chunks, 1):
-            clean = self._clean_text(c["text"])
-            if not clean:
-                continue
-            # limit chunk size so entire context stays small
-            parts.append(f"[Doc {i}] {clean[:400]}")
-        ctx = "\n\n".join(parts)
-        # final trim
-        if len(ctx) > self.max_context_chars:
-            ctx = ctx[: self.max_context_chars]
-        return ctx.strip()
+        if not results:
+            logger.info("⚠️ No results found in FAISS.")
+            return "I checked the database, but I couldn't find specific details on that."
 
-    def _clean_text(self, text: str) -> str:
-        if not text:
-            return ""
-        t = re.sub(r'http\S+', '', text)
-        t = re.sub(r'\S+@\S+\.\S+', '', t)
-        t = re.sub(r'<[^>]+>', '', t)
-        t = re.sub(r'\[[^\]]*\]', '', t)
-        t = re.sub(r'\s+', ' ', t).strip()
-        return t
+        # STEP 2: Context Build
+        # Extract text from results (Robust handling)
+        context_parts = []
+        for res in results:
+            # Different RAG setups use different keys ('text', 'content', 'page_content')
+            text = res.get("text") or res.get("content") or res.get("page_content") or ""
+            text = str(text).strip()
+            if len(text) > 10:  
+                context_parts.append(text)
 
-    def _generate_strict_response(self, query: str, context: str) -> str:
-        """
-        Use LLM and ensure it only uses context. Add guardrails in prompt.
-        """
-        if not openai_client:
-            # fallback to basic assembly
-            parts = context.split("\n\n")
-            if parts:
-                return parts[0][:400]
-            return "I have some related information but cannot generate a detailed answer right now."
+        if not context_parts:
+             return "I found some records, but they were empty."
 
+        context = "\n---\n".join(context_parts)[:2500] # Limit context size
+
+        # STEP 3: Generate Answer using GPT-4o-mini
+        answer = await self._generate_answer(query, context)
+        return answer
+
+    # =======================================================
+    # 🤖 GPT GENERATION (Context -> Human Voice)
+    # =======================================================
+    async def _generate_answer(self, query: str, context: str) -> str:
+        if not aclient:
+            return "OpenAI client is not configured."
+
+        # Prompt Optimized for FAISS Data
         prompt = f"""
-You are a voice assistant. Answer the user's question using ONLY the provided context below.
-Strict rules:
-- Do NOT add any information not present in the context.
-- Do NOT guess, hallucinate, or invent facts.
-- If the context doesn't contain a direct answer, ask the user for clarification or suggest related queries.
-- Keep the answer short and conversational, suitable for spoken output (2-3 sentences).
+        You are a helpful voice assistant for DGF Law Firm. 
+        Answer the User's question using ONLY the retrieved Context from the database.
+        
+        Context from FAISS:
+        {context}
 
-User question:
-{query}
+        User Question: {query}
 
-CONTEXT (use only this):
-{context}
+        Guidelines:
+        1. Answer strictly based on the Context.
+        2. Keep it conversational and short (under 2 sentences).
+        3. Do not say "Based on the database" or "According to the context". Just answer.
+        4. If the context doesn't match the question, say you don't know.
+        """
 
-Voice assistant reply:
-"""
         try:
-            response = openai_client.chat.completions.create(
+            resp = await aclient.chat.completions.create(
                 model=self.llm_model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.0,
-                max_tokens=220
+                messages=[{"role": "system", "content": "You are a concise voice assistant."},
+                          {"role": "user", "content": prompt}],
+                max_tokens=150,
+                temperature=0.1 
             )
-            text = ""
-            # support different response shapes
-            if hasattr(response, "choices") and response.choices:
-                c0 = response.choices[0]
-                if hasattr(c0, "message") and getattr(c0.message, "content", None):
-                    text = c0.message.content
-                elif getattr(c0, "text", None):
-                    text = c0.text
-            elif isinstance(response, dict):
-                # fallback dict parsing
-                choices = response.get("choices", [])
-                if choices:
-                    text = choices[0].get("message", {}).get("content", "") or choices[0].get("text", "")
-            text = (text or "").strip()
-            # If model returns something suspiciously out-of-context, fallback
-            if not text:
-                return "I couldn't find a concise answer in my knowledge base. Could you rephrase?"
-            return text
+            return resp.choices[0].message.content.strip()
+
         except Exception as e:
-            logger.exception("LLM call failed: %s", e)
-            # fallback simple formatting
-            parts = context.split("\n\n")
-            if parts:
-                return parts[0][:400]
-            return "I could not generate an answer at the moment."
+            logger.error(f"LLM Generation Error: {e}")
+            return "I'm having trouble retrieving that information right now."

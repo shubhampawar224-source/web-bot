@@ -42,8 +42,6 @@ from utils.url_confirmation_service import url_confirmation_service
 from utils.admin_auth_service import admin_auth_service
 from utils.user_auth_service import user_auth_service
 from utils.url_processing_service import url_processing_service
-
-
 # from cache_manager import load_website_text
 from utils.llm_tools import get_answer_from_db
 from utils.vector_store import (
@@ -2693,49 +2691,53 @@ from dotenv import load_dotenv
 from voice_config.voice_helper import *
 # ----------------------------------
 # ENVIRONMENT SETUP
-voice_assistant = VoiceAssistant()
 
 @app.get("/voice")
 async def get_index():
     return FileResponse("static/voice.html")
 
+# assistant = RealtimeVoiceAssistant()
 
-@app.websocket("/ws/voice")
-async def ws_voice(ws: WebSocket):
-    await ws.accept()
+# @app.websocket("/ws/voice")
+# async def websocket_endpoint(websocket: WebSocket):
+#     await assistant.handle_ws(websocket)
+
+# @app.websocket("/ws/voice")
+# async def ws_voice(ws: WebSocket):
+#     await ws.accept()
     
-    session_id = str(uuid.uuid4())
-    print(f"🎧 Session Started: {session_id}")
+#     session_id = str(uuid.uuid4())
+#     print(f"🎧 Session Started: {session_id}")
 
-    # [IMPORTANT] Frontend ko batao session ID mil gaya
-    await ws.send_json({"session_id": session_id})
+#     # [IMPORTANT] Frontend ko batao session ID mil gaya
+#     await ws.send_json({"session_id": session_id})
 
-    try:
-        # Initial Greeting
-        greeting = "Hello! I am your DJF Law Firm AI Assistant, How can I help you?"
-        await voice_assistant.safe_send(ws, greeting)
+#     try:
+#         # Initial Greeting
+#         greeting = "Hello! I am your DJF Law Firm AI Assistant, How can I help you?"
+#         await voice_assistant.safe_send(ws, greeting)
 
-        while True:
-            try:
-                data = await ws.receive_json()
-            except WebSocketDisconnect:
-                break
+#         while True:
+#             try:
+#                 data = await ws.receive_json()
+#             except WebSocketDisconnect:
+#                 break
             
-            # Handle Stop Signal
-            if data.get("stop"):
-                print("🛑 User stopped manually")
-                # Yahan break nahi karenge, bas current processing rukegi
-                # kyunki 'safe_send' async hai, wo loop ko block nahi karega
-                continue
+#             # Handle Stop Signal
+#             if data.get("stop"):
+#                 print("🛑 User stopped manually")
+#                 # Yahan break nahi karenge, bas current processing rukegi
+#                 # kyunki 'safe_send' async hai, wo loop ko block nahi karega
+#                 continue
 
-            if data.get("audio"):
-                audio_bytes = base64.b64decode(data["audio"])
-                await voice_assistant.process_audio(ws, audio_bytes, session_id)
+#             if data.get("audio"):
+#                 audio_bytes = base64.b64decode(data["audio"])
+#                 await voice_assistant.process_audio(ws, audio_bytes, session_id)
 
-    except Exception as e:
-        print(f"Connection Error: {e}")
-    finally:
-        if session_id in voice_assistant.sessions:
-            del voice_assistant.sessions[session_id]
-        print(f"🔒 Session Closed: {session_id}")
+#     except Exception as e:
+#         print(f"Connection Error: {e}")
+#     finally:
+#         if session_id in voice_assistant.sessions:
+#             del voice_assistant.sessions[session_id]
+#         print(f"🔒 Session Closed: {session_id}")
         
