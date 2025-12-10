@@ -51,7 +51,14 @@ from utils.vector_store import (
     add_text_chunks_to_collection,
 )
 
-load_dotenv()
+import websockets
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+
+# Import the robust RAG agent
+from voice_config.simple_rag_agent import EnhancedRAGAgent
+
+load_dotenv(override=True)
 ALLOWED_IFRAME_ORIGINS = os.getenv("ALLOWED_IFRAME_ORIGINS", "")  # space-separated list e.g. "https://siteA.com https://siteB.com"
 
 # ---------------- Disable HuggingFace Tokenizer Warning ----------------
@@ -2679,15 +2686,6 @@ async def frame_headers_middleware(request: Request, call_next):
     return resp
 
 
-
-import io
-import base64
-import os
-import uuid
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
-from dotenv import load_dotenv
 from voice_config.voice_helper import *
 # ----------------------------------
 # ENVIRONMENT SETUP
@@ -2696,48 +2694,12 @@ from voice_config.voice_helper import *
 async def get_index():
     return FileResponse("static/voice.html")
 
-# assistant = RealtimeVoiceAssistant()
 
-# @app.websocket("/ws/voice")
-# async def websocket_endpoint(websocket: WebSocket):
-#     await assistant.handle_ws(websocket)
+# Logging Setup
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("VoiceServer")
 
-# @app.websocket("/ws/voice")
-# async def ws_voice(ws: WebSocket):
-#     await ws.accept()
-    
-#     session_id = str(uuid.uuid4())
-#     print(f"🎧 Session Started: {session_id}")
-
-#     # [IMPORTANT] Frontend ko batao session ID mil gaya
-#     await ws.send_json({"session_id": session_id})
-
-#     try:
-#         # Initial Greeting
-#         greeting = "Hello! I am your DJF Law Firm AI Assistant, How can I help you?"
-#         await voice_assistant.safe_send(ws, greeting)
-
-#         while True:
-#             try:
-#                 data = await ws.receive_json()
-#             except WebSocketDisconnect:
-#                 break
-            
-#             # Handle Stop Signal
-#             if data.get("stop"):
-#                 print("🛑 User stopped manually")
-#                 # Yahan break nahi karenge, bas current processing rukegi
-#                 # kyunki 'safe_send' async hai, wo loop ko block nahi karega
-#                 continue
-
-#             if data.get("audio"):
-#                 audio_bytes = base64.b64decode(data["audio"])
-#                 await voice_assistant.process_audio(ws, audio_bytes, session_id)
-
-#     except Exception as e:
-#         print(f"Connection Error: {e}")
-#     finally:
-#         if session_id in voice_assistant.sessions:
-#             del voice_assistant.sessions[session_id]
-#         print(f"🔒 Session Closed: {session_id}")
-        
+@app.websocket("/ws/voice")
+async def voice_socket(websocket: WebSocket):
+    logger.info("Client connected.")
+    await communication(websocket)

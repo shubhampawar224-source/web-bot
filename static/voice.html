@@ -4,11 +4,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Voice Assistant (Fast VAD)</title>
+    <title>AI Voice Agent (Echo Proof)</title>
     <style>
-        /* --- CSS STYLES --- */
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Segoe UI', sans-serif;
             background-color: #f0f2f5;
             display: flex;
             justify-content: center;
@@ -20,7 +19,7 @@
         .main-container {
             width: 100%;
             max-width: 450px;
-            height: 80vh;
+            height: 90vh;
             background: white;
             border-radius: 20px;
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
@@ -35,7 +34,6 @@
             padding: 15px;
             text-align: center;
             font-weight: 600;
-            font-size: 1.1rem;
         }
 
         .chat-box {
@@ -105,22 +103,22 @@
             transition: all 0.2s ease;
         }
 
-        .mic-button svg {
-            width: 30px;
-            height: 30px;
-            fill: white;
-        }
-
         .mic-button.recording {
             background-color: #dc3545;
             box-shadow: 0 0 0 5px rgba(220, 53, 69, 0.2);
         }
 
-        /* ⭐ Visual Feedback for Sending Audio */
-        .mic-button.sending {
-            background-color: #28a745 !important;
-            /* Green blink */
-            transform: scale(0.95);
+        /* Visual indicator when AI is speaking (Mic Disabled) */
+        .mic-button.listening-blocked {
+            background-color: #6c757d;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        .mic-button svg {
+            width: 30px;
+            height: 30px;
+            fill: white;
         }
 
         @keyframes fadeIn {
@@ -141,9 +139,7 @@
 
     <div class="main-container">
         <div class="header">🎙️ AI Voice Agent</div>
-
         <div class="chat-box" id="chatBox"></div>
-
         <div class="controls">
             <div class="status-text" id="statusText">Ready</div>
             <button class="mic-button" id="micBtn">
@@ -162,15 +158,32 @@
         const micBtn = document.getElementById("micBtn");
 
         let ws;
-        let audioCtx;
-        let workletNode;
+        let audioCtx;     // For Mic
+        let playbackCtx;  // For Speaker
+        let micWorklet;
         let source;
         let stream;
         let isRecording = false;
 
-        const SAMPLE_RATE = 24000;
+        // Player State
+        let nextStartTime = 0;
+        let activeSources = [];
+
+        // ⭐ NEW FLAG: AI Speaking State ⭐
+        let isAiSpeaking = false;
+
+        const MIC_SAMPLE_RATE = 24000;
 
         micBtn.onclick = async () => {
+            // Agar AI bol raha hai, toh click karne pe usse chup karao (Interruption)
+            if (isAiSpeaking) {
+                stopAudioPlayback();
+                isAiSpeaking = false;
+                micBtn.classList.remove("listening-blocked");
+                statusText.textContent = "Listening...";
+                return;
+            }
+
             if (!isRecording) {
                 await startConnection();
             } else {
@@ -182,15 +195,15 @@
             try {
                 statusText.textContent = "Connecting...";
 
-                // Initialize Audio Context immediately (User Gesture)
-                if (!audioCtx) {
-                    audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: SAMPLE_RATE });
-                }
-                if (audioCtx.state === 'suspended') {
-                    await audioCtx.resume();
-                }
+                playbackCtx = new (window.AudioContext || window.webkitAudioContext)();
+                nextStartTime = 0;
 
-                ws = new WebSocket("ws://" + location.host + "/ws/voice");
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: MIC_SAMPLE_RATE });
+                if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+                const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+                const wsUrl = `${protocol}//${window.location.host}/ws/voice`;
+                ws = new WebSocket(wsUrl);
 
                 ws.onopen = async () => {
                     statusText.textContent = "Connected. Starting Mic...";
@@ -201,31 +214,20 @@
                 };
 
                 ws.onmessage = async (event) => {
+                    if (!isRecording) return;
                     const data = JSON.parse(event.data);
 
-                    if (data.type === "transcript") {
-                        addMessage(data.text, data.role);
-                    }
-
-                    if (data.type === "log") {
-                        statusText.textContent = data.message;
-                    }
+                    if (data.type === "transcript") addMessage(data.text, data.role);
+                    if (data.type === "log") statusText.textContent = data.message;
 
                     if (data.type === "audio_chunk") {
-                        statusText.textContent = "Speaking...";
-                        await playAudioChunk(data.audio);
+                        statusText.textContent = "AI Speaking...";
+                        handleAudioChunk(data.audio);
                     }
                 };
 
-                ws.onclose = () => {
-                    stopConnection();
-                    statusText.textContent = "Disconnected";
-                };
-
-                ws.onerror = (err) => {
-                    console.error("WS Error", err);
-                    statusText.textContent = "Connection Error";
-                }
+                ws.onclose = () => { stopConnection(); statusText.textContent = "Disconnected"; };
+                ws.onerror = (err) => { console.error("WS Error", err); statusText.textContent = "Connection Error"; }
 
             } catch (err) {
                 console.error("Error:", err);
@@ -233,83 +235,139 @@
             }
         }
 
-        async function startMicrophone() {
-            stream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    channelCount: 1,
-                    sampleRate: SAMPLE_RATE,
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true // Helps if volume is low
-                }
-            });
+        function handleAudioChunk(base64Audio) {
+            if (!playbackCtx || playbackCtx.state === 'closed') return;
 
-            source = audioCtx.createMediaStreamSource(stream);
+            // ⭐ 1. Mark AI as Speaking
+            isAiSpeaking = true;
+            micBtn.classList.add("listening-blocked"); // Visual UI update
 
-            const processorCode = `
-                class PCMProcessor extends AudioWorkletProcessor {
-                    process(inputs, outputs, parameters) {
-                        const input = inputs[0];
-                        if (input.length > 0) {
-                            const float32Data = input[0];
-                            this.port.postMessage(float32Data);
-                        }
-                        return true;
-                    }
-                }
-                registerProcessor('pcm-processor', PCMProcessor);
-            `;
+            const binaryString = window.atob(base64Audio);
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) bytes[i] = binaryString.charCodeAt(i);
 
-            const blob = new Blob([processorCode], { type: "text/javascript" });
-            const url = URL.createObjectURL(blob);
+            const float32Data = new Float32Array(len / 2);
+            const dataView = new DataView(bytes.buffer);
 
-            try {
-                await audioCtx.audioWorklet.addModule(url);
-            } catch (e) {
-                // Ignore if already added
+            for (let i = 0; i < float32Data.length; i++) {
+                const int16 = dataView.getInt16(i * 2, true);
+                float32Data[i] = int16 / 32768.0;
             }
 
-            workletNode = new AudioWorkletNode(audioCtx, 'pcm-processor');
+            const audioBuffer = playbackCtx.createBuffer(1, float32Data.length, 24000);
+            audioBuffer.getChannelData(0).set(float32Data);
 
-            let bufferAccumulator = [];
+            const source = playbackCtx.createBufferSource();
+            source.buffer = audioBuffer;
+            source.connect(playbackCtx.destination);
 
-            workletNode.port.onmessage = (e) => {
-                if (!isRecording || ws.readyState !== WebSocket.OPEN) return;
+            const currentTime = playbackCtx.currentTime;
+            if (nextStartTime < currentTime) nextStartTime = currentTime + 0.1;
 
-                const float32Chunk = e.data;
-                bufferAccumulator.push(...float32Chunk);
+            source.start(nextStartTime);
+            nextStartTime += audioBuffer.duration;
 
-                // ⭐ FIXED: Reduced buffer size from 4096 to 1024 (Faster sending)
-                if (bufferAccumulator.length >= 1024) {
-                    const chunkToSend = new Float32Array(bufferAccumulator);
-                    bufferAccumulator = [];
+            activeSources.push(source);
 
-                    const pcmData = floatTo16BitPCM(chunkToSend);
-                    const base64Audio = arrayBufferToBase64(pcmData);
-                    ws.send(JSON.stringify({ audio: base64Audio }));
+            source.onended = () => {
+                activeSources = activeSources.filter(s => s !== source);
 
-                    // Visual Feedback (Blink Green)
-                    requestAnimationFrame(() => {
-                        micBtn.classList.add("sending");
-                        setTimeout(() => micBtn.classList.remove("sending"), 100);
-                    });
+                // ⭐ 2. Only Unmute Mic when ALL audio is finished
+                if (activeSources.length === 0) {
+                    isAiSpeaking = false;
+                    micBtn.classList.remove("listening-blocked");
+                    if (isRecording) statusText.textContent = "Listening...";
                 }
             };
+        }
 
-            source.connect(workletNode);
-            workletNode.connect(audioCtx.destination);
+        async function startMicrophone() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        channelCount: 1,
+                        sampleRate: MIC_SAMPLE_RATE,
+                        echoCancellation: true, // Echo cancel is still good backup
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                });
+
+                source = audioCtx.createMediaStreamSource(stream);
+
+                const micCode = `
+                    class PCMProcessor extends AudioWorkletProcessor {
+                        process(inputs, outputs) {
+                            const input = inputs[0];
+                            if (input.length > 0) {
+                                this.port.postMessage(input[0]);
+                            }
+                            return true;
+                        }
+                    }
+                    registerProcessor('pcm-processor', PCMProcessor);
+                `;
+
+                const blob = new Blob([micCode], { type: "text/javascript" });
+                await audioCtx.audioWorklet.addModule(URL.createObjectURL(blob));
+
+                micWorklet = new AudioWorkletNode(audioCtx, 'pcm-processor');
+
+                let bufferAccumulator = [];
+
+                micWorklet.port.onmessage = (e) => {
+                    if (!isRecording || ws.readyState !== WebSocket.OPEN) return;
+
+                    // ⭐ 3. CRITICAL LOGIC: BLOCK MIC WHEN AI IS SPEAKING ⭐
+                    if (isAiSpeaking) {
+                        bufferAccumulator = []; // Clear user input while AI speaks
+                        return; // Don't send anything!
+                    }
+
+                    const float32Chunk = e.data;
+                    bufferAccumulator.push(...float32Chunk);
+
+                    if (bufferAccumulator.length >= 4096) {
+                        const chunkToSend = new Float32Array(bufferAccumulator);
+                        bufferAccumulator = [];
+
+                        const pcmData = floatTo16BitPCM(chunkToSend);
+                        const base64Audio = arrayBufferToBase64(pcmData);
+                        ws.send(JSON.stringify({ audio: base64Audio }));
+                    }
+                };
+
+                source.connect(micWorklet);
+                micWorklet.connect(audioCtx.destination);
+            } catch (error) {
+                console.error("Mic Error:", error);
+            }
         }
 
         function stopConnection() {
             isRecording = false;
+            isAiSpeaking = false; // Reset flag
             micBtn.classList.remove("recording");
+            micBtn.classList.remove("listening-blocked");
             statusText.textContent = "Ready";
 
-            if (workletNode) { workletNode.disconnect(); workletNode = null; }
-            if (source) { source.disconnect(); source = null; }
-            if (stream) { stream.getTracks().forEach(track => track.stop()); stream = null; }
             if (ws) { ws.close(); ws = null; }
-            // Note: Don't close audioCtx, just reuse it
+            stopAudioPlayback();
+
+            if (playbackCtx) { playbackCtx.close(); playbackCtx = null; }
+            if (audioCtx) { audioCtx.close(); audioCtx = null; }
+            if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+        }
+
+        function stopAudioPlayback() {
+            activeSources.forEach(s => { try { s.stop(); } catch (e) { } });
+            activeSources = [];
+            if (playbackCtx) nextStartTime = playbackCtx.currentTime;
+
+            // Allow mic again immediately
+            isAiSpeaking = false;
+            micBtn.classList.remove("listening-blocked");
         }
 
         function addMessage(text, role) {
@@ -321,7 +379,6 @@
             chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' });
         }
 
-        // --- UTILS ---
         function floatTo16BitPCM(input) {
             const output = new Int16Array(input.length);
             for (let i = 0; i < input.length; i++) {
@@ -335,71 +392,8 @@
             let binary = '';
             const bytes = new Uint8Array(buffer);
             const len = bytes.byteLength;
-            for (let i = 0; i < len; i++) {
-                binary += String.fromCharCode(bytes[i]);
-            }
+            for (let i = 0; i < len; i++) { binary += String.fromCharCode(bytes[i]); }
             return window.btoa(binary);
-        }
-
-        // --- AUDIO PLAYER ---
-        // Using separate context for playback to avoid mic feedback loops issues
-        let playbackCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
-        let nextStartTime = 0;
-
-        async function playAudioChunk(base64Audio) {
-            try {
-                if (playbackCtx.state === 'suspended') await playbackCtx.resume();
-
-                const binaryString = window.atob(base64Audio);
-                const len = binaryString.length;
-                const bytes = new Uint8Array(len);
-                for (let i = 0; i < len; i++) { bytes[i] = binaryString.charCodeAt(i); }
-
-                const wavBytes = addWavHeader(bytes, 24000, 1);
-                const audioBuffer = await playbackCtx.decodeAudioData(wavBytes.buffer);
-
-                const source = playbackCtx.createBufferSource();
-                source.buffer = audioBuffer;
-                source.connect(playbackCtx.destination);
-
-                const now = playbackCtx.currentTime;
-                if (nextStartTime < now) nextStartTime = now;
-
-                source.start(nextStartTime);
-                nextStartTime += audioBuffer.duration;
-
-                source.onended = () => {
-                    if (playbackCtx.currentTime >= nextStartTime && isRecording) {
-                        statusText.textContent = "Listening...";
-                    }
-                };
-            } catch (e) {
-                console.error("Playback error", e);
-            }
-        }
-
-        function addWavHeader(samples, sampleRate, numChannels) {
-            const buffer = new ArrayBuffer(44 + samples.length);
-            const view = new DataView(buffer);
-            const writeString = (view, offset, string) => {
-                for (let i = 0; i < string.length; i++) view.setUint8(offset + i, string.charCodeAt(i));
-            };
-            writeString(view, 0, 'RIFF');
-            view.setUint32(4, 36 + samples.length, true);
-            writeString(view, 8, 'WAVE');
-            writeString(view, 12, 'fmt ');
-            view.setUint32(16, 16, true);
-            view.setUint16(20, 1, true);
-            view.setUint16(22, numChannels, true);
-            view.setUint32(24, sampleRate, true);
-            view.setUint32(28, sampleRate * numChannels * 2, true);
-            view.setUint16(32, numChannels * 2, true);
-            view.setUint16(34, 16, true);
-            writeString(view, 36, 'data');
-            view.setUint32(40, samples.length, true);
-            const dataView = new Uint8Array(buffer, 44);
-            dataView.set(samples);
-            return new Uint8Array(buffer);
         }
     </script>
 </body>
