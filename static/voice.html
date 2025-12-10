@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Voice Agent (Echo Proof)</title>
+    <title>AI Voice Agent (Interruption Enabled)</title>
     <style>
         body {
             font-family: 'Segoe UI', sans-serif;
@@ -108,13 +108,6 @@
             box-shadow: 0 0 0 5px rgba(220, 53, 69, 0.2);
         }
 
-        /* Visual indicator when AI is speaking (Mic Disabled) */
-        .mic-button.listening-blocked {
-            background-color: #6c757d;
-            cursor: not-allowed;
-            opacity: 0.6;
-        }
-
         .mic-button svg {
             width: 30px;
             height: 30px;
@@ -158,32 +151,20 @@
         const micBtn = document.getElementById("micBtn");
 
         let ws;
-        let audioCtx;     // For Mic
-        let playbackCtx;  // For Speaker
+        let audioCtx;
+        let playbackCtx;
         let micWorklet;
         let source;
         let stream;
         let isRecording = false;
 
-        // Player State
-        let nextStartTime = 0;
         let activeSources = [];
-
-        // ⭐ NEW FLAG: AI Speaking State ⭐
+        let nextStartTime = 0;
         let isAiSpeaking = false;
 
         const MIC_SAMPLE_RATE = 24000;
 
         micBtn.onclick = async () => {
-            // Agar AI bol raha hai, toh click karne pe usse chup karao (Interruption)
-            if (isAiSpeaking) {
-                stopAudioPlayback();
-                isAiSpeaking = false;
-                micBtn.classList.remove("listening-blocked");
-                statusText.textContent = "Listening...";
-                return;
-            }
-
             if (!isRecording) {
                 await startConnection();
             } else {
@@ -206,7 +187,7 @@
                 ws = new WebSocket(wsUrl);
 
                 ws.onopen = async () => {
-                    statusText.textContent = "Connected. Starting Mic...";
+                    statusText.textContent = "Connected.";
                     micBtn.classList.add("recording");
                     isRecording = true;
                     await startMicrophone();
@@ -222,6 +203,7 @@
 
                     if (data.type === "audio_chunk") {
                         statusText.textContent = "AI Speaking...";
+                        isAiSpeaking = true;
                         handleAudioChunk(data.audio);
                     }
                 };
@@ -235,12 +217,9 @@
             }
         }
 
+        // --- PLAYBACK ENGINE ---
         function handleAudioChunk(base64Audio) {
             if (!playbackCtx || playbackCtx.state === 'closed') return;
-
-            // ⭐ 1. Mark AI as Speaking
-            isAiSpeaking = true;
-            micBtn.classList.add("listening-blocked"); // Visual UI update
 
             const binaryString = window.atob(base64Audio);
             const len = binaryString.length;
@@ -249,10 +228,8 @@
 
             const float32Data = new Float32Array(len / 2);
             const dataView = new DataView(bytes.buffer);
-
             for (let i = 0; i < float32Data.length; i++) {
-                const int16 = dataView.getInt16(i * 2, true);
-                float32Data[i] = int16 / 32768.0;
+                float32Data[i] = dataView.getInt16(i * 2, true) / 32768.0;
             }
 
             const audioBuffer = playbackCtx.createBuffer(1, float32Data.length, 24000);
@@ -269,14 +246,10 @@
             nextStartTime += audioBuffer.duration;
 
             activeSources.push(source);
-
             source.onended = () => {
                 activeSources = activeSources.filter(s => s !== source);
-
-                // ⭐ 2. Only Unmute Mic when ALL audio is finished
                 if (activeSources.length === 0) {
                     isAiSpeaking = false;
-                    micBtn.classList.remove("listening-blocked");
                     if (isRecording) statusText.textContent = "Listening...";
                 }
             };
@@ -284,11 +257,12 @@
 
         async function startMicrophone() {
             try {
+                // Echo Cancellation zaroori hai
                 stream = await navigator.mediaDevices.getUserMedia({
                     audio: {
                         channelCount: 1,
                         sampleRate: MIC_SAMPLE_RATE,
-                        echoCancellation: true, // Echo cancel is still good backup
+                        echoCancellation: true,
                         noiseSuppression: true,
                         autoGainControl: true
                     }
@@ -319,19 +293,31 @@
                 micWorklet.port.onmessage = (e) => {
                     if (!isRecording || ws.readyState !== WebSocket.OPEN) return;
 
-                    // ⭐ 3. CRITICAL LOGIC: BLOCK MIC WHEN AI IS SPEAKING ⭐
-                    if (isAiSpeaking) {
-                        bufferAccumulator = []; // Clear user input while AI speaks
-                        return; // Don't send anything!
-                    }
-
                     const float32Chunk = e.data;
+
+                    // ⭐ INTERRUPTION LOGIC (Local VAD) ⭐
+                    if (isAiSpeaking) {
+                        // Volume Check: Calculate RMS (Root Mean Square)
+                        let sum = 0;
+                        for (let i = 0; i < float32Chunk.length; i++) {
+                            sum += float32Chunk[i] * float32Chunk[i];
+                        }
+                        const rms = Math.sqrt(sum / float32Chunk.length);
+
+                        // Threshold: 0.02 (Adjust agar sensitivity kam/zyada karni ho)
+                        if (rms > 0.02) {
+                            console.log("Interruption Detected! Volume:", rms);
+                            stopAudioPlayback(); // Turant Speaker Band
+                            isAiSpeaking = false;
+                        }
+                    }
+                    // ----------------------------------------
+
                     bufferAccumulator.push(...float32Chunk);
 
                     if (bufferAccumulator.length >= 4096) {
                         const chunkToSend = new Float32Array(bufferAccumulator);
                         bufferAccumulator = [];
-
                         const pcmData = floatTo16BitPCM(chunkToSend);
                         const base64Audio = arrayBufferToBase64(pcmData);
                         ws.send(JSON.stringify({ audio: base64Audio }));
@@ -347,9 +333,7 @@
 
         function stopConnection() {
             isRecording = false;
-            isAiSpeaking = false; // Reset flag
             micBtn.classList.remove("recording");
-            micBtn.classList.remove("listening-blocked");
             statusText.textContent = "Ready";
 
             if (ws) { ws.close(); ws = null; }
@@ -361,13 +345,12 @@
         }
 
         function stopAudioPlayback() {
+            // Sabhi active sounds ko roko
             activeSources.forEach(s => { try { s.stop(); } catch (e) { } });
             activeSources = [];
-            if (playbackCtx) nextStartTime = playbackCtx.currentTime;
 
-            // Allow mic again immediately
-            isAiSpeaking = false;
-            micBtn.classList.remove("listening-blocked");
+            // Queue reset karo taaki future audio bhi na baje
+            if (playbackCtx) nextStartTime = playbackCtx.currentTime;
         }
 
         function addMessage(text, role) {
