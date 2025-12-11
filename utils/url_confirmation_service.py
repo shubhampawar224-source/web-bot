@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from database.db import SessionLocal
 from model.url_injection_models import URLInjectionRequest
 
-load_dotenv()
+load_dotenv(override=True)
 
 class URLConfirmationService:
     def __init__(self):

@@ -75,15 +75,6 @@ async def startup_event():
         print("🔧 Initializing database tables...")
         init_db()
         print("✅ Database tables initialized successfully!")
-        
-        # Test OpenAI API connectivity
-        print("🔧 Testing OpenAI API connectivity...")
-        from utils.llm_tools import test_connectivity
-        if test_connectivity():
-            print("✅ OpenAI API connectivity verified!")
-        else:
-            print("⚠️  OpenAI API connectivity test failed - chat functionality may be limited")
-        
         # Initialize admin system
         print("🔧 Initializing admin system...")
         admin_auth_service.initialize_default_admin()
@@ -193,6 +184,10 @@ async def get_index():
     return FileResponse("static/voice.html")
 
 
+@app.get("/call")
+async def get_call():
+    return FileResponse("static/call.html")
+
 @app.post("/chat")
 async def chat_endpoint(data: ChatRequest):
     session_id = data.session_id or str(uuid.uuid4())
@@ -227,7 +222,7 @@ async def chat_endpoint(data: ChatRequest):
                 print(f"⚠️ Error getting user API key: {e}")
 
         # Get firm-specific answer from vector DB
-        answer = get_answer_from_db(
+        answer = await get_answer_from_db(
             query=query,
             session_id=session_id,
             firm_id=firm.id,
@@ -380,7 +375,7 @@ async def chat_url_specific(data: dict):
         # Use URL-specific context with request_ids
         if request_ids:
             print(f"🎯 Using URL-specific context with {len(request_ids)} request IDs")
-            answer = get_answer_from_db(
+            answer = await get_answer_from_db(
                 query=query, 
                 session_id=session_id, 
                 url_context=','.join(request_ids),
@@ -388,7 +383,7 @@ async def chat_url_specific(data: dict):
             )
         elif firm_id:
             print(f"🏢 Fallback to firm-based search (firm_id: {firm_id})")
-            answer = get_answer_from_db(
+            answer = await get_answer_from_db(
                 query=query, 
                 session_id=session_id, 
                 firm_id=firm_id,
@@ -396,7 +391,7 @@ async def chat_url_specific(data: dict):
             )
         else:
             print(f"🌐 Using general knowledge fallback")
-            answer = get_answer_from_db(
+            answer = await get_answer_from_db(
                 query=query, 
                 session_id=session_id,
                 custom_api_key=custom_api_key
@@ -700,14 +695,6 @@ async def get_widget_firm_info(urls: Optional[str] = None, user_id: Optional[str
             "status": "error",
             "message": str(e)
         }
-
-# ----------------- WebSocket voice assistant ----------------
-
-@app.get("/config")
-def get_config():
-    return {
-        "baseUrl": os.getenv("WIDGET_BASE_URL")  # only public value
-    }
 
 # ---------------- Admin Panel Endpoints ----------------
 

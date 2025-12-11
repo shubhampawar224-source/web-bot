@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Call Request Form</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* Toast Animation */
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeOut {
+            from {
+                opacity: 1;
+            }
+
+            to {
+                opacity: 0;
+            }
+        }
+
+        .toast-enter {
+            animation: slideIn 0.5s ease-out forwards;
+        }
+
+        .toast-exit {
+            animation: fadeOut 0.5s ease-out forwards;
+        }
+    </style>
+</head>
+
+<body class="bg-slate-900 text-white min-h-screen flex items-center justify-center p-4">
+
+    <!-- Success Notification (Hidden by default) -->
+    <div id="notification" class="fixed top-5 right-5 hidden z-50">
+        <div
+            class="bg-green-600 text-white px-6 py-4 rounded-lg shadow-2xl flex items-center gap-3 border border-green-500">
+            <i class="fas fa-check-circle text-xl"></i>
+            <div>
+                <h4 class="font-bold text-sm">Request Submitted!</h4>
+                <p class="text-xs opacity-90">Calling user in background...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Form Card -->
+    <div
+        class="bg-slate-800 p-8 rounded-2xl shadow-2xl w-full max-w-md border border-slate-700 relative overflow-hidden">
+
+        <div class="text-center mb-6 relative z-10">
+            <h1 class="text-2xl font-bold tracking-tight text-blue-400">Request a Call</h1>
+            <p class="text-slate-400 text-sm mt-1">Fill details to receive an AI call immediately.</p>
+        </div>
+
+        <form id="callForm" onsubmit="handleSubmit(event)" class="space-y-4 relative z-10">
+            <!-- Name Input -->
+            <div>
+                <label class="block text-xs font-semibold text-slate-400 mb-1 uppercase">Full Name</label>
+                <div class="relative">
+                    <span class="absolute left-3 top-3 text-slate-500"><i class="fas fa-user"></i></span>
+                    <input type="text" id="userName" required placeholder="John Doe"
+                        class="w-full bg-slate-900/50 border border-slate-600 rounded-lg px-10 py-2.5 text-white placeholder-slate-600 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all">
+                </div>
+            </div>
+
+            <!-- Email Input -->
+            <div>
+                <label class="block text-xs font-semibold text-slate-400 mb-1 uppercase">Email Address</label>
+                <div class="relative">
+                    <span class="absolute left-3 top-3 text-slate-500"><i class="fas fa-envelope"></i></span>
+                    <input type="email" id="userEmail" required placeholder="john@example.com"
+                        class="w-full bg-slate-900/50 border border-slate-600 rounded-lg px-10 py-2.5 text-white placeholder-slate-600 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all">
+                </div>
+            </div>
+
+            <!-- Phone Input -->
+            <div>
+                <label class="block text-xs font-semibold text-slate-400 mb-1 uppercase">Mobile Number</label>
+                <div class="relative">
+                    <span class="absolute left-3 top-3 text-slate-500"><i class="fas fa-phone"></i></span>
+                    <input type="tel" id="userPhone" required placeholder="+919876543210"
+                        class="w-full bg-slate-900/50 border border-slate-600 rounded-lg px-10 py-2.5 text-white placeholder-slate-600 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all">
+                </div>
+                <p class="text-xs text-slate-500 mt-1 ml-1">Include country code (e.g., +91)</p>
+            </div>
+
+            <!-- Submit Button -->
+            <button type="submit" id="submitBtn"
+                class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-lg transition-all shadow-lg mt-2 flex items-center justify-center gap-2">
+                <span>Submit Request</span>
+                <i class="fas fa-paper-plane"></i>
+            </button>
+        </form>
+
+        <!-- Status/Debug Area (Optional, hidden primarily) -->
+        <div id="statusArea" class="mt-4 text-center hidden">
+            <p class="text-xs text-slate-500">Call Status: <span id="callStatusText"
+                    class="text-blue-400">Processing...</span></p>
+        </div>
+
+    </div>
+
+    <script>
+        async function handleSubmit(e) {
+            e.preventDefault(); // Page refresh roko
+
+            const name = document.getElementById('userName').value;
+            const email = document.getElementById('userEmail').value;
+            const phone = document.getElementById('userPhone').value;
+            const btn = document.getElementById('submitBtn');
+            const form = document.getElementById('callForm');
+
+            // 1. UI Feedback: Loading
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+            btn.disabled = true;
+
+            try {
+                // 2. Send Data to Backend
+                // Hum 'await' use kar rahe hain connection check karne ke liye,
+                // par user ko turant success dikhayenge agar request chali gayi.
+
+                fetch('/make-call', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: name,
+                        email: email,
+                        phone: phone
+                    })
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log("Call initiated:", data);
+                        // Agar backend se confirm ho gaya ki call queue ho gayi
+                    })
+                    .catch(err => console.error("Error:", err));
+
+                // 3. User Experience: Fake delay (optional) for feel -> Show Success
+                setTimeout(() => {
+                    showNotification();
+                    form.reset(); // Clear Form
+
+                    // Reset Button
+                    btn.innerHTML = '<span>Submit Request</span><i class="fas fa-paper-plane"></i>';
+                    btn.disabled = false;
+                }, 800); // 0.8 sec delay for smooth UX
+
+            } catch (error) {
+                console.error(error);
+                alert("Something went wrong!");
+                btn.disabled = false;
+                btn.innerHTML = '<span>Submit Request</span><i class="fas fa-paper-plane"></i>';
+            }
+        }
+
+        function showNotification() {
+            const notif = document.getElementById('notification');
+            notif.classList.remove('hidden');
+            notif.classList.add('toast-enter');
+
+            // Hide after 3 seconds
+            setTimeout(() => {
+                notif.classList.remove('toast-enter');
+                notif.classList.add('toast-exit');
+                setTimeout(() => {
+                    notif.classList.add('hidden');
+                    notif.classList.remove('toast-exit');
+                }, 500);
+            }, 3000);
+        }
+    </script>
+</body>
+
+</html>

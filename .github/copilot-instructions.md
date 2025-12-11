@@ -85,7 +85,6 @@ Model_name=gpt-4o
 ```
 
 ### Key Config Locations
-- `config.py`: Centralized config loading
 - `loges.py`: Logging setup (imported at startup)
 - `requirements.txt`: Python 3.9 < 3.11 required
 

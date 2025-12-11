@@ -1,356 +1,115 @@
-# utils/chat_service.py
-
-import re
 import uuid
-from datetime import datetime
-from typing import Tuple, List, Optional
-from fastapi.responses import JSONResponse
-from sqlalchemy.orm import Session
-# from langchain.chat_models import ChatOpenAI
-from langchain_openai import ChatOpenAI
+import asyncio
+import os
 import httpx
-import openai
-from openai import OpenAI
+from datetime import datetime
+from typing import Optional, List, Dict
+from collections import deque
+from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
 
-from database.db import SessionLocal
-from model.models import Firm, Website
+# Database imports REMOVED for speed
 from utils.vector_store import collection, embedding_model
-from utils.prompt_engine import my_prompt_function, session_memory
-from config import OPENAI_API_KEY
+from utils.prompt_engine import my_prompt_function
+from utils.memory import SESSION_STORE
 
-# Agentic Search - Intelligent multi-query bypass
+# Import Optimized Agentic Search
 try:
     from utils.agentic_search import AgenticSearchAgent
     AGENTIC_SEARCH_ENABLED = True
-    print("✅ Agentic Search enabled - will auto-activate for fuzzy queries")
+    print("✅ Agentic Search enabled")
 except ImportError:
     AGENTIC_SEARCH_ENABLED = False
     print("⚠️ Agentic Search not available")
 
-# Debug API key loading
-if OPENAI_API_KEY:
-    print(f"✅ OpenAI API key loaded (starts...)")
-else:
-    print("❌ OpenAI API key not found in environment variables")
+load_dotenv(override=True)
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# ---------------- LLM Setup with Error Handling ----------------
-def create_llm_client():
-    """Create LLM client with proper timeout and retry settings"""
+# ==============================================================================
+# 1. ULTRA-FAST LLM CLIENT SETUP
+# ==============================================================================
+
+connection_limits = httpx.Limits(max_connections=50, max_keepalive_connections=20)
+
+sync_http_client = httpx.Client(limits=connection_limits, timeout=20.0)
+async_http_client = httpx.AsyncClient(limits=connection_limits, timeout=20.0)
+
+llm = ChatOpenAI(
+    model_name="gpt-4o",
+    temperature=0,
+    openai_api_key=OPENAI_API_KEY,
+    http_client=sync_http_client,        
+    http_async_client=async_http_client, 
+    request_timeout=20,
+    max_retries=1
+)
+
+# ==============================================================================
+# 2. IN-MEMORY SESSION STORE (Integrated Memory Logic)
+# ==============================================================================
+
+# Global Store: { "session_id": deque([{role:..., content:...}]) }
+# Ye RAM mein rahega for instant access
+SESSION_STORE: Dict[str, deque] = {}
+
+def get_chat_history_str(session_id: str) -> str:
+    """Fetch recent history formatted for prompt"""
+    history = SESSION_STORE.get(session_id)
+    if not history:
+        return ""
+    
+    # Format: "User: ... \n Assistant: ..."
+    return "\n".join([f"{msg['role'].title()}: {msg['content']}" for msg in history])
+
+def add_to_history(session_id: str, user_q: str, ai_a: str):
+    """Update history (Keep last 6 turns)"""
+    if session_id not in SESSION_STORE:
+        SESSION_STORE[session_id] = deque(maxlen=6)
+    
+    SESSION_STORE[session_id].append({"role": "user", "content": user_q})
+    SESSION_STORE[session_id].append({"role": "assistant", "content": ai_a})
+
+def update_followup_suggestions(answer_text: str):
+    """Extracts follow-up suggestions from text and updates global memory"""
     try:
-        # Create direct OpenAI client as fallback
-        openai_client = OpenAI(
-            api_key=OPENAI_API_KEY,
-            timeout=30.0,  # 30 second timeout
-            max_retries=3
-        )
-        
-        # Create LangChain ChatOpenAI with custom HTTP client
-        custom_http_client = httpx.Client(
-            timeout=30.0,
-            limits=httpx.Limits(max_connections=10, max_keepalive_connections=5)
-        )
-        
-        llm = ChatOpenAI(
-            model_name="gpt-4o", 
-            temperature=0, 
-            openai_api_key=OPENAI_API_KEY,
-            http_client=custom_http_client,
-            request_timeout=30
-        )
-        
-        return llm, openai_client
-    except Exception as e:
-        print(f"Error creating LLM client: {e}")
-        return None, None
+        if "**Follow-Up" in answer_text:
+            # Parse text like "- Question 1"
+            section = answer_text.split("**Follow-Up")[1]
+            suggestions = [
+                line.strip()[2:] 
+                for line in section.splitlines() 
+                if line.strip().startswith("- ")
+            ]
+            if suggestions:
+                SESSION_STORE["previous_suggestions"] = suggestions
+    except Exception:
+        pass
 
-llm, openai_client = create_llm_client()
+# ==============================================================================
+# 3. ASYNC HELPERS
+# ==============================================================================
 
-def test_connectivity():
-    """Test connectivity to OpenAI API"""
+async def get_embedding_async(text: str):
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, lambda: embedding_model.encode(text).tolist())
+
+async def search_vector_db_async(query_embedding, firm_id, n_results=5):
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, lambda: collection.query(
+        query_embeddings=[query_embedding],
+        n_results=n_results,
+        where={"$and": [
+            {"type": {"$in": ["website", "manual_knowledge"]}},
+            {"firm_id": str(firm_id)}
+        ]}
+    ))
+
+async def save_chat_background(session_id, firm_id, answer_text):
+    """Save to Vector DB (Disk) without making user wait"""
     try:
-        if openai_client is not None:
-            # Make a simple API call to test connectivity
-            response = openai_client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[{"role": "user", "content": "Hello"}],
-                max_tokens=5,
-                timeout=10
-            )
-            print("✅ OpenAI API connectivity test successful")
-            return True
-    except httpx.ConnectError:
-        print("❌ Network connectivity issue - cannot reach OpenAI API")
-        return False
-    except openai.AuthenticationError:
-        print("❌ Invalid OpenAI API key")
-        return False
-    except Exception as e:
-        print(f"❌ Connectivity test failed: {e}")
-        return False
-
-def call_llm_with_fallback(prompt_text: str, max_retries: int = 3, custom_api_key: str = None) -> str:
-    """Call LLM with fallback to direct OpenAI client if LangChain fails"""
-    
-    # Use custom API key if provided
-    active_openai_client = openai_client
-    active_llm = llm
-    
-    if custom_api_key:
-        print("Using custom API key for LLM call")
-        # Create temporary client with custom API key
-        try:
-            custom_openai_client = OpenAI(
-                api_key=custom_api_key,
-                timeout=30.0,
-                max_retries=3
-            )
-            active_openai_client = custom_openai_client
-            
-            # Create custom LangChain client (httpx already imported at top)
-            custom_http_client = httpx.Client(
-                timeout=30.0,
-                limits=httpx.Limits(max_connections=10, max_keepalive_connections=5)
-            )
-            
-            active_llm = ChatOpenAI(
-                model_name="gpt-4o", 
-                temperature=0, 
-                openai_api_key=custom_api_key,
-                http_client=custom_http_client,
-                request_timeout=30
-            )
-        except Exception as e:
-            print(f"Error creating custom LLM client: {e}")
-            # Fall back to direct API call only
-            active_llm = None
-    
-    # Try LangChain ChatOpenAI first
-    for attempt in range(max_retries):
-        try:
-            if active_llm is not None:
-                print(f"Attempting LangChain call (attempt {attempt + 1}/{max_retries})")
-                response_obj = active_llm.invoke(prompt_text)
-                return response_obj.content
-        except (httpx.ConnectError, openai.APIConnectionError, Exception) as e:
-            print(f"LangChain attempt {attempt + 1} failed: {e}")
-            if attempt < max_retries - 1:
-                import time
-                time.sleep(2 ** attempt)  # Exponential backoff
-            continue
-    
-    # Fallback to direct OpenAI client
-    for attempt in range(max_retries):
-        try:
-            if active_openai_client is not None:
-                print(f"Attempting direct OpenAI call (attempt {attempt + 1}/{max_retries})")
-                response = active_openai_client.chat.completions.create(
-                    model="gpt-4o",
-                    messages=[{"role": "user", "content": prompt_text}],
-                    temperature=0,
-                    timeout=30
-                )
-                return response.choices[0].message.content
-        except (httpx.ConnectError, openai.APIConnectionError, Exception) as e:
-            print(f"Direct OpenAI attempt {attempt + 1} failed: {e}")
-            if attempt < max_retries - 1:
-                import time
-                time.sleep(2 ** attempt)  # Exponential backoff
-            continue
-    
-    # If all attempts fail, return error message
-    return "I'm currently experiencing connectivity issues. Please try again in a moment."
-
-# ---------------- Session Memory Utilities ----------------
-def update_session_suggestions(session_id: str, suggestions: List[str]):
-    """Store follow-up suggestions for a session."""
-    session_memory["previous_suggestions"] = suggestions
-    session_memory.setdefault("last_selected_firm", {})[session_id] = None
-
-
-def update_session_firm(session_id: str, firm_id: int):
-    """Store last selected firm for a session."""
-    session_memory.setdefault("last_selected_firm", {})[session_id] = firm_id
-
-
-def get_last_selected_firm(session_id: str) -> Optional[int]:
-    """Get last selected firm for a session."""
-    return session_memory.get("last_selected_firm", {}).get(session_id)
-
-
-# ---------------- Helper: Extract Follow-Up Suggestions ----------------
-def extract_suggestions_from_response(response_text: str) -> List[str]:
-    suggestions = []
-    marker = "**Follow-Up"
-    if marker in response_text:
-        section = response_text.split(marker, 1)[1]
-        for line in section.splitlines():
-            if line.strip().startswith("- "):
-                suggestions.append(line.strip()[2:])
-    return suggestions
-
-
-# ---------------- Helper: Load Firm & Links from DB ----------------
-# ---------------- Helper: Load Firm & Links from DB ----------------
-def load_firm_and_links(firm_id: int) -> Tuple[str, List[str]]:
-    """Fetch firm name and all links from websites associated with this firm."""
-    db: Session = SessionLocal()
-    try:
-        firm = db.query(Firm).filter(Firm.id == firm_id).first()
-        if not firm:
-            return "Unknown Firm", []
-
-        websites = db.query(Website).filter(Website.firm_id == firm.id).all()
-        links_list = []
-        about_texts = []
-
-        for w in websites:
-            # about_data = w.scraped_data.get("about", {}) if w.scraped_data else {}
-            links_data = w.scraped_data.get("links", []) if w.scraped_data and isinstance(w.scraped_data, dict) else []
-
-            # about_texts.append(about_data.get("full_text", ""))
-            for link in links_data:
-                if isinstance(link, dict):
-                    links_list.append(f"{link.get('text','')} → {link.get('url','')}")
-                elif isinstance(link, str):
-                    links_list.append(link)
-
-        firm_name = re.sub(r"^(www\.)|(\.com)$", "", firm.name, flags=re.IGNORECASE)
-        # context_text = " ".join(about_texts)
-        return firm_name, links_list
-    finally:
-        db.close()
-
-
-# ---------------- Main: Get Answer ----------------
-def get_answer_from_db(query: str, firm_id: int = None, session_id: Optional[str] = None, url_context: Optional[str] = None, custom_api_key: str = None) -> str:
-    """Get answer from database - supports both firm_id and URL-specific context"""
-    session_id = session_id or str(uuid.uuid4())
-
-    try:
-        # 1️⃣ Embed user query
-        query_embedding = embedding_model.encode(query).tolist()
-
-        docs = []
-        firm_name = "Assistant"
-        links_list = []
-
-        if url_context:
-            # URL-specific context - query user-submitted content
-            url_ids = [id.strip() for id in url_context.split(',') if id.strip()]
-            print(f"🔍 Searching vector DB for request_ids: {url_ids}")
-            
-            if url_ids:
-                # Query user_website type content with specific request_ids
-                # Note: ChromaDB uses $in operator for matching multiple values
-                results = collection.query(
-                    query_embeddings=[query_embedding],
-                    n_results=10,
-                    where={"$and": [
-                        {"type": "user_website"},
-                        {"request_id": {"$in": url_ids}}
-                    ]},
-                )
-                docs = results["documents"][0] if results["documents"] else []
-                print(f"📄 Found {len(docs)} documents from vector search")
-                
-                # Try to get firm name from metadata
-                if results["metadatas"] and results["metadatas"][0]:
-                    for metadata in results["metadatas"][0]:
-                        if isinstance(metadata, dict) and metadata.get("firm_name"):
-                            firm_name = metadata["firm_name"]
-                            print(f"🏢 Extracted firm name from metadata: {firm_name}")
-                            break
-                        
-        elif firm_id:
-            # 2️⃣ Retrieve top 20 firm-specific docs from vector DB (include manual_knowledge)
-            results = collection.query(
-                query_embeddings=[query_embedding],
-                n_results=20,
-                where={"$and": [
-                    {"type": {"$in": ["website", "manual_knowledge"]}},
-                    {"firm_id": str(firm_id)}
-                ]},
-            )
-            docs = results["documents"][0] if results["documents"] else []
-            # Let RAG agent handle all queries semantically, no manual keyword filtering
-            
-            # 🤖 AGENTIC BYPASS: If traditional search returns poor results, use intelligent multi-query search
-            if AGENTIC_SEARCH_ENABLED and len(docs) < 3:
-                print(f"🔄 Activating Agentic Search (traditional found {len(docs)} docs)")
-                try:
-                    # Create mock vector store wrapper for agentic agent
-                    class VectorStoreWrapper:
-                        def search(self, query_text, n_results=5, where=None):
-                            emb = embedding_model.encode(query_text).tolist()
-                            res = collection.query(
-                                query_embeddings=[emb],
-                                n_results=n_results,
-                                where=where
-                            )
-                            return res
-                    
-                    agent = AgenticSearchAgent(VectorStoreWrapper())
-                    import asyncio
-                    
-                    # Run agentic search
-                    search_result = asyncio.run(agent.search(
-                        query=query,
-                        firm_id=str(firm_id),
-                        n_results=5
-                    ))
-                    
-                    # Extract documents from agentic results
-                    agentic_docs = [r.get("content", "") for r in search_result["final_results"]]
-                    
-                    if agentic_docs and len(agentic_docs) > len(docs):
-                        print(f"✅ Agentic found {len(agentic_docs)} docs (vs {len(docs)} traditional)")
-                        print(f"   Queries tried: {search_result['total_queries_tried']}")
-                        print(f"   Confidence: {search_result['confidence']:.1%}")
-                        docs = agentic_docs
-                    
-                except Exception as e:
-                    print(f"⚠️ Agentic search failed, using traditional results: {e}")
-
-            # 3️⃣ Load firm context & links
-            firm_name, links_list = load_firm_and_links(firm_id)
-        
-        # 4️⃣ Merge retrieved docs + context
-        MAX_DOC_CHARS = 5000
-        docs = [d[:MAX_DOC_CHARS] for d in docs]
-        context_text = " ".join(docs)
-
-        # 5️⃣ Generate prompt (use session memory suggestions)
-        is_followup = bool(session_memory.get("previous_suggestions"))
-        prompt_text = my_prompt_function(
-            firm=firm_name,
-            context=context_text,
-            question=query,
-            is_followup=is_followup,
-            Urls= links_list,
-        )
-
-        # 6️⃣ LLM response with fallback handling
-        print("Calling LLM for response...")
-        response_text = call_llm_with_fallback(prompt_text, custom_api_key=custom_api_key)
-        
-        # Check if we got a connectivity error message
-        if "connectivity issues" in response_text:
-            return response_text
-
-        # 7️⃣ Extract follow-up suggestions & update session
-        new_suggestions = extract_suggestions_from_response(response_text)
-        if new_suggestions:
-            update_session_suggestions(session_id, new_suggestions)
-
-        # 8️⃣ Clean final text
-        try:
-            answer_text = response_text[:response_text.index("{")].strip()
-        except ValueError:
-            answer_text = response_text
-
-        # 9️⃣ Store assistant answer in vector DB
-        answer_embedding = embedding_model.encode(answer_text).tolist()
-        collection.add(
+        answer_embedding = await get_embedding_async(answer_text)
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, lambda: collection.add(
             ids=[f"assistant_{session_id}_{uuid.uuid4()}"],
             embeddings=[answer_embedding],
             documents=[answer_text],
@@ -358,28 +117,127 @@ def get_answer_from_db(query: str, firm_id: int = None, session_id: Optional[str
                 "type": "chat",
                 "role": "assistant",
                 "session_id": session_id,
-                "firm_id": str(firm_id) if firm_id else "general",
+                "firm_id": str(firm_id),
                 "timestamp": datetime.now().isoformat()
-            }],
-        )
-
-        # 🔟 Update last selected firm in session memory
-        if firm_id:
-            update_session_firm(session_id, firm_id)
-        return answer_text
-
-    except httpx.ConnectError as e:
-        print(f"[Network Error in get_answer_from_db]: Connection failed - {e}")
-        return "I'm having trouble connecting to my AI service. Please check your internet connection and try again."
-    except openai.APIConnectionError as e:
-        print(f"[OpenAI Connection Error in get_answer_from_db]: {e}")
-        return "I'm having trouble reaching the AI service. Please try again in a moment."
-    except openai.RateLimitError as e:
-        print(f"[Rate Limit Error in get_answer_from_db]: {e}")
-        return "I'm receiving too many requests right now. Please wait a moment and try again."
-    except openai.AuthenticationError as e:
-        print(f"[Authentication Error in get_answer_from_db]: {e}")
-        return "There's an issue with my AI service configuration. Please contact support."
+            }]
+        ))
     except Exception as e:
-        print(f"[General Error in get_answer_from_db]: {type(e).__name__}: {e}")
-        return "Sorry, I encountered an unexpected issue. Please try again."
+        print(f"Background Save Error: {e}")
+
+# ==============================================================================
+# 4. FIRM AGENT CLASS
+# ==============================================================================
+
+class FirmAgent:
+    def __init__(self, session_id: str, firm_id: int):
+        self.session_id = session_id
+        self.firm_id = str(firm_id)
+
+    async def ask(self, query: str, custom_api_key: str = None, url_context_ids: str = None) -> str:
+        try:
+            # 1. Parallel: Embedding + History
+            embedding_task = get_embedding_async(query)
+            # Memory ab direct yahan se fetch ho rahi hai (Integrated)
+            chat_history_str = get_chat_history_str(self.session_id)
+            query_embedding = await embedding_task
+
+            # 2. Retrieval Strategy
+            docs = []
+            metadatas = []
+
+            if url_context_ids:
+                url_ids = [id.strip() for id in url_context_ids.split(',') if id.strip()]
+                loop = asyncio.get_event_loop()
+                raw_results = await loop.run_in_executor(None, lambda: collection.query(
+                    query_embeddings=[query_embedding],
+                    n_results=8,
+                    where={"$and": [
+                        {"type": "user_website"},
+                        {"request_id": {"$in": url_ids}}
+                    ]}
+                ))
+                docs = raw_results["documents"][0] if raw_results["documents"] else []
+                metadatas = raw_results["metadatas"][0] if raw_results["metadatas"] else []
+
+            elif AGENTIC_SEARCH_ENABLED:
+                agent = AgenticSearchAgent(collection)
+                search_data = await agent.search(query, firm_id=self.firm_id, n_results=5)
+                docs = [r["content"] for r in search_data.get("final_results", [])]
+                metadatas = [r["metadata"] for r in search_data.get("final_results", [])]
+            
+            else:
+                raw_results = await search_vector_db_async(query_embedding, self.firm_id)
+                docs = raw_results["documents"][0] if raw_results["documents"] else []
+                metadatas = raw_results["metadatas"][0] if raw_results["metadatas"] else []
+
+            # 3. Metadata Extraction
+            firm_name = "Assistant"
+            relevant_urls = []
+            if metadatas:
+                first_meta = metadatas[0]
+                if isinstance(first_meta, dict):
+                    firm_name = first_meta.get("firm_name", "Firm")
+                
+                seen_urls = set()
+                for meta in metadatas:
+                    if isinstance(meta, dict):
+                        url = meta.get("url") or meta.get("source")
+                        if url and url not in seen_urls:
+                            relevant_urls.append(url)
+                            seen_urls.add(url)
+
+            # 4. Prompt Generation
+            if not docs:
+                context_text = "No specific documents found."
+            else:
+                context_text = "\n\n".join([str(d)[:2000] for d in docs[:4]])
+
+            prompt_text = my_prompt_function(
+                firm=firm_name,
+                context=context_text,
+                question=query,
+                chat_history_str=chat_history_str, # Passing history for follow-up context
+                Urls=relevant_urls
+            )
+
+            # 5. LLM Call
+            print("🚀 Sending to LLM...")
+            active_llm = llm
+            if custom_api_key:
+                active_llm = ChatOpenAI(
+                    model_name="gpt-4o",
+                    temperature=0,
+                    openai_api_key=custom_api_key,
+                    http_async_client=async_http_client,
+                    request_timeout=20
+                )
+
+            response_obj = await active_llm.ainvoke(prompt_text)
+            response_text = response_obj.content
+
+            # 6. Post-Process (Update Memory & DB)
+            # Update History Logic Integrated Here
+            add_to_history(self.session_id, query, response_text)
+            
+            # Extract & Update Follow-ups for UI
+            update_followup_suggestions(response_text)
+            
+            # Background Save to DB
+            asyncio.create_task(save_chat_background(self.session_id, self.firm_id, response_text))
+
+            return response_text
+
+        except Exception as e:
+            print(f"❌ Agent Error: {e}")
+            return "I encountered a temporary issue. Please try again."
+
+# ==============================================================================
+# 5. API WRAPPER
+# ==============================================================================
+
+async def get_answer_from_db(query: str, firm_id: int = None, session_id: Optional[str] = None, url_context: Optional[str] = None, custom_api_key: str = None) -> str:
+    if not session_id:
+        session_id = str(uuid.uuid4())
+        
+    agent = FirmAgent(session_id, firm_id)
+    return await agent.ask(query, custom_api_key=custom_api_key, url_context_ids=url_context)

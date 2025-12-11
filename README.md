@@ -109,7 +109,6 @@ When traditional RAG finds <3 results, **Agentic Search** activates:
 web-bot/
 ├── main.py                 # Main FastAPI app (port 8000)
 ├── my_agent.py            # Legacy voice assistant file
-├── config.py              # Environment config
 ├── requirements.txt       # Dependencies
 ├── database/
 │   └── db.py             # SQLAlchemy models

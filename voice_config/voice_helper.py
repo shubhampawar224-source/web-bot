@@ -135,7 +135,7 @@ async def communication (websocket: WebSocket):
                             query = args.get("query")
                             
                             logger.info(f"Tool Triggered: {query}")
-                            await websocket.send_json({"type": "log", "message": f"Searching for: {query}..."})
+                            await websocket.send_json({"type": "log", "message": f"Thinking..."})
 
                             # RAG Execution
                             result = await RAG.search_and_respond(query)

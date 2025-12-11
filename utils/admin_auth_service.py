@@ -4,14 +4,14 @@ from typing import Optional, Tuple
 from sqlalchemy.orm import Session
 from database.db import SessionLocal
 from model.admin_models import AdminUser, AdminSession
-import config
 
 class AdminAuthService:
     def __init__(self):
-        self.default_admin_username = os.getenv("DEFAULT_ADMIN_USERNAME", config.DEFAULT_ADMIN_USERNAME if hasattr(config, 'DEFAULT_ADMIN_USERNAME') else "admin")
-        self.default_admin_password = os.getenv("DEFAULT_ADMIN_PASSWORD", config.DEFAULT_ADMIN_PASSWORD if hasattr(config, 'DEFAULT_ADMIN_PASSWORD') else "admin123")
+        # Use only .env (environment variables), fallback to hardcoded defaults
+        self.default_admin_username = os.getenv("DEFAULT_ADMIN_USERNAME", "admin")
+        self.default_admin_password = os.getenv("DEFAULT_ADMIN_PASSWORD", "admin123")
         self.default_admin_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
-        self.session_expire_hours = config.ADMIN_SESSION_EXPIRE_HOURS
+        self.session_expire_hours = int(os.getenv("ADMIN_SESSION_EXPIRE_HOURS", 24))
     
     def initialize_default_admin(self) -> bool:
         """Create default admin user if none exists"""
