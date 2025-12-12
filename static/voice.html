@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Voice Agent (Interruption Enabled)</title>
+    <title>AI Voice Agent (Final)</title>
     <style>
         body {
             font-family: 'Segoe UI', sans-serif;
@@ -74,44 +74,176 @@
         }
 
         .controls {
-            padding: 20px;
+            padding: 30px;
             background: #f8f9fa;
             display: flex;
             flex-direction: column;
             align-items: center;
             border-top: 1px solid #ddd;
+            gap: 15px;
         }
 
         .status-text {
-            margin-bottom: 15px;
             font-size: 0.9rem;
             color: #555;
             height: 20px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
 
-        .mic-button {
+        .buttons-row {
+            display: flex;
+            gap: 40px;
+            align-items: center;
+            position: relative;
+        }
+
+        .btn {
             width: 70px;
             height: 70px;
             border-radius: 50%;
-            background-color: #007bff;
             border: none;
             cursor: pointer;
             display: flex;
             justify-content: center;
             align-items: center;
-            box-shadow: 0 4px 15px rgba(0, 123, 255, 0.3);
-            transition: all 0.2s ease;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            position: relative;
+            z-index: 2;
         }
 
-        .mic-button.recording {
-            background-color: #dc3545;
-            box-shadow: 0 0 0 5px rgba(220, 53, 69, 0.2);
-        }
-
-        .mic-button svg {
+        .btn svg {
             width: 30px;
             height: 30px;
             fill: white;
+        }
+
+        .btn:active {
+            transform: scale(0.90);
+        }
+
+        /* --- BUTTON STYLES --- */
+
+        /* 1. Connect Button (Main) */
+        #connectBtn {
+            background-color: #28a745;
+        }
+
+        #connectBtn.active {
+            background-color: #dc3545;
+        }
+
+        /* Red when connected */
+
+        /* ⭐ RIPPLE ANIMATION (When User Speaks) ⭐ */
+        #connectBtn.speaking::before,
+        #connectBtn.speaking::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 2px solid #28a745;
+            /* Green Ripple */
+            opacity: 0;
+            z-index: -1;
+        }
+
+        #connectBtn.active.speaking::before,
+        #connectBtn.active.speaking::after {
+            border-color: #dc3545;
+            /* Red Ripple when connected */
+        }
+
+        #connectBtn.speaking::before {
+            animation: ripple 1.5s infinite;
+        }
+
+        #connectBtn.speaking::after {
+            animation: ripple 1.5s infinite 0.4s;
+        }
+
+        /* 2. Mute Button */
+        #muteBtn {
+            background-color: #6c757d;
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        #muteBtn.active {
+            opacity: 1;
+            pointer-events: all;
+            background-color: #007bff;
+        }
+
+        #muteBtn.muted {
+            background-color: #ffc107;
+        }
+
+        #muteBtn.muted svg {
+            fill: #333;
+        }
+
+        /* 3. AI GLOW (When AI Speaks) */
+        #connectBtn.ai-talking {
+            box-shadow: 0 0 20px 5px rgba(0, 123, 255, 0.6);
+            animation: breathe 1.5s infinite ease-in-out;
+        }
+
+        .status-text {
+            font-size: 14px;
+            /* Size bada karne ke liye */
+            font-family: 'Roboto', sans-serif;
+            /* Modern Font */
+            font-weight: 200;
+            /* Thoda Bold karne ke liye */
+            font-style: normal;
+            /* Agar italic hataana ho */
+            color: #333;
+            /* Dark grey color readable hota h */
+            letter-spacing: 0.5px;
+            /* Letters ke beech thoda gap */
+            line-height: 1.5;
+            /* Readability badhane ke liye */
+        }
+
+        /* --- ANIMATIONS --- */
+        @keyframes ripple {
+            0% {
+                width: 100%;
+                height: 100%;
+                opacity: 0.8;
+                border-width: 6px;
+            }
+
+            100% {
+                width: 220%;
+                height: 220%;
+                opacity: 0;
+                border-width: 0px;
+            }
+        }
+
+        @keyframes breathe {
+            0% {
+                transform: scale(1);
+                box-shadow: 0 0 20px 5px rgba(0, 123, 255, 0.6);
+            }
+
+            50% {
+                transform: scale(1.1);
+                box-shadow: 0 0 30px 10px rgba(0, 123, 255, 0.8);
+            }
+
+            100% {
+                transform: scale(1);
+                box-shadow: 0 0 20px 5px rgba(0, 123, 255, 0.6);
+            }
         }
 
         @keyframes fadeIn {
@@ -129,52 +261,85 @@
 </head>
 
 <body>
-
     <div class="main-container">
         <div class="header">🎙️ AI Voice Agent</div>
         <div class="chat-box" id="chatBox"></div>
+
         <div class="controls">
             <div class="status-text" id="statusText">Ready</div>
-            <button class="mic-button" id="micBtn">
-                <svg viewBox="0 0 24 24">
-                    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
-                    <path
-                        d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
-                </svg>
-            </button>
+
+            <div class="buttons-row">
+                <button id="muteBtn" class="btn" title="Pause Mic">
+                    <svg id="iconUnmuted" viewBox="0 0 24 24">
+                        <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
+                        <path
+                            d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+                    </svg>
+                    <svg id="iconMuted" viewBox="0 0 24 24" style="display:none;">
+                        <path
+                            d="M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98.9-2.09.9-3.28zm-4.02.17c0-.06.02-.11.02-.17V5c0-1.66-1.34-3-3-3S9 3.34 9 5v.18l5.98 5.99zM4.27 3L3 4.27l6.01 6.01V11c0 1.66 1.33 3 2.99 3 .22 0 .44-.03.65-.08l2.97 2.97c-.85.45-1.79.7-2.8.75v3.24h-2v-3.24c-3.28-.48-6.75-1.91-6.75-6.65h2c0 2.76 2.24 5 5 5 .37 0 .72-.06 1.06-.15l4.63 4.63L18.73 20 4.27 3z" />
+                    </svg>
+                </button>
+
+                <button id="connectBtn" class="btn" title="Start/Stop Call">
+                    <svg viewBox="0 0 24 24">
+                        <path
+                            d="M13 3h-2v10h2V3zm4.83 2.17l-1.42 1.42C17.99 7.86 19 9.81 19 12c0 3.87-3.13 7-7 7s-7-3.13-7-7c0-2.19 1.01-4.14 2.58-5.42L6.17 5.17C4.23 6.82 3 9.26 3 12c0 4.97 4.03 9 9 9s9-4.03 9-9c0-2.74-1.23-5.18-3.17-6.83z" />
+                    </svg>
+                </button>
+            </div>
         </div>
     </div>
-
     <script>
         const chatBox = document.getElementById("chatBox");
         const statusText = document.getElementById("statusText");
-        const micBtn = document.getElementById("micBtn");
+        statusText.classList.add('status-text');
+        const connectBtn = document.getElementById("connectBtn");
+        const muteBtn = document.getElementById("muteBtn");
+        const iconUnmuted = document.getElementById("iconUnmuted");
+        const iconMuted = document.getElementById("iconMuted");
 
-        let ws;
-        let audioCtx;
-        let playbackCtx;
-        let micWorklet;
-        let source;
-        let stream;
+        let ws, audioCtx, playbackCtx, micWorklet, source, stream;
         let isRecording = false;
+        let isMuted = false;
 
         let activeSources = [];
         let nextStartTime = 0;
         let isAiSpeaking = false;
 
         const MIC_SAMPLE_RATE = 24000;
+        // Sirf Visuals aur Interruption ke liye threshold
+        const VISUAL_THRESHOLD = 0.04;
 
-        micBtn.onclick = async () => {
-            if (!isRecording) {
-                await startConnection();
+        connectBtn.onclick = async () => {
+            if (!isRecording) await startConnection();
+            else stopConnection();
+        };
+
+        muteBtn.onclick = () => {
+            if (!isRecording) return;
+            isMuted = !isMuted;
+            if (isMuted) {
+                muteBtn.classList.add("muted");
+                iconUnmuted.style.display = "none";
+                iconMuted.style.display = "block";
+                statusText.textContent = "Mic Muted";
+                connectBtn.classList.remove("speaking");
             } else {
-                stopConnection();
+                muteBtn.classList.remove("muted");
+                iconUnmuted.style.display = "block";
+                iconMuted.style.display = "none";
+                statusText.textContent = "Listening...";
             }
         };
 
         async function startConnection() {
             try {
                 statusText.textContent = "Connecting...";
+
+                connectBtn.classList.add("active");
+                muteBtn.classList.add("active");
+                isMuted = false;
 
                 playbackCtx = new (window.AudioContext || window.webkitAudioContext)();
                 nextStartTime = 0;
@@ -187,11 +352,9 @@
                 ws = new WebSocket(wsUrl);
 
                 ws.onopen = async () => {
-                    statusText.textContent = "Connected.";
-                    micBtn.classList.add("recording");
                     isRecording = true;
                     await startMicrophone();
-                    statusText.textContent = "Listening...";
+                    statusText.textContent = "Connected. Speak now.";
                 };
 
                 ws.onmessage = async (event) => {
@@ -204,60 +367,52 @@
                     if (data.type === "audio_chunk") {
                         statusText.textContent = "AI Speaking...";
                         isAiSpeaking = true;
+                        connectBtn.classList.add("ai-talking");
                         handleAudioChunk(data.audio);
                     }
                 };
 
                 ws.onclose = () => { stopConnection(); statusText.textContent = "Disconnected"; };
                 ws.onerror = (err) => { console.error("WS Error", err); statusText.textContent = "Connection Error"; }
-
             } catch (err) {
-                console.error("Error:", err);
-                statusText.textContent = "Error: " + err.message;
+                console.error("Error:", err); statusText.textContent = "Error: " + err.message;
             }
         }
 
-        // --- PLAYBACK ENGINE ---
         function handleAudioChunk(base64Audio) {
             if (!playbackCtx || playbackCtx.state === 'closed') return;
-
             const binaryString = window.atob(base64Audio);
             const len = binaryString.length;
             const bytes = new Uint8Array(len);
             for (let i = 0; i < len; i++) bytes[i] = binaryString.charCodeAt(i);
-
             const float32Data = new Float32Array(len / 2);
             const dataView = new DataView(bytes.buffer);
-            for (let i = 0; i < float32Data.length; i++) {
-                float32Data[i] = dataView.getInt16(i * 2, true) / 32768.0;
-            }
+            for (let i = 0; i < float32Data.length; i++) float32Data[i] = dataView.getInt16(i * 2, true) / 32768.0;
 
             const audioBuffer = playbackCtx.createBuffer(1, float32Data.length, 24000);
             audioBuffer.getChannelData(0).set(float32Data);
-
             const source = playbackCtx.createBufferSource();
             source.buffer = audioBuffer;
             source.connect(playbackCtx.destination);
 
             const currentTime = playbackCtx.currentTime;
             if (nextStartTime < currentTime) nextStartTime = currentTime + 0.1;
-
             source.start(nextStartTime);
             nextStartTime += audioBuffer.duration;
-
             activeSources.push(source);
+
             source.onended = () => {
                 activeSources = activeSources.filter(s => s !== source);
                 if (activeSources.length === 0) {
                     isAiSpeaking = false;
-                    if (isRecording) statusText.textContent = "Listening...";
+                    connectBtn.classList.remove("ai-talking");
+                    if (isRecording && !isMuted) statusText.textContent = "Listening...";
                 }
             };
         }
 
         async function startMicrophone() {
             try {
-                // Echo Cancellation zaroori hai
                 stream = await navigator.mediaDevices.getUserMedia({
                     audio: {
                         channelCount: 1,
@@ -269,23 +424,18 @@
                 });
 
                 source = audioCtx.createMediaStreamSource(stream);
-
                 const micCode = `
-                    class PCMProcessor extends AudioWorkletProcessor {
-                        process(inputs, outputs) {
-                            const input = inputs[0];
-                            if (input.length > 0) {
-                                this.port.postMessage(input[0]);
-                            }
-                            return true;
-                        }
+                class PCMProcessor extends AudioWorkletProcessor {
+                    process(inputs, outputs) {
+                        const input = inputs[0];
+                        if (input.length > 0) this.port.postMessage(input[0]);
+                        return true;
                     }
-                    registerProcessor('pcm-processor', PCMProcessor);
-                `;
-
+                }
+                registerProcessor('pcm-processor', PCMProcessor);
+            `;
                 const blob = new Blob([micCode], { type: "text/javascript" });
                 await audioCtx.audioWorklet.addModule(URL.createObjectURL(blob));
-
                 micWorklet = new AudioWorkletNode(audioCtx, 'pcm-processor');
 
                 let bufferAccumulator = [];
@@ -295,26 +445,35 @@
 
                     const float32Chunk = e.data;
 
-                    // ⭐ INTERRUPTION LOGIC (Local VAD) ⭐
-                    if (isAiSpeaking) {
-                        // Volume Check: Calculate RMS (Root Mean Square)
-                        let sum = 0;
-                        for (let i = 0; i < float32Chunk.length; i++) {
-                            sum += float32Chunk[i] * float32Chunk[i];
-                        }
-                        const rms = Math.sqrt(sum / float32Chunk.length);
+                    // ⭐ HARD MUTE check (Data drop)
+                    if (isMuted) return;
 
-                        // Threshold: 0.02 (Adjust agar sensitivity kam/zyada karni ho)
-                        if (rms > 0.02) {
-                            console.log("Interruption Detected! Volume:", rms);
-                            stopAudioPlayback(); // Turant Speaker Band
-                            isAiSpeaking = false;
-                        }
+                    // --- Calculate Volume for UI & Logic ---
+                    let sum = 0;
+                    for (let i = 0; i < float32Chunk.length; i++) {
+                        sum += float32Chunk[i] * float32Chunk[i];
                     }
-                    // ----------------------------------------
+                    const rms = Math.sqrt(sum / float32Chunk.length);
+
+                    // 1. Visual Feedback (Ripple)
+                    if (rms > VISUAL_THRESHOLD) {
+                        connectBtn.classList.add("speaking");
+                    } else {
+                        connectBtn.classList.remove("speaking");
+                    }
+
+                    // 2. Interruption Logic (Sirf tab jab AI bol rha ho aur aawaz tez ho)
+                    if (isAiSpeaking && rms > VISUAL_THRESHOLD) {
+                        stopAudioPlayback();
+                        isAiSpeaking = false;
+                        connectBtn.classList.remove("ai-talking");
+                    }
+
+                    // ⭐ FIX: NO DATA DROPPING! ⭐
+                    // Hum 'rms < threshold' par return nahi kar rahe.
+                    // Hum sab kuch bhej rahe hain taaki Server VAD silence detect kar sake.
 
                     bufferAccumulator.push(...float32Chunk);
-
                     if (bufferAccumulator.length >= 4096) {
                         const chunkToSend = new Float32Array(bufferAccumulator);
                         bufferAccumulator = [];
@@ -323,41 +482,40 @@
                         ws.send(JSON.stringify({ audio: base64Audio }));
                     }
                 };
-
                 source.connect(micWorklet);
                 micWorklet.connect(audioCtx.destination);
-            } catch (error) {
-                console.error("Mic Error:", error);
-            }
+            } catch (error) { console.error("Mic Error:", error); }
         }
 
         function stopConnection() {
             isRecording = false;
-            micBtn.classList.remove("recording");
-            statusText.textContent = "Ready";
+            connectBtn.classList.remove("active");
+            connectBtn.classList.remove("speaking");
+            connectBtn.classList.remove("ai-talking");
+            muteBtn.classList.remove("active");
+            muteBtn.classList.remove("muted");
+
+            iconUnmuted.style.display = "block";
+            iconMuted.style.display = "none";
+            statusText.textContent = "Ready to Connect";
 
             if (ws) { ws.close(); ws = null; }
             stopAudioPlayback();
-
             if (playbackCtx) { playbackCtx.close(); playbackCtx = null; }
             if (audioCtx) { audioCtx.close(); audioCtx = null; }
             if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
         }
 
         function stopAudioPlayback() {
-            // Sabhi active sounds ko roko
             activeSources.forEach(s => { try { s.stop(); } catch (e) { } });
             activeSources = [];
-
-            // Queue reset karo taaki future audio bhi na baje
             if (playbackCtx) nextStartTime = playbackCtx.currentTime;
         }
 
         function addMessage(text, role) {
             if (!text) return;
             const div = document.createElement("div");
-            div.className = `message ${role}`;
-            div.textContent = text;
+            div.className = `message ${role}`; div.textContent = text;
             chatBox.appendChild(div);
             chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' });
         }
@@ -379,6 +537,7 @@
             return window.btoa(binary);
         }
     </script>
+
 </body>
 
 </html>

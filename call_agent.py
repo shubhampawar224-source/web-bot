@@ -38,12 +38,11 @@ class CallRequest(BaseModel):
 async def index():
     # Read the index.html file manually to serve it
     try:
-        with open("templates/index.html", "r") as f:
+        with open("templates/call.html", "r") as f:
             content = f.read()
         return HTMLResponse(content=content)
     except FileNotFoundError:
-        return Response("index.html not found. Make sure 'templates/index.html' exists.", status_code=404)
-
+        return Response("call.html not found. Make sure 'templates/call.html' exists.", status_code=404)
 # --- 1. CALL INITIATE API ---
 @app.post("/make-call")
 async def make_call(request: CallRequest):
