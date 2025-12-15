@@ -51,7 +51,7 @@ DB_TOOL = {
 }
 
 
-# ⭐ NEW TOOL: CHANGE LANGUAGE ⭐
+# NEW TOOL: CHANGE LANGUAGE 
 LANGUAGE_TOOL = {
     "type": "function",
     "name": "change_language",

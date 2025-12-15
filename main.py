@@ -1,3 +1,4 @@
+
 import base64
 import io
 import json
@@ -57,6 +58,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 # Import the robust RAG agent
 from voice_config.simple_rag_agent import EnhancedRAGAgent
+
+# Use config for assistant_voice
+import config
 
 load_dotenv(override=True)
 ALLOWED_IFRAME_ORIGINS = os.getenv("ALLOWED_IFRAME_ORIGINS", "")  # space-separated list e.g. "https://siteA.com https://siteB.com"
@@ -2690,3 +2694,19 @@ logger = logging.getLogger("VoiceServer")
 async def voice_socket(websocket: WebSocket):
     logger.info("Client connected.")
     await communication(websocket)
+
+# --- Global Voice Setting (for admin override) ---
+from fastapi import Body
+
+# API to set assistant voice from admin panel
+from pydantic import BaseModel
+class VoiceRequest(BaseModel):
+    voice: str
+@app.post("/admin/set-voice")
+async def set_assistant_voice(request: Request, body: VoiceRequest):
+    admin_info = await verify_admin_auth(request)
+    allowed_voices = ["coral", "onyx", "nova", "shimmer", "echo", "fable", "alloy"]
+    if body.voice not in allowed_voices:
+        return {"status": "error", "message": "Invalid voice name."}
+    config.assistant_voice = body.voice
+    return {"status": "success", "voice": config.assistant_voice}

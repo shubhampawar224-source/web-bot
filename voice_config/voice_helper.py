@@ -1,33 +1,27 @@
+
 import asyncio
 import os
 import json
+from dotenv import load_dotenv
+from fastapi import WebSocket, WebSocketDisconnect
 import logging
 import websockets
-from fastapi import WebSocket, WebSocketDisconnect
-from dotenv import load_dotenv
+import re
+import config
 
 # --- IMPORTS ---
 from voice_config.simple_rag_agent import EnhancedRAGAgent
 from voice_config.services.contact_service import save_contact_to_db 
 from voice_config.services.my_tools import RAG_TOOL, VOICE_TOOL, DB_TOOL, LANGUAGE_TOOL, LANGUAGE_MAP
 
-# Load Environment Variables
 load_dotenv(override=True)
 API_KEY = os.getenv("OPENAI_API_KEY")
 
-# Logging Setup
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("VoiceServer")
 
-# Initialize RAG
 RAG = EnhancedRAGAgent()
-
-# OpenAI WebSocket URL
 OPENAI_URL = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17"
-
-# ==========================================
-# MAIN COMMUNICATION FUNCTION 
-# ==========================================
 
 async def communication(websocket: WebSocket):
     await websocket.accept()
@@ -37,74 +31,73 @@ async def communication(websocket: WebSocket):
         "OpenAI-Beta": "realtime=v1"
     }
 
+
     try:
         async with websockets.connect(OPENAI_URL, additional_headers=headers) as openai_ws:
-            
-            # Default Settings
             default_lang = "english"
             default_config = LANGUAGE_MAP[default_lang]
-            
-            # 1. VARIABLE FOR DYNAMIC VOICE
-            current_voice = "verse"  # Default Voice
+            print(f"assistant_voice voice: {config.assistant_voice}")
 
-            # 2. Initialize Session
+            current_voice = config.assistant_voice if config.assistant_voice else "shimmer"
+            print(f"Using voice: {current_voice}")
             session_config = {
                 "type": "session.update",
                 "session": {
                     "modalities": ["text", "audio"],
-                    
-                    # Voice is now Dynamic
                     "voice": current_voice,
-                    
                     "input_audio_format": "pcm16",
                     "output_audio_format": "pcm16",
-                    
                     "input_audio_transcription": {
                         "model": "whisper-1",
+                        "language": default_config["code"],
                         "prompt": default_config["prompt"]
                     },
-                    
                     "turn_detection": {
                         "type": "server_vad",
                         "threshold": 0.5,
                         "prefix_padding_ms": 300,
                         "silence_duration_ms": 200
                     },
-                    
-                    "tools": [RAG_TOOL, VOICE_TOOL, DB_TOOL, LANGUAGE_TOOL],
+                    "tools": [RAG_TOOL, DB_TOOL, LANGUAGE_TOOL],
                     "tool_choice": "auto",
-                    
-                    # MAIN INSTRUCTIONS (KEPT EXACTLY AS REQUESTED)
-                    # MAIN INSTRUCTIONS (UPDATED FOR BOOKING)
+                    # ⭐ UPDATED LOGIC: DEFAULT vs EXPLICIT ⭐
                     "instructions": f"""
                     You are a smart voice assistant for DJF Law Firm.
                     
-                    🔴 **CRITICAL RULE FOR BOOKING/CONSULTATION:**
-                    If the user asks **"How to schedule?"**, **"Appointment"**, or **"Consultation details"**:
-                    1. **DO NOT** say "I don't know" or search the database.
-                    2. **INSTEAD, REPLY:** "I can schedule that for you right now. Please tell me your **Full Name**, **Phone Number**, and **Email**."
-                    3. Once the user provides these 3 details, call the `create_contact_entry` tool immediately.
+                    🛑 **STRICT SCOPE:** - You handle Legal Inquiries and Appointments ONLY.
+                    - If user asks about unrelated topics (Weather, Coding, Movies), politely refuse.
                     
-                    🔴 **KNOWLEDGE BOUNDARIES:**
-                    1. For general questions (services, pricing, laws), use 'query_knowledge_base'.
-                    2. If the tool returns "No info", apologize.
-                    3. DO NOT answer legal questions from your own general knowledge.
+                    🔵 **PRIORITY 1: DEFAULT INTERACTION (THE CATCH-ALL)**
+                    - If the user says "Hello", asks a question, seeks advice, or says ANYTHING that is NOT a direct request to book:
+                    1. **ALWAYS** use the `query_knowledge_base` tool.
+                    2. Converse naturally and answer their query.
+                    3. **NEVER** assume they want to book. **NEVER** ask for name/phone yet.
+                    
+                    🔴 **PRIORITY 2: BOOKING (EXPLICIT TRIGGER ONLY)**
+                    - Activate this mode **ONLY** if the user specifically uses words like: **"Book appointment"**, **"Schedule a call"**, **"I want to meet"**, or **"Take my details"**.
+                    - If triggered, follow this EXACT sequence:
+                    1. **Step 1:** Ask: "Sure. What is your **Full Name**?" -> WAIT.
+                    2. **Step 2:** Ask: "Thanks. What is your **Phone Number**?" -> WAIT.
+                    3. **Step 3:** Ask: "And your **Email Address**?" -> WAIT.
+                    
+                    ⚠️ **DATA RULES:**
+                    1. **PHONE:** Copy exactly as spoken (String). Do not change digits.
+                    2. **SAVE:** Call `create_contact_entry` ONLY after getting all 3 details.
                     
                     **LANGUAGE RULES:**
                     1. Start in English.
-                    2. If user speaks Hindi, reply in Hindi.
+                    2. If user speaks English, reply in English.
                     3. Keep answers short.
                     """
                 }
             }
             await openai_ws.send(json.dumps(session_config))
 
-            # 2. Welcome Message
             await openai_ws.send(json.dumps({
                 "type": "response.create",
                 "response": {
                     "modalities": ["text", "audio"],
-                    "instructions": "Say 'Hello! I am your DJF Law Firm assistant. I can help with firm-specific queries only.'"
+                    "instructions": "Say 'Hello! I am your DJF Law Firm assistant. How can I help you today?'"
                 }
             }))
 
@@ -141,7 +134,6 @@ async def communication(websocket: WebSocket):
                             if transcript:
                                 await websocket.send_json({"type": "transcript", "role": "user", "text": transcript})
 
-                        # HANDLE TOOL CALLS
                         elif evt_type == "response.function_call_arguments.done":
                             call_id = event["call_id"]
                             tool_name = event["name"]
@@ -150,50 +142,45 @@ async def communication(websocket: WebSocket):
                             logger.info(f"Tool Triggered: {tool_name}")
                             output_result = "Done."
 
-                            # ---------------------------------------
-                            # 1. HANDLE LANGUAGE CHANGE
-                            # ---------------------------------------
                             if tool_name == "change_language":
                                 req_lang = args.get("language", "english").lower()
                                 lang_settings = LANGUAGE_MAP.get(req_lang, LANGUAGE_MAP["english"])
-                                
                                 await websocket.send_json({"type": "log", "message": f"Switching to {req_lang}..."})
                                 
-                                # Only changing Transcription Prompt & Instructions (Voice Remains Same)
                                 new_instructions = f"""
                                 You are a smart voice assistant for DJF Law Firm.
-                                🔴 CRITICAL UPDATE: User switched to {req_lang.upper()}.
-                                
+                                CRITICAL UPDATE: User switched to {req_lang.upper()}.
                                 1. {lang_settings['instructions']}
-                                2. Translate everything to {req_lang.upper()}.
-                                
-                                🔴 KNOWLEDGE BOUNDARY:
-                                - USE 'query_knowledge_base' for ALL information.
-                                - DO NOT use your own outside knowledge.
-                                - If info is missing in tool output, say "I don't have that info".
+                                2. DEFAULT: Answer ALL questions using RAG.
+                                3. BOOKING: Only start if explicitly requested (Name -> Phone -> Email).
+                                4. RULE: Copy phone digits EXACTLY.
                                 """
-                                
                                 await openai_ws.send(json.dumps({
                                     "type": "session.update",
                                     "session": { 
                                         "instructions": new_instructions,
                                         "input_audio_transcription": {
                                             "model": "whisper-1",
+                                            "language": lang_settings["code"], 
                                             "prompt": lang_settings["prompt"]
                                         }
                                     }
                                 }))
-                                
-                                output_result = f"Language switched to {req_lang}. Strict RAG mode active."
+                                output_result = f"Language switched to {req_lang}."
 
-                            # ---------------------------------------
-                            # 2. HANDLE LEAD CAPTURE
-                            # ---------------------------------------
                             elif tool_name == "create_contact_entry":
                                 fname = args.get("first_name", "Unknown")
                                 lname = args.get("last_name", "")
-                                phone = args.get("phone", "")
+                                raw_phone = str(args.get("phone", ""))
+                                # Python Cleaning Logic
+                                if raw_phone.startswith("00") or raw_phone.startswith("+"):
+                                    cleaned_phone = re.sub(r'\D', '', raw_phone)
+                                    if len(cleaned_phone) > 10:
+                                        cleaned_phone = cleaned_phone[-10:]
+                                    args['phone'] = cleaned_phone
+                                phone = args['phone']
                                 email = args.get("email", None)
+                                
                                 await websocket.send_json({"type": "log", "message": f"Saving {fname}..."})
                                 try:
                                     success = await asyncio.to_thread(save_contact_to_db, fname, lname, phone, email)
@@ -201,38 +188,24 @@ async def communication(websocket: WebSocket):
                                 except:
                                     output_result = "Error saving details."
 
-                            # ---------------------------------------
-                            # 3. VOICE CHANGE (Dynamic & Fixed)
-                            # ---------------------------------------
                             elif tool_name == "change_voice":
                                 new_voice = args.get("voice_name")
-                                current_voice = new_voice # Update variable locally
-                                
+                                current_voice = new_voice
                                 await websocket.send_json({"type": "log", "message": f"Voice: {new_voice}"})
-                                
-                                # Update Session
                                 await openai_ws.send(json.dumps({
                                     "type": "session.update",
                                     "session": { "voice": new_voice }
                                 }))
-                                
-                                # FIX: Wait for server to update voice before speaking
                                 await asyncio.sleep(0.5)
-                                
                                 output_result = f"Voice changed to {new_voice}."
 
-                            # ---------------------------------------
-                            # 4. RAG
-                            # ---------------------------------------
                             elif tool_name == "query_knowledge_base":
                                 await websocket.send_json({"type": "log", "message": "Thinking..."})
                                 query = args.get("query")
                                 output_result = await RAG.search_and_respond(query)
-                                
                                 if not output_result or "not found" in output_result.lower():
-                                    output_result = "SYSTEM: No information found in knowledge. Politely tell user you don't know."
+                                    output_result = "SYSTEM: No info found. Apologize."
 
-                            # Send Output
                             await openai_ws.send(json.dumps({
                                 "type": "conversation.item.create",
                                 "item": {
@@ -241,8 +214,6 @@ async def communication(websocket: WebSocket):
                                     "output": output_result
                                 }
                             }))
-                            
-                            # Force Response
                             await openai_ws.send(json.dumps({"type": "response.create"}))
                             
                 except Exception as e:

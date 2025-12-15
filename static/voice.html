@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Voice Agent (Final)</title>
+    <title>AI Voice Agent (Smart Transcribe)</title>
     <style>
         body {
             font-family: 'Segoe UI', sans-serif;
@@ -84,12 +84,12 @@
         }
 
         .status-text {
-            font-size: 0.9rem;
-            color: #555;
+            font-size: 14px;
+            font-family: 'Roboto', sans-serif;
+            font-weight: 500;
+            color: #333;
+            letter-spacing: 0.5px;
             height: 20px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 1px;
         }
 
         .buttons-row {
@@ -124,9 +124,6 @@
             transform: scale(0.90);
         }
 
-        /* --- BUTTON STYLES --- */
-
-        /* 1. Connect Button (Main) */
         #connectBtn {
             background-color: #28a745;
         }
@@ -135,9 +132,6 @@
             background-color: #dc3545;
         }
 
-        /* Red when connected */
-
-        /* ⭐ RIPPLE ANIMATION (When User Speaks) ⭐ */
         #connectBtn.speaking::before,
         #connectBtn.speaking::after {
             content: '';
@@ -149,7 +143,6 @@
             height: 100%;
             border-radius: 50%;
             border: 2px solid #28a745;
-            /* Green Ripple */
             opacity: 0;
             z-index: -1;
         }
@@ -157,7 +150,6 @@
         #connectBtn.active.speaking::before,
         #connectBtn.active.speaking::after {
             border-color: #dc3545;
-            /* Red Ripple when connected */
         }
 
         #connectBtn.speaking::before {
@@ -168,7 +160,6 @@
             animation: ripple 1.5s infinite 0.4s;
         }
 
-        /* 2. Mute Button */
         #muteBtn {
             background-color: #6c757d;
             opacity: 0.5;
@@ -189,30 +180,11 @@
             fill: #333;
         }
 
-        /* 3. AI GLOW (When AI Speaks) */
         #connectBtn.ai-talking {
             box-shadow: 0 0 20px 5px rgba(0, 123, 255, 0.6);
             animation: breathe 1.5s infinite ease-in-out;
         }
 
-        .status-text {
-            font-size: 14px;
-            /* Size bada karne ke liye */
-            font-family: 'Roboto', sans-serif;
-            /* Modern Font */
-            font-weight: 200;
-            /* Thoda Bold karne ke liye */
-            font-style: normal;
-            /* Agar italic hataana ho */
-            color: #333;
-            /* Dark grey color readable hota h */
-            letter-spacing: 0.5px;
-            /* Letters ke beech thoda gap */
-            line-height: 1.5;
-            /* Readability badhane ke liye */
-        }
-
-        /* --- ANIMATIONS --- */
         @keyframes ripple {
             0% {
                 width: 100%;
@@ -307,9 +279,11 @@
         let nextStartTime = 0;
         let isAiSpeaking = false;
 
+        // Variables for Speech Hold (To fix Transcript)
+        let lastSpeechTime = 0;
+        const SPEECH_HOLD_TIME_MS = 400; // 400ms tak wait karega aawaz band hone ke baad
+        const NOISE_GATE_THRESHOLD = 0.01; // Slightly more sensitive for better capture
         const MIC_SAMPLE_RATE = 24000;
-        // Sirf Visuals aur Interruption ke liye threshold
-        const VISUAL_THRESHOLD = 0.04;
 
         connectBtn.onclick = async () => {
             if (!isRecording) await startConnection();
@@ -336,7 +310,6 @@
         async function startConnection() {
             try {
                 statusText.textContent = "Connecting...";
-
                 connectBtn.classList.add("active");
                 muteBtn.classList.add("active");
                 isMuted = false;
@@ -365,7 +338,7 @@
                     if (data.type === "log") statusText.textContent = data.message;
 
                     if (data.type === "audio_chunk") {
-                        statusText.textContent = "AI Speaking...";
+                        statusText.textContent = "Speaking...";
                         isAiSpeaking = true;
                         connectBtn.classList.add("ai-talking");
                         handleAudioChunk(data.audio);
@@ -419,7 +392,7 @@
                         sampleRate: MIC_SAMPLE_RATE,
                         echoCancellation: true,
                         noiseSuppression: true,
-                        autoGainControl: true
+                        autoGainControl: false
                     }
                 });
 
@@ -445,33 +418,44 @@
 
                     const float32Chunk = e.data;
 
-                    // ⭐ HARD MUTE check (Data drop)
                     if (isMuted) return;
 
-                    // --- Calculate Volume for UI & Logic ---
+                    // RMS Calculation
                     let sum = 0;
                     for (let i = 0; i < float32Chunk.length; i++) {
                         sum += float32Chunk[i] * float32Chunk[i];
                     }
                     const rms = Math.sqrt(sum / float32Chunk.length);
 
-                    // 1. Visual Feedback (Ripple)
-                    if (rms > VISUAL_THRESHOLD) {
+                    // ⭐ SMART SPEECH HOLD LOGIC ⭐
+                    // Agar aawaz threshold se upar hai, toh timer reset karo
+                    if (rms > NOISE_GATE_THRESHOLD) {
+                        lastSpeechTime = Date.now();
                         connectBtn.classList.add("speaking");
+
+                        // Interrupt AI if speaking
+                        if (isAiSpeaking) {
+                            stopAudioPlayback();
+                            isAiSpeaking = false;
+                            connectBtn.classList.remove("ai-talking");
+                        }
+                    }
+
+                    // Check: Kya abhi bhi "Hold Time" ke andar hain?
+                    // (Matlab user chup hua hai lekin 400ms nahi hue hain)
+                    const timeSinceLastSpeech = Date.now() - lastSpeechTime;
+
+                    if (timeSinceLastSpeech < SPEECH_HOLD_TIME_MS) {
+                        // SEND AUDIO (Speaking phase or Holding phase)
+                        // Do nothing here, let the buffer process below
                     } else {
+                        // SEND SILENCE (Noise Gate Active)
+                        // Aawaz zero kar do taaki background noise na jaye
+                        for (let i = 0; i < float32Chunk.length; i++) {
+                            float32Chunk[i] = 0;
+                        }
                         connectBtn.classList.remove("speaking");
                     }
-
-                    // 2. Interruption Logic (Sirf tab jab AI bol rha ho aur aawaz tez ho)
-                    if (isAiSpeaking && rms > VISUAL_THRESHOLD) {
-                        stopAudioPlayback();
-                        isAiSpeaking = false;
-                        connectBtn.classList.remove("ai-talking");
-                    }
-
-                    // ⭐ FIX: NO DATA DROPPING! ⭐
-                    // Hum 'rms < threshold' par return nahi kar rahe.
-                    // Hum sab kuch bhej rahe hain taaki Server VAD silence detect kar sake.
 
                     bufferAccumulator.push(...float32Chunk);
                     if (bufferAccumulator.length >= 4096) {

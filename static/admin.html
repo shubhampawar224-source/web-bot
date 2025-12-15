@@ -60,6 +60,14 @@
             <aside id="admin-sidebar" class="admin-sidebar">
                 <nav class="sidebar-nav">
                     <ul class="nav-menu">
+                        <!-- Voice Assistant Option -->
+                        <li class="nav-item">
+                            <a href="#voice-assistant" class="nav-link" data-section="voice-assistant"
+                                data-tooltip="Voice Assistant">
+                                <i class="fas fa-microphone"></i>
+                                <span>Voice Assistant</span>
+                            </a>
+                        </li>
                         <li class="nav-item">
                             <a href="#dashboard" class="nav-link active" data-section="dashboard"
                                 data-tooltip="Dashboard">
@@ -119,6 +127,29 @@
 
             <!-- Main Content -->
             <main class="admin-main">
+                <!-- Voice Assistant Section -->
+                <section id="voice-assistant-section" class="content-section" style="display:none;">
+                    <div class="section-header">
+                        <h2><i class="fas fa-microphone"></i> Voice Assistant Settings</h2>
+                    </div>
+                    <div class="form-group" style="max-width: 320px; margin: 24px auto;">
+                        <label for="voice-select"><b>Select Assistant Voice</b></label>
+                        <select id="voice-select" class="form-control" style="margin-bottom:12px;">
+                            <option value="coral">Coral (Default)</option>
+                            <option value="onyx">Onyx</option>
+                            <option value="nova">Nova</option>
+                            <option value="shimmer">Shimmer</option>
+                            <option value="echo">Echo</option>
+                            <option value="fable">Fable</option>
+                            <option value="alloy">Alloy</option>
+                        </select>
+                        <button id="change-voice-btn" class="btn btn-primary" style="width:100%;">
+                            <i class="fas fa-microphone"></i> Change Voice
+                        </button>
+                        <div id="voice-change-status" style="font-size:13px;margin-top:8px;"></div>
+                    </div>
+                </section>
+
                 <!-- Dashboard Section -->
                 <section id="dashboard-section" class="content-section active">
                     <div class="section-header">

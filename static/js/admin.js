@@ -238,6 +238,63 @@ class AdminDashboard {
         if (toggleAdminKey) {
             toggleAdminKey.addEventListener('click', () => this.toggleApiKeyVisibility());
         }
+
+        // Voice Assistant change button event (fix: use correct IDs and button click)
+        const voiceSelect = document.getElementById('voice-select');
+        const changeVoiceBtn = document.getElementById('change-voice-btn');
+        if (voiceSelect && changeVoiceBtn) {
+            changeVoiceBtn.addEventListener('click', () => this.handleVoiceSelection(voiceSelect.value));
+        }
+    }
+
+    // Handle voice selection from button click
+    async handleVoiceSelection(selectedVoice) {
+        const statusDiv = document.getElementById('voice-change-status');
+
+        if (!selectedVoice) {
+            if (statusDiv) {
+                statusDiv.textContent = 'Please select a voice.';
+                statusDiv.style.color = 'red';
+            }
+            return;
+        }
+
+        // Show loading
+        if (statusDiv) {
+            statusDiv.textContent = 'Updating voice...';
+            statusDiv.style.color = '#007bff';
+        }
+
+        try {
+            const response = await fetch('/admin/set-voice', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.authToken}`
+                },
+                body: JSON.stringify({ voice: selectedVoice })
+            });
+            const data = await response.json();
+            if (response.ok && data.status === 'success') {
+                if (statusDiv) {
+                    statusDiv.textContent = 'Voice updated successfully!';
+                    statusDiv.style.color = 'green';
+                }
+                this.showToast('Voice updated successfully!', 'success');
+            } else {
+                if (statusDiv) {
+                    statusDiv.textContent = data.message || 'Failed to update voice.';
+                    statusDiv.style.color = 'red';
+                }
+                this.showToast(data.message || 'Failed to update voice.', 'error');
+            }
+        } catch (error) {
+            if (statusDiv) {
+                statusDiv.textContent = 'Error updating voice.';
+                statusDiv.style.color = 'red';
+            }
+            this.showToast('Error updating voice.', 'error');
+        }
     }
 
     async handleLogin(e) {
@@ -537,15 +594,19 @@ class AdminDashboard {
         document.querySelectorAll('.nav-link').forEach(link => {
             link.classList.remove('active');
         });
+        const navLink = document.querySelector(`[data-section="${sectionName}"]`);
+        if (navLink) navLink.classList.add('active');
 
-        document.querySelector(`[data-section="${sectionName}"]`).classList.add('active');
-
-        // Update content
+        // Hide all sections and show only the selected one
         document.querySelectorAll('.content-section').forEach(section => {
             section.classList.remove('active');
+            section.style.display = 'none';
         });
-
-        document.getElementById(`${sectionName}-section`).classList.add('active');
+        const targetSection = document.getElementById(`${sectionName}-section`);
+        if (targetSection) {
+            targetSection.classList.add('active');
+            targetSection.style.display = '';
+        }
 
         this.currentSection = sectionName;
 
