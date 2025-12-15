@@ -1,13 +1,12 @@
-
 import asyncio
 import os
 import json
-from dotenv import load_dotenv
-from fastapi import WebSocket, WebSocketDisconnect
 import logging
 import websockets
 import re
 import config
+from fastapi import WebSocket, WebSocketDisconnect
+from dotenv import load_dotenv
 
 # --- IMPORTS ---
 from voice_config.simple_rag_agent import EnhancedRAGAgent
@@ -31,15 +30,14 @@ async def communication(websocket: WebSocket):
         "OpenAI-Beta": "realtime=v1"
     }
 
-
     try:
         async with websockets.connect(OPENAI_URL, additional_headers=headers) as openai_ws:
+            
             default_lang = "english"
             default_config = LANGUAGE_MAP[default_lang]
-            print(f"assistant_voice voice: {config.assistant_voice}")
-
             current_voice = config.assistant_voice if config.assistant_voice else "shimmer"
-            print(f"Using voice: {current_voice}")
+            print(f"Using Voice: {current_voice}")
+
             session_config = {
                 "type": "session.update",
                 "session": {
@@ -47,47 +45,54 @@ async def communication(websocket: WebSocket):
                     "voice": current_voice,
                     "input_audio_format": "pcm16",
                     "output_audio_format": "pcm16",
+                    
                     "input_audio_transcription": {
                         "model": "whisper-1",
-                        "language": default_config["code"],
+                        "language": default_config["code"], 
                         "prompt": default_config["prompt"]
                     },
+                    
                     "turn_detection": {
                         "type": "server_vad",
                         "threshold": 0.5,
                         "prefix_padding_ms": 300,
-                        "silence_duration_ms": 200
+                        "silence_duration_ms": 1000 
                     },
-                    "tools": [RAG_TOOL, DB_TOOL, LANGUAGE_TOOL],
+                    
+                    "tools": [RAG_TOOL, VOICE_TOOL, DB_TOOL, LANGUAGE_TOOL],
                     "tool_choice": "auto",
-                    # ⭐ UPDATED LOGIC: DEFAULT vs EXPLICIT ⭐
+                    
+                    # UPDATED INSTRUCTIONS: NO DATE/TIME
                     "instructions": f"""
                     You are a smart voice assistant for DJF Law Firm.
+                    **STRICT CONTEXT RULE:**
+                    - Answer ONLY questions related to Legal Matters or DJF Law Firm.
+                    - If user asks about anything else (e.g. Weather, Coding, Jokes), REFUSE politely.
+                    - Do NOT generate information outside the provided context.
+
+                    **STRICT RULE: NO DATE OR TIME BOOKING**
+                    - You do NOT schedule calendar appointments.
+                    - You ONLY collect contact details for a **CALLBACK**.
+                    - **NEVER ask for Date or Time.**
                     
-                    🛑 **STRICT SCOPE:** - You handle Legal Inquiries and Appointments ONLY.
-                    - If user asks about unrelated topics (Weather, Coding, Movies), politely refuse.
+                    **PRIORITY 1: DEFAULT INTERACTION**
+                    - If user asks a question -> Use `query_knowledge_base`.
+                    - Summarize answer in **2 lines max**.
                     
-                    🔵 **PRIORITY 1: DEFAULT INTERACTION (THE CATCH-ALL)**
-                    - If the user says "Hello", asks a question, seeks advice, or says ANYTHING that is NOT a direct request to book:
-                    1. **ALWAYS** use the `query_knowledge_base` tool.
-                    2. Converse naturally and answer their query.
-                    3. **NEVER** assume they want to book. **NEVER** ask for name/phone yet.
+                    **PRIORITY 2: BOOKING (CALLBACK REQUEST)**
+                    - Only if user says "Book appointment" or "Schedule call":
+                    1. Say: "I can have our team call you back. What is your **Full Name**?" -> Wait.
+                    2. Ask: "What is your **Phone Number**?" -> Wait.
+                    3. Ask: "And your **Email**?" -> Wait.
+                    4. **STOP.** Do not ask for Date/Time. Call `create_contact_entry` immediately.
                     
-                    🔴 **PRIORITY 2: BOOKING (EXPLICIT TRIGGER ONLY)**
-                    - Activate this mode **ONLY** if the user specifically uses words like: **"Book appointment"**, **"Schedule a call"**, **"I want to meet"**, or **"Take my details"**.
-                    - If triggered, follow this EXACT sequence:
-                    1. **Step 1:** Ask: "Sure. What is your **Full Name**?" -> WAIT.
-                    2. **Step 2:** Ask: "Thanks. What is your **Phone Number**?" -> WAIT.
-                    3. **Step 3:** Ask: "And your **Email Address**?" -> WAIT.
-                    
-                    ⚠️ **DATA RULES:**
-                    1. **PHONE:** Copy exactly as spoken (String). Do not change digits.
-                    2. **SAVE:** Call `create_contact_entry` ONLY after getting all 3 details.
+                    **DATA RULES:**
+                    1. Phone: Treat digits as STRING. Copy exactly.
+                    2. Save: Call tool immediately after getting Name, Phone, Email.
                     
                     **LANGUAGE RULES:**
                     1. Start in English.
                     2. If user speaks English, reply in English.
-                    3. Keep answers short.
                     """
                 }
             }
@@ -132,6 +137,7 @@ async def communication(websocket: WebSocket):
                         elif evt_type == "conversation.item.input_audio_transcription.completed":
                             transcript = event.get("transcript", "")
                             if transcript:
+                                print(f"🎤 [USER SAID]: {transcript}") 
                                 await websocket.send_json({"type": "transcript", "role": "user", "text": transcript})
 
                         elif evt_type == "response.function_call_arguments.done":
@@ -145,15 +151,14 @@ async def communication(websocket: WebSocket):
                             if tool_name == "change_language":
                                 req_lang = args.get("language", "english").lower()
                                 lang_settings = LANGUAGE_MAP.get(req_lang, LANGUAGE_MAP["english"])
-                                await websocket.send_json({"type": "log", "message": f"Switching to {req_lang}..."})
+                                await websocket.send_json({"type": "log", "message": f"Thinking..."})
                                 
                                 new_instructions = f"""
                                 You are a smart voice assistant for DJF Law Firm.
-                                CRITICAL UPDATE: User switched to {req_lang.upper()}.
+                                User switched to {req_lang.upper()}.
                                 1. {lang_settings['instructions']}
-                                2. DEFAULT: Answer ALL questions using RAG.
-                                3. BOOKING: Only start if explicitly requested (Name -> Phone -> Email).
-                                4. RULE: Copy phone digits EXACTLY.
+                                2. RULE: NO DATE/TIME. Just Name, Phone, Email for callback.
+                                3. Phone: Copy digits exactly.
                                 """
                                 await openai_ws.send(json.dumps({
                                     "type": "session.update",
@@ -172,7 +177,8 @@ async def communication(websocket: WebSocket):
                                 fname = args.get("first_name", "Unknown")
                                 lname = args.get("last_name", "")
                                 raw_phone = str(args.get("phone", ""))
-                                # Python Cleaning Logic
+                                
+                                # Phone Cleaning
                                 if raw_phone.startswith("00") or raw_phone.startswith("+"):
                                     cleaned_phone = re.sub(r'\D', '', raw_phone)
                                     if len(cleaned_phone) > 10:
@@ -181,30 +187,31 @@ async def communication(websocket: WebSocket):
                                 phone = args['phone']
                                 email = args.get("email", None)
                                 
-                                await websocket.send_json({"type": "log", "message": f"Saving {fname}..."})
+                                await websocket.send_json({"type": "log", "message": f"Thinking..."})
                                 try:
                                     success = await asyncio.to_thread(save_contact_to_db, fname, lname, phone, email)
-                                    output_result = "Success. Details saved." if success else "Failed to save."
+                                    output_result = "Success. Callback details saved." if success else "Failed to save."
                                 except:
                                     output_result = "Error saving details."
 
                             elif tool_name == "change_voice":
                                 new_voice = args.get("voice_name")
                                 current_voice = new_voice
-                                await websocket.send_json({"type": "log", "message": f"Voice: {new_voice}"})
+                                await websocket.send_json({"type": "log", "message": f"Changing voice..."})
                                 await openai_ws.send(json.dumps({
                                     "type": "session.update",
                                     "session": { "voice": new_voice }
                                 }))
                                 await asyncio.sleep(0.5)
-                                output_result = f"Voice changed to {new_voice}."
+                                output_result = f"Voice changed."
 
                             elif tool_name == "query_knowledge_base":
                                 await websocket.send_json({"type": "log", "message": "Thinking..."})
                                 query = args.get("query")
                                 output_result = await RAG.search_and_respond(query)
+                                
                                 if not output_result or "not found" in output_result.lower():
-                                    output_result = "SYSTEM: No info found. Apologize."
+                                    output_result = "No info found."
 
                             await openai_ws.send(json.dumps({
                                 "type": "conversation.item.create",

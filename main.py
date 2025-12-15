@@ -1,4 +1,7 @@
 
+from fastapi import Body
+
+
 import base64
 import io
 import json
@@ -2708,5 +2711,17 @@ async def set_assistant_voice(request: Request, body: VoiceRequest):
     allowed_voices = ["coral", "onyx", "nova", "shimmer", "echo", "fable", "alloy"]
     if body.voice not in allowed_voices:
         return {"status": "error", "message": "Invalid voice name."}
-    config.assistant_voice = body.voice
-    return {"status": "success", "voice": config.assistant_voice}
+    try:
+        config.save_assistant_voice(body.voice)
+        # Force reload from file to ensure consistency
+        config.assistant_voice = config.load_assistant_voice()
+        return {"status": "success", "voice": config.assistant_voice, "message": f"Assistant voice set to '{body.voice}' permanently."}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+# Endpoint to get the current assistant voice for admin UI
+@app.get("/admin/get-voice")
+async def get_current_voice(request: Request):
+    admin_info = await verify_admin_auth(request)
+    return {"voice": config.assistant_voice}
+# --- Admin: Set Assistant Voice Permanently ---

@@ -46,6 +46,8 @@ class AdminDashboard {
                 } catch (error) {
                     console.error('❌ Error loading dashboard data:', error);
                 }
+                // Fetch and set current assistant voice in dropdown
+                this.setCurrentVoiceDropdown();
             } else {
                 console.log('❌ Session invalid, clearing and showing login...');
                 // Clear invalid session and redirect to login page
@@ -56,6 +58,26 @@ class AdminDashboard {
             console.log('🔓 No token found, showing login...');
             // If we're on admin panel without token, redirect to login
             this.redirectToLogin();
+        }
+    }
+
+    async setCurrentVoiceDropdown() {
+        // Fetch the current assistant voice from backend
+        try {
+            const response = await fetch('/admin/get-voice', {
+                headers: {
+                    'Authorization': `Bearer ${this.authToken}`
+                }
+            });
+            if (!response.ok) return;
+            const data = await response.json();
+            const currentVoice = data.voice;
+            const voiceSelect = document.getElementById('voice-select');
+            if (voiceSelect && currentVoice) {
+                voiceSelect.value = currentVoice;
+            }
+        } catch (e) {
+            // ignore
         }
 
         console.log('🔧 Binding events...');
