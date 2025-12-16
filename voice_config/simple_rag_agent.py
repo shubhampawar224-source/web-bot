@@ -74,6 +74,6 @@ class EnhancedRAGAgent:
         
         # Top 3 sabse relevant chunks ko join karke bhej do
         # Zyada bada text voice ke liye acha nahi hota
-        final_answer = "\n".join(unique_context[:3]) 
+        final_answer = "\n".join(unique_context[:1]) 
         
         return final_answer

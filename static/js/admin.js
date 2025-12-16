@@ -43,11 +43,10 @@ class AdminDashboard {
                 this.showDashboard();
                 try {
                     this.loadDashboardData();
+                    this.loadCurrentVoice();
                 } catch (error) {
                     console.error('❌ Error loading dashboard data:', error);
                 }
-                // Fetch and set current assistant voice in dropdown
-                this.setCurrentVoiceDropdown();
             } else {
                 console.log('❌ Session invalid, clearing and showing login...');
                 // Clear invalid session and redirect to login page
@@ -58,26 +57,6 @@ class AdminDashboard {
             console.log('🔓 No token found, showing login...');
             // If we're on admin panel without token, redirect to login
             this.redirectToLogin();
-        }
-    }
-
-    async setCurrentVoiceDropdown() {
-        // Fetch the current assistant voice from backend
-        try {
-            const response = await fetch('/admin/get-voice', {
-                headers: {
-                    'Authorization': `Bearer ${this.authToken}`
-                }
-            });
-            if (!response.ok) return;
-            const data = await response.json();
-            const currentVoice = data.voice;
-            const voiceSelect = document.getElementById('voice-select');
-            if (voiceSelect && currentVoice) {
-                voiceSelect.value = currentVoice;
-            }
-        } catch (e) {
-            // ignore
         }
 
         console.log('🔧 Binding events...');
@@ -261,61 +240,10 @@ class AdminDashboard {
             toggleAdminKey.addEventListener('click', () => this.toggleApiKeyVisibility());
         }
 
-        // Voice Assistant change button event (fix: use correct IDs and button click)
-        const voiceSelect = document.getElementById('voice-select');
+        // Voice Assistant change button
         const changeVoiceBtn = document.getElementById('change-voice-btn');
-        if (voiceSelect && changeVoiceBtn) {
-            changeVoiceBtn.addEventListener('click', () => this.handleVoiceSelection(voiceSelect.value));
-        }
-    }
-
-    // Handle voice selection from button click
-    async handleVoiceSelection(selectedVoice) {
-        const statusDiv = document.getElementById('voice-change-status');
-
-        if (!selectedVoice) {
-            if (statusDiv) {
-                statusDiv.textContent = 'Please select a voice.';
-                statusDiv.style.color = 'red';
-            }
-            return;
-        }
-
-        // Show loading
-        if (statusDiv) {
-            statusDiv.textContent = 'Updating voice...';
-            statusDiv.style.color = '#007bff';
-        }
-
-        try {
-            const response = await fetch('/admin/set-voice', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.authToken}`
-                },
-                body: JSON.stringify({ voice: selectedVoice })
-            });
-            const data = await response.json();
-            if (response.ok && data.status === 'success') {
-                if (statusDiv) {
-                    statusDiv.textContent = 'Voice updated successfully!';
-                    statusDiv.style.color = 'green';
-                }
-                this.showToast('Voice updated successfully!', 'success');
-            } else {
-                if (statusDiv) {
-                    statusDiv.textContent = data.message || 'Failed to update voice.';
-                    statusDiv.style.color = 'red';
-                }
-                this.showToast(data.message || 'Failed to update voice.', 'error');
-            }
-        } catch (error) {
-            if (statusDiv) {
-                statusDiv.textContent = 'Error updating voice.';
-                statusDiv.style.color = 'red';
-            }
-            this.showToast('Error updating voice.', 'error');
+        if (changeVoiceBtn) {
+            changeVoiceBtn.addEventListener('click', () => this.handleVoiceChange());
         }
     }
 
@@ -616,19 +544,15 @@ class AdminDashboard {
         document.querySelectorAll('.nav-link').forEach(link => {
             link.classList.remove('active');
         });
-        const navLink = document.querySelector(`[data-section="${sectionName}"]`);
-        if (navLink) navLink.classList.add('active');
 
-        // Hide all sections and show only the selected one
+        document.querySelector(`[data-section="${sectionName}"]`).classList.add('active');
+
+        // Update content
         document.querySelectorAll('.content-section').forEach(section => {
             section.classList.remove('active');
-            section.style.display = 'none';
         });
-        const targetSection = document.getElementById(`${sectionName}-section`);
-        if (targetSection) {
-            targetSection.classList.add('active');
-            targetSection.style.display = '';
-        }
+
+        document.getElementById(`${sectionName}-section`).classList.add('active');
 
         this.currentSection = sectionName;
 
@@ -658,12 +582,94 @@ class AdminDashboard {
             case 'admin-bot':
                 await this.loadAdminBotSection();
                 break;
+            case 'voice-assistant':
+                await this.loadCurrentVoice();
+                break;
         }
     }
 
     async loadDashboardData() {
         await this.loadDashboardStats();
         await this.loadRecentActivity();
+    }
+
+    async loadCurrentVoice() {
+        try {
+            const response = await fetch('/admin/get-voice', {
+                headers: {
+                    'Authorization': `Bearer ${this.authToken}`
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                const voiceSelect = document.getElementById('voice-select');
+                if (voiceSelect && data.voice) {
+                    voiceSelect.value = data.voice;
+                    console.log('🎤 Current voice loaded:', data.voice);
+                }
+            }
+        } catch (error) {
+            console.error('❌ Error loading current voice:', error);
+        }
+    }
+
+    async handleVoiceChange() {
+        const voiceSelect = document.getElementById('voice-select');
+        const statusDiv = document.getElementById('voice-change-status');
+
+        if (!voiceSelect) return;
+
+        const selectedVoice = voiceSelect.value;
+
+        if (!selectedVoice) {
+            if (statusDiv) {
+                statusDiv.textContent = 'Please select a voice.';
+                statusDiv.style.color = 'red';
+            }
+            return;
+        }
+
+        // Show loading
+        if (statusDiv) {
+            statusDiv.textContent = 'Updating voice...';
+            statusDiv.style.color = '#007bff';
+        }
+
+        try {
+            const response = await fetch('/admin/set-voice', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.authToken}`
+                },
+                body: JSON.stringify({ voice: selectedVoice })
+            });
+
+            const data = await response.json();
+
+            if (response.ok && data.status === 'success') {
+                if (statusDiv) {
+                    statusDiv.textContent = `✅ Voice updated to ${selectedVoice} successfully!`;
+                    statusDiv.style.color = 'green';
+                }
+                this.showToast(`Voice updated to ${selectedVoice}!`, 'success');
+                console.log('🎤 Voice changed to:', selectedVoice);
+            } else {
+                if (statusDiv) {
+                    statusDiv.textContent = data.message || 'Failed to update voice.';
+                    statusDiv.style.color = 'red';
+                }
+                this.showToast(data.message || 'Failed to update voice.', 'error');
+            }
+        } catch (error) {
+            console.error('❌ Error changing voice:', error);
+            if (statusDiv) {
+                statusDiv.textContent = 'Error updating voice.';
+                statusDiv.style.color = 'red';
+            }
+            this.showToast('Error updating voice.', 'error');
+        }
     }
 
     async loadAdminBotSection() {

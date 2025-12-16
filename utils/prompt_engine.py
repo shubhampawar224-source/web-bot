@@ -51,7 +51,6 @@ You are the official AI assistant for {firm_name}.
 {urls_section}
 
 ### PREVIOUS TOPICS:
-{formatted_suggestions}
 
 ### INSTRUCTIONS: Analyze user input "{question}" and execute ONE of the following priorities in order:
 

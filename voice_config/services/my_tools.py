@@ -33,23 +33,22 @@ VOICE_TOOL = {
     }
 }
 
-# --- TOOL 3: DB SAVE (Updated for your Model)---
 DB_TOOL = {
     "type": "function",
     "name": "create_contact_entry",
-    "description": "Save user's contact details into the database for a consultation callback.",
+    "description": "MANDATORY: Save user's contact details to database immediately when you have name and phone number. This tool MUST be called for appointment booking.",
     "parameters": {
         "type": "object",
         "properties": {
-            "first_name": {"type": "string", "description": "User's first name"},
-            "last_name": {"type": "string", "description": "User's last name (if provided, else blank)"},
-            "phone": {"type": "string", "description": "User's phone number"},
-            "email": {"type": "string", "description": "User's email address"} # Description update
+            "first_name": {"type": "string", "description": "User's first name (required)"},
+            "last_name": {"type": "string", "description": "User's last name (optional, can be empty string)"},
+            "phone": {"type": "string", "description": "User's phone number (required, minimum 10 digits)"},
+            "email": {"type": "string", "description": "User's email address (optional, can be null)"}
         },
-        "required": ["first_name", "phone", "email"] 
+        # ⭐ CRITICAL: Only first_name and phone are required
+        "required": ["first_name", "phone"] 
     }
 }
-
 
 # NEW TOOL: CHANGE LANGUAGE 
 LANGUAGE_TOOL = {

@@ -75,6 +75,12 @@ loges.log_check(message="INFO")
 app = FastAPI()
 contact_mgr = ContactManager()
 
+
+class MakeCallRequest(BaseModel):
+    name: str
+    email: Optional[str] = None
+    phone: str
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize database tables and test connectivity on application startup"""
@@ -555,6 +561,74 @@ async def save_contact(payload: ContactIn, background_tasks: BackgroundTasks):
         return {"status": "ok", "id": contact_id}
     except Exception as e:
         return {"status": "error", "detail": str(e)}
+
+
+@app.post("/make-call")
+async def make_call(payload: MakeCallRequest, background_tasks: BackgroundTasks):
+    """Persist a call request as a contact entry.
+
+    The existing UI at static/call.html posts to this endpoint.
+    We save the request into the `contacts` table so it shows up in the admin dashboard.
+
+    If Twilio is configured and installed, we optionally attempt to queue a call,
+    but persistence is the primary behavior.
+    """
+
+    if not payload.phone:
+        raise HTTPException(status_code=400, detail="Phone number is required")
+
+    # Split name into fname/lname (best-effort)
+    full_name = (payload.name or "").strip()
+    parts = [p for p in full_name.split() if p]
+    fname = parts[0] if parts else ""
+    lname = " ".join(parts[1:]) if len(parts) > 1 else ""
+
+    # Save as contact (DB + optional email)
+    try:
+        contact_id = contact_mgr.save_and_notify(
+            {
+                "fname": fname,
+                "lname": lname,
+                "email": payload.email,
+                "phone_number": payload.phone,
+                "metadata": {"source": "call_request"},
+            },
+            background_tasks=background_tasks,
+            notify_to=payload.email,
+        )
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
+
+    # Optional: attempt to initiate Twilio call if available (non-fatal)
+    call_sid = None
+    try:
+        twilio_account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+        twilio_auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+        twilio_phone_number = os.getenv("TWILIO_PHONE_NUMBER")
+        server_base_url = os.getenv("SERVER_BASE_URL")
+
+        if twilio_account_sid and twilio_auth_token and twilio_phone_number and server_base_url:
+            try:
+                from twilio.rest import Client  # type: ignore
+
+                client = Client(twilio_account_sid, twilio_auth_token)
+                call = client.calls.create(
+                    to=payload.phone,
+                    from_=twilio_phone_number,
+                    url=f"{server_base_url}/incoming-voice",
+                )
+                call_sid = getattr(call, "sid", None)
+            except Exception as twilio_err:
+                print(f"⚠️ Twilio call initiation failed: {twilio_err}")
+    except Exception:
+        # Do not let optional telephony impact DB save
+        pass
+
+    return {
+        "status": "scheduled",
+        "contact_id": contact_id,
+        "callSid": call_sid,
+    }
 
 @app.get("/history/{session_id}")
 async def get_history(session_id: str):
@@ -2705,6 +2779,8 @@ from fastapi import Body
 from pydantic import BaseModel
 class VoiceRequest(BaseModel):
     voice: str
+
+    
 @app.post("/admin/set-voice")
 async def set_assistant_voice(request: Request, body: VoiceRequest):
     admin_info = await verify_admin_auth(request)

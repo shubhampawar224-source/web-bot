@@ -132,10 +132,7 @@
 
             try {
                 // 2. Send Data to Backend
-                // Hum 'await' use kar rahe hain connection check karne ke liye,
-                // par user ko turant success dikhayenge agar request chali gayi.
-
-                fetch('/make-call', {
+                const resp = await fetch('/make-call', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -143,27 +140,26 @@
                         email: email,
                         phone: phone
                     })
-                })
-                    .then(response => response.json())
-                    .then(data => {
-                        console.log("Call initiated:", data);
-                        // Agar backend se confirm ho gaya ki call queue ho gayi
-                    })
-                    .catch(err => console.error("Error:", err));
+                });
 
-                // 3. User Experience: Fake delay (optional) for feel -> Show Success
-                setTimeout(() => {
-                    showNotification();
-                    form.reset(); // Clear Form
+                const data = await resp.json().catch(() => ({}));
+                console.log("Call request response:", data);
 
-                    // Reset Button
-                    btn.innerHTML = '<span>Submit Request</span><i class="fas fa-paper-plane"></i>';
-                    btn.disabled = false;
-                }, 800); // 0.8 sec delay for smooth UX
+                if (!resp.ok || data.status !== 'scheduled') {
+                    const msg = (data && (data.detail || data.error)) ? (data.detail || data.error) : 'Request failed';
+                    throw new Error(msg);
+                }
+
+                showNotification();
+                form.reset(); // Clear Form
+
+                // Reset Button
+                btn.innerHTML = '<span>Submit Request</span><i class="fas fa-paper-plane"></i>';
+                btn.disabled = false;
 
             } catch (error) {
                 console.error(error);
-                alert("Something went wrong!");
+                alert(error?.message || "Something went wrong!");
                 btn.disabled = false;
                 btn.innerHTML = '<span>Submit Request</span><i class="fas fa-paper-plane"></i>';
             }
